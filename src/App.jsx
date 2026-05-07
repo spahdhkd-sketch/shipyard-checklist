@@ -1,10 +1,9 @@
 import { useState } from "react";
+import { useEffect } from "react";
 
 useEffect(() => { localStorage.setItem('checklists', JSON.stringify(checklists)); }, [checklists]);
 useEffect(() => { localStorage.setItem('ships',      JSON.stringify(ships));      }, [ships]);
 useEffect(() => { localStorage.setItem('history',    JSON.stringify(history));    }, [history]);
-
-import { useEffect } from "react";
 
 // localStorage 헬퍼
 const load = (key, def) => {
