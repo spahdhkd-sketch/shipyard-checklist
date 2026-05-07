@@ -1,40 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-@import "tailwindcss";
-
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-}
-
-:root {
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f8fafc;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #94a3b8;
-  --color-border-secondary: #e2e8f0;
-  --color-border-tertiary: #f1f5f9;
-  --border-radius-md: 0.75rem;
-  --border-radius-lg: 1rem;
-  --color-brand-blue: #0c447c;
-  --color-brand-blue-hover: #185fa5;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  @apply font-sans antialiased bg-slate-50 text-slate-900;
-  height: 100vh;
-  margin: 0;
-  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+  padding: 1rem;
 }
 
-#root {
-  height: 100%;
+/* ───── Light mode ───── */
+:root {
+  --color-background-primary:   #ffffff;
+  --color-background-secondary: #f5f4f0;
+  --color-background-tertiary:  #eeede8;
+
+  --color-text-primary:   #1a1a18;
+  --color-text-secondary: #6b6a63;
+  --color-text-tertiary:  #9b9a93;
+
+  --color-border-primary:   rgba(0,0,0,0.40);
+  --color-border-secondary: rgba(0,0,0,0.30);
+  --color-border-tertiary:  rgba(0,0,0,0.15);
+
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* ───── Dark mode ───── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary:   #1e1e1c;
+    --color-background-secondary: #2a2a27;
+    --color-background-tertiary:  #141412;
+
+    --color-text-primary:   #e8e7e0;
+    --color-text-secondary: #9b9a93;
+    --color-text-tertiary:  #6b6a63;
+
+    --color-border-primary:   rgba(255,255,255,0.40);
+    --color-border-secondary: rgba(255,255,255,0.30);
+    --color-border-tertiary:  rgba(255,255,255,0.15);
+  }
 }
