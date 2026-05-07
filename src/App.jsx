@@ -1,21 +1,12 @@
 import { useState, useEffect } from "react";
-import { supabase } from './supabase';
+
 
 /* ── localStorage 헬퍼 ── */
 const load = (key, def) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
   catch { return def; }
 };
-// 저장
-async function saveData(key, value) {
-  await supabase.from('app_data').upsert({ key, value });
-}
 
-// 로드
-async function loadData(key, defaultVal) {
-  const { data } = await supabase.from('app_data').select('value').eq('key', key).single();
-  return data?.value ?? defaultVal;
-}
 /* ── 상수 ── */
 const INIT_CHECKLISTS = {
   welding: {
