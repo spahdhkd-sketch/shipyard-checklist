@@ -1,17 +1,12 @@
 import { useState, useEffect } from "react";
 
-useEffect(() => { localStorage.setItem('checklists', JSON.stringify(checklists)); }, [checklists]);
-useEffect(() => { localStorage.setItem('ships',      JSON.stringify(ships));      }, [ships]);
-useEffect(() => { localStorage.setItem('history',    JSON.stringify(history));    }, [history]);
-
-// localStorage 헬퍼
+/* ── localStorage 헬퍼 ── */
 const load = (key, def) => {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : def;
-  } catch { return def; }
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+  catch { return def; }
 };
 
+/* ── 상수 ── */
 const INIT_CHECKLISTS = {
   welding: {
     label: "용접/절단 작업", icon: "🔥", color: "#e24b4a",
@@ -64,69 +59,67 @@ const INIT_CHECKLISTS = {
     ],
   },
 };
-
 const RISK_LABELS = { high: "위험", medium: "주의", low: "정상" };
 const RISK_COLORS = {
-  high: { bg: "#fcebeb", color: "#a32d2d", border: "#f09595" },
+  high:   { bg: "#fcebeb", color: "#a32d2d", border: "#f09595" },
   medium: { bg: "#faeeda", color: "#854f0b", border: "#fac775" },
-  low: { bg: "#eaf3de", color: "#3b6d11", border: "#c0dd97" },
+  low:    { bg: "#eaf3de", color: "#3b6d11", border: "#c0dd97" },
 };
 const PRESET_COLORS = ["#e24b4a","#ef9f27","#378add","#1d9e75","#7c5cbf","#d97ab0","#5b8c5a","#e07b39","#0077a8","#c0392b"];
 const TABS = ["대시보드", "체크리스트 작성", "점검 이력", "호선 관리", "항목 관리"];
-const initShips = [
-  { id: 1, no: "1234", name: "LNG 운반선 A" },
+const INIT_SHIPS = [
+  { id: 1, no: "1234",  name: "LNG 운반선 A" },
   { id: 2, no: "H3462", name: "컨테이너선 B" },
 ];
-const sampleHistory = [
-  { id: 1, type: "welding", date: "2026-05-07", time: "08:30", worker: "김철수", shipNo: "1234", status: "완료", warnings: 0 },
-  { id: 2, type: "height", date: "2026-05-07", time: "09:15", worker: "이영희", shipNo: "H3462", status: "완료", warnings: 1 },
-  { id: 3, type: "mounting", date: "2026-05-06", time: "14:00", worker: "박민준", shipNo: "1234", status: "미완료", warnings: 2 },
-  { id: 4, type: "confined", date: "2026-05-06", time: "10:45", worker: "최지원", shipNo: "H3462", status: "완료", warnings: 0 },
-  { id: 5, type: "welding", date: "2026-05-05", time: "07:50", worker: "정우성", shipNo: "1234", status: "완료", warnings: 0 },
+const SAMPLE_HISTORY = [
+  { id: 1, type: "welding",  date: "2026-05-07", time: "08:30", worker: "김철수", shipNo: "1234",  status: "완료",   warnings: 0 },
+  { id: 2, type: "height",   date: "2026-05-07", time: "09:15", worker: "이영희", shipNo: "H3462", status: "완료",   warnings: 1 },
+  { id: 3, type: "mounting", date: "2026-05-06", time: "14:00", worker: "박민준", shipNo: "1234",  status: "미완료", warnings: 2 },
+  { id: 4, type: "confined", date: "2026-05-06", time: "10:45", worker: "최지원", shipNo: "H3462", status: "완료",   warnings: 0 },
+  { id: 5, type: "welding",  date: "2026-05-05", time: "07:50", worker: "정우성", shipNo: "1234",  status: "완료",   warnings: 0 },
 ];
 
+/* ── 스타일 객체 (컴포넌트 밖) ── */
 const s = {
-  wrap: { fontFamily: "sans-serif", color: "var(--color-text-primary)", maxWidth: 720, margin: "0 auto", padding: "0 0 2rem" },
-  header: { background: "#0c447c", color: "#fff", padding: "1rem 1.25rem", borderRadius: "var(--border-radius-lg)", marginBottom: "1rem" },
-  tabs: { display: "flex", gap: 2, marginBottom: "1rem", borderBottom: "0.5px solid var(--color-border-tertiary)", flexWrap: "wrap" },
-  tab: (a) => ({ padding: "8px 12px", fontSize: 13, fontWeight: a ? 500 : 400, color: a ? "#185fa5" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderBottom: a ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1 }),
-  card: { background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1rem 1.25rem", marginBottom: 12 },
-  metricGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 },
-  metric: { background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem" },
-  typeGrid: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 },
-  typeBtn: (sel, color) => ({ background: sel ? color + "18" : "var(--color-background-primary)", border: sel ? `1.5px solid ${color}` : "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", cursor: "pointer", textAlign: "left" }),
-  badge: (risk) => ({ fontSize: 11, padding: "2px 7px", borderRadius: 99, background: RISK_COLORS[risk].bg, color: RISK_COLORS[risk].color, border: `0.5px solid ${RISK_COLORS[risk].border}`, whiteSpace: "nowrap", display: "inline-block" }),
-  progressBar: (pct, color) => ({ height: 6, background: color, borderRadius: 99, width: pct + "%", transition: "width .3s" }),
-  progressTrack: { height: 6, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 8 },
-  input: { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 14, background: "var(--color-background-primary)", color: "var(--color-text-primary)" },
-  select: { boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 13, background: "var(--color-background-primary)", color: "var(--color-text-primary)", cursor: "pointer" },
-  btn: (disabled) => ({ padding: "8px 18px", borderRadius: "var(--border-radius-md)", background: disabled ? "var(--color-background-secondary)" : "#185fa5", color: disabled ? "var(--color-text-tertiary)" : "#fff", border: "none", cursor: disabled ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" }),
-  btnSm: (color) => ({ padding: "5px 10px", borderRadius: "var(--border-radius-md)", background: "none", color: color || "var(--color-text-secondary)", border: `0.5px solid ${color || "var(--color-border-secondary)"}`, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }),
-  btnGhost: { padding: "7px 14px", borderRadius: "var(--border-radius-md)", background: "none", color: "#185fa5", border: "1px dashed #185fa5", cursor: "pointer", fontSize: 13, fontWeight: 500 },
-  warnBox: { background: "#fcebeb", border: "0.5px solid #f09595", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem", marginBottom: 12 },
-  histHead: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, padding: "6px 0 8px", borderBottom: "0.5px solid var(--color-border-secondary)", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500 },
-  histRow: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, alignItems: "center", padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", fontSize: 13 },
+  wrap:         { fontFamily: "sans-serif", color: "var(--color-text-primary)", maxWidth: 720, margin: "0 auto", padding: "0 0 2rem" },
+  header:       { background: "#0c447c", color: "#fff", padding: "1rem 1.25rem", borderRadius: "var(--border-radius-lg)", marginBottom: "1rem" },
+  tabs:         { display: "flex", gap: 2, marginBottom: "1rem", borderBottom: "0.5px solid var(--color-border-tertiary)", flexWrap: "wrap" },
+  tab:          (a) => ({ padding: "8px 12px", fontSize: 13, fontWeight: a ? 500 : 400, color: a ? "#185fa5" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderBottom: a ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1 }),
+  card:         { background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1rem 1.25rem", marginBottom: 12 },
+  metricGrid:   { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 },
+  metric:       { background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem" },
+  typeGrid:     { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 },
+  typeBtn:      (sel, color) => ({ background: sel ? color + "18" : "var(--color-background-primary)", border: sel ? `1.5px solid ${color}` : "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", cursor: "pointer", textAlign: "left" }),
+  badge:        (risk) => ({ fontSize: 11, padding: "2px 7px", borderRadius: 99, background: RISK_COLORS[risk].bg, color: RISK_COLORS[risk].color, border: `0.5px solid ${RISK_COLORS[risk].border}`, whiteSpace: "nowrap", display: "inline-block" }),
+  progressBar:  (pct, color) => ({ height: 6, background: color, borderRadius: 99, width: pct + "%", transition: "width .3s" }),
+  progressTrack:{ height: 6, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 8 },
+  input:        { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 14, background: "var(--color-background-primary)", color: "var(--color-text-primary)" },
+  select:       { boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 13, background: "var(--color-background-primary)", color: "var(--color-text-primary)", cursor: "pointer" },
+  btn:          (disabled) => ({ padding: "8px 18px", borderRadius: "var(--border-radius-md)", background: disabled ? "var(--color-background-secondary)" : "#185fa5", color: disabled ? "var(--color-text-tertiary)" : "#fff", border: "none", cursor: disabled ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" }),
+  btnSm:        (color) => ({ padding: "5px 10px", borderRadius: "var(--border-radius-md)", background: "none", color: color || "var(--color-text-secondary)", border: `0.5px solid ${color || "var(--color-border-secondary)"}`, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }),
+  btnGhost:     { padding: "7px 14px", borderRadius: "var(--border-radius-md)", background: "none", color: "#185fa5", border: "1px dashed #185fa5", cursor: "pointer", fontSize: 13, fontWeight: 500 },
+  warnBox:      { background: "#fcebeb", border: "0.5px solid #f09595", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem", marginBottom: 12 },
+  histHead:     { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, padding: "6px 0 8px", borderBottom: "0.5px solid var(--color-border-secondary)", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500 },
+  histRow:      { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, alignItems: "center", padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", fontSize: 13 },
 };
 
-// ─────────────────────────────────────────────
-// (3) ColorPicker — App() 바깥으로 이동 ★
-// ─────────────────────────────────────────────
+/* ── ColorPicker (컴포넌트 밖) ── */
 function ColorPicker({ value, onChange }) {
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       {PRESET_COLORS.map(c => (
-        <button key={c} onClick={() => onChange(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: value === c ? "2.5px solid var(--color-text-primary)" : "2px solid transparent", cursor: "pointer", padding: 0, outline: "none", flexShrink: 0 }} />
+        <button key={c} onClick={() => onChange(c)}
+          style={{ width: 22, height: 22, borderRadius: "50%", background: c,
+            border: value === c ? "2.5px solid #1a1a18" : "2px solid transparent",
+            cursor: "pointer", padding: 0, outline: "none", flexShrink: 0 }} />
       ))}
       <input type="color" value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: 28, height: 22, border: "0.5px solid var(--color-border-secondary)", borderRadius: 4, padding: 0, cursor: "pointer", background: "none" }}
-        title="직접 선택" />
+        style={{ width: 28, height: 22, border: "0.5px solid #ccc", borderRadius: 4, padding: 0, cursor: "pointer" }} />
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// (4) CatEditForm — App() 바깥으로 이동 ★
-// ─────────────────────────────────────────────
+/* ── CatEditForm (컴포넌트 밖) ── */
 function CatEditForm({ onSave, onCancel, label, setLabel, icon, setIcon, color, setColor, saveLabel }) {
   return (
     <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", marginBottom: 4 }}>
@@ -151,20 +144,30 @@ function CatEditForm({ onSave, onCancel, label, setLabel, icon, setIcon, color, 
     </div>
   );
 }
-export default function App() {
-  const [checklists, setChecklists] = useState(() => load('checklists', INIT_CHECKLISTS));
-  const [tab, setTab] = useState(0);
-  
 
-  // 호선
-  const [ships,      setShips]      = useState(() => load('ships',      initShips));
+/* ══════════════════════════════════════════════
+   메인 App 컴포넌트
+══════════════════════════════════════════════ */
+export default function App() {
+  /* ── state ── */
+  const [tab, setTab] = useState(0);
+  const [checklists, setChecklists] = useState(() => load("checklists", INIT_CHECKLISTS));
+  const [ships,      setShips]      = useState(() => load("ships",      INIT_SHIPS));
+  const [history,    setHistory]    = useState(() => load("history",    SAMPLE_HISTORY));
+
+  /* ── localStorage 동기화 ── */
+  useEffect(() => { localStorage.setItem("checklists", JSON.stringify(checklists)); }, [checklists]);
+  useEffect(() => { localStorage.setItem("ships",      JSON.stringify(ships));      }, [ships]);
+  useEffect(() => { localStorage.setItem("history",    JSON.stringify(history));    }, [history]);
+
+  /* ── 호선 state ── */
   const [newShipNo, setNewShipNo] = useState("");
   const [newShipName, setNewShipName] = useState("");
   const [editShipId, setEditShipId] = useState(null);
   const [editShipNo, setEditShipNo] = useState("");
   const [editShipName, setEditShipName] = useState("");
 
-  // 항목 관리 – 카테고리 선택 및 아이템 CRUD
+  /* ── 항목 관리 state ── */
   const [mgmtType, setMgmtType] = useState(null);
   const [newItemText, setNewItemText] = useState("");
   const [newItemRisk, setNewItemRisk] = useState("medium");
@@ -172,67 +175,81 @@ export default function App() {
   const [editItemText, setEditItemText] = useState("");
   const [editItemRisk, setEditItemRisk] = useState("medium");
 
-  // 카테고리 편집
+  /* ── 카테고리 편집 state ── */
   const [editCatKey, setEditCatKey] = useState(null);
   const [editCatLabel, setEditCatLabel] = useState("");
   const [editCatIcon, setEditCatIcon] = useState("");
   const [editCatColor, setEditCatColor] = useState("#378add");
-
-  // 새 카테고리 추가 폼
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("📋");
   const [newCatColor, setNewCatColor] = useState("#378add");
   const [deleteCatConfirm, setDeleteCatConfirm] = useState(null);
 
-  // 체크리스트 작성
+  /* ── 체크리스트 작성 state ── */
   const [selectedType, setSelectedType] = useState(null);
   const [checks, setChecks] = useState({});
   const [worker, setWorker] = useState("");
   const [shipNo, setShipNo] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [history,    setHistory]    = useState(() => load('history',    sampleHistory));
   const [filterType, setFilterType] = useState("all");
 
-  const cl = selectedType ? checklists[selectedType] : null;
-  const items = cl ? cl.items : [];
+  /* ── 파생 값 ── */
+  const cl           = selectedType ? checklists[selectedType] : null;
+  const items        = cl ? cl.items : [];
   const checkedCount = items.filter(i => checks[i.id]).length;
-  const uncheckedHigh = items.filter(i => !checks[i.id] && i.risk === "high");
-  const progress = items.length ? Math.round((checkedCount / items.length) * 100) : 0;
+  const uncheckedHigh= items.filter(i => !checks[i.id] && i.risk === "high");
+  const progress     = items.length ? Math.round((checkedCount / items.length) * 100) : 0;
+  const totalToday   = history.filter(h => h.date === new Date().toISOString().slice(0, 10)).length;
+  const totalDone    = history.filter(h => h.status === "완료").length;
+  const totalWarn    = history.filter(h => h.warnings > 0).length;
 
-  const totalToday = history.filter(h => h.date === "2026-05-07").length;
-  const totalDone = history.filter(h => h.status === "완료").length;
-  const totalWarn = history.filter(h => h.warnings > 0).length;
-
-  // 체크리스트 제출
+  /* ── 체크리스트 제출 ── */
   function handleSubmit() {
     if (!worker.trim() || !shipNo) return;
-    setHistory([{ id: history.length + 1, type: selectedType, date: "2026-05-07", time: new Date().toTimeString().slice(0, 5), worker, shipNo, status: checkedCount === items.length ? "완료" : "미완료", warnings: uncheckedHigh.length }, ...history]);
+    const now = new Date();
+    setHistory(prev => [{
+      id: Date.now(), type: selectedType,
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
+      worker, shipNo,
+      status: checkedCount === items.length ? "완료" : "미완료",
+      warnings: uncheckedHigh.length,
+    }, ...prev]);
     setSubmitted(true);
   }
   function resetForm() { setSelectedType(null); setChecks({}); setWorker(""); setShipNo(""); setSubmitted(false); }
 
-  // 호선 CRUD
-  function addShip() { if (!newShipNo.trim()) return; setShips([...ships, { id: Date.now(), no: newShipNo.trim(), name: newShipName.trim() }]); setNewShipNo(""); setNewShipName(""); }
-  function deleteShip(id) { setShips(ships.filter(s => s.id !== id)); }
-  function startEditShip(s) { setEditShipId(s.id); setEditShipNo(s.no); setEditShipName(s.name); }
-  function saveEditShip() { setShips(ships.map(s => s.id === editShipId ? { ...s, no: editShipNo.trim(), name: editShipName.trim() } : s)); setEditShipId(null); }
+  /* ── 호선 CRUD ── */
+  function addShip() {
+    if (!newShipNo.trim()) return;
+    setShips(prev => [...prev, { id: Date.now(), no: newShipNo.trim(), name: newShipName.trim() }]);
+    setNewShipNo(""); setNewShipName("");
+  }
+  function deleteShip(id) { setShips(prev => prev.filter(s => s.id !== id)); }
+  function startEditShip(sh) { setEditShipId(sh.id); setEditShipNo(sh.no); setEditShipName(sh.name); }
+  function saveEditShip() {
+    setShips(prev => prev.map(sh => sh.id === editShipId ? { ...sh, no: editShipNo.trim(), name: editShipName.trim() } : sh));
+    setEditShipId(null);
+  }
 
-  // 아이템 CRUD
+  /* ── 항목 CRUD ── */
   function addItem() {
     if (!newItemText.trim() || !mgmtType) return;
     const ni = { id: `${mgmtType}_${Date.now()}`, text: newItemText.trim(), risk: newItemRisk };
     setChecklists(prev => ({ ...prev, [mgmtType]: { ...prev[mgmtType], items: [...prev[mgmtType].items, ni] } }));
     setNewItemText(""); setNewItemRisk("medium");
   }
-  function deleteItem(typeKey, itemId) { setChecklists(prev => ({ ...prev, [typeKey]: { ...prev[typeKey], items: prev[typeKey].items.filter(i => i.id !== itemId) } })); }
+  function deleteItem(typeKey, itemId) {
+    setChecklists(prev => ({ ...prev, [typeKey]: { ...prev[typeKey], items: prev[typeKey].items.filter(i => i.id !== itemId) } }));
+  }
   function startEditItem(item) { setEditItemId(item.id); setEditItemText(item.text); setEditItemRisk(item.risk); }
   function saveEditItem() {
     setChecklists(prev => ({ ...prev, [mgmtType]: { ...prev[mgmtType], items: prev[mgmtType].items.map(i => i.id === editItemId ? { ...i, text: editItemText.trim(), risk: editItemRisk } : i) } }));
     setEditItemId(null);
   }
 
-  // 카테고리 CRUD
+  /* ── 카테고리 CRUD ── */
   function startEditCat(k) {
     setEditCatKey(k); setEditCatLabel(checklists[k].label);
     setEditCatIcon(checklists[k].icon); setEditCatColor(checklists[k].color);
@@ -250,24 +267,31 @@ export default function App() {
     setNewCatLabel(""); setNewCatIcon("📋"); setNewCatColor("#378add"); setShowNewCat(false);
   }
   function deleteCat(k) {
-    const next = { ...checklists };
-    delete next[k];
-    setChecklists(next);
+    setChecklists(prev => { const n = { ...prev }; delete n[k]; return n; });
     setDeleteCatConfirm(null);
     if (mgmtType === k) setMgmtType(null);
   }
 
   const filteredHistory = filterType === "all" ? history : history.filter(h => h.type === filterType);
 
+  /* ════════════ 렌더 ════════════ */
   return (
     <div style={s.wrap}>
+      {/* 헤더 */}
       <div style={s.header}>
         <div style={{ fontSize: 20, fontWeight: 500 }}>⚓ 조선소 안전 체크리스트</div>
-        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>현장 작업 안전 점검 관리 시스템 · 2026-05-07</div>
+        <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>현장 작업 안전 점검 관리 시스템</div>
       </div>
 
+      {/* 탭 */}
       <div style={s.tabs}>
-        {TABS.map((t, i) => <button key={i} style={s.tab(tab === i)} onClick={() => { setTab(i); if (i === 1) resetForm(); if (i === 4) { setMgmtType(null); setEditCatKey(null); setShowNewCat(false); } }}>{t}</button>)}
+        {TABS.map((t, i) => (
+          <button key={i} style={s.tab(tab === i)} onClick={() => {
+            setTab(i);
+            if (i === 1) resetForm();
+            if (i === 4) { setMgmtType(null); setEditCatKey(null); setShowNewCat(false); }
+          }}>{t}</button>
+        ))}
       </div>
 
       {/* ── 대시보드 ── */}
@@ -275,15 +299,15 @@ export default function App() {
         <>
           <div style={s.metricGrid}>
             <div style={s.metric}><div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>오늘 점검 건수</div><div style={{ fontSize: 22, fontWeight: 500, color: "#185fa5" }}>{totalToday}</div></div>
-            <div style={s.metric}><div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>완료율</div><div style={{ fontSize: 22, fontWeight: 500, color: "#3b6d11" }}>{Math.round((totalDone / history.length) * 100)}%</div></div>
+            <div style={s.metric}><div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>완료율</div><div style={{ fontSize: 22, fontWeight: 500, color: "#3b6d11" }}>{history.length ? Math.round((totalDone / history.length) * 100) : 0}%</div></div>
             <div style={s.metric}><div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>위험 경고 건수</div><div style={{ fontSize: 22, fontWeight: 500, color: "#a32d2d" }}>{totalWarn}</div></div>
           </div>
           <div style={s.card}>
             <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 12 }}>작업 유형별 현황</div>
             {Object.entries(checklists).map(([k, v]) => {
-              const cnt = history.filter(h => h.type === k).length;
+              const cnt  = history.filter(h => h.type === k).length;
               const done = history.filter(h => h.type === k && h.status === "완료").length;
-              const pct = cnt ? Math.round((done / cnt) * 100) : 0;
+              const pct  = cnt ? Math.round((done / cnt) * 100) : 0;
               return (
                 <div key={k} style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
@@ -353,19 +377,20 @@ export default function App() {
                     <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 6 }}>호선 번호</div>
                     <select style={s.input} value={shipNo} onChange={e => setShipNo(e.target.value)}>
                       <option value="">호선 선택</option>
-                      {ships.map(s => <option key={s.id} value={s.no}>{s.no}{s.name ? ` · ${s.name}` : ""}</option>)}
+                      {ships.map(sh => <option key={sh.id} value={sh.no}>{sh.no}{sh.name ? ` · ${sh.name}` : ""}</option>)}
                     </select>
                   </div>
                 </div>
               </div>
+              {ships.length === 0 && <div style={s.warnBox}><div style={{ fontSize: 13, color: "#a32d2d" }}>등록된 호선이 없습니다. 호선 관리 탭에서 추가해 주세요.</div></div>}
               {uncheckedHigh.length > 0 && <div style={s.warnBox}><div style={{ fontSize: 13, color: "#a32d2d", fontWeight: 500 }}>⚠ 위험 항목 {uncheckedHigh.length}건 미확인</div><div style={{ fontSize: 12, color: "#a32d2d" }}>제출 전 반드시 확인하세요.</div></div>}
               <div style={s.progressTrack}><div style={s.progressBar(progress, cl.color)} /></div>
               <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>{checkedCount}/{items.length} 항목 확인됨 ({progress}%)</div>
               <div style={s.card}>
-                {items.length === 0 && <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>등록된 항목이 없습니다. 항목 관리 탭에서 추가해 주세요.</div>}
+                {items.length === 0 && <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>등록된 항목이 없습니다.</div>}
                 {items.map(item => (
                   <div key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", opacity: checks[item.id] ? 0.55 : 1 }}>
-                    <input type="checkbox" checked={!!checks[item.id]} onChange={e => setChecks({ ...checks, [item.id]: e.target.checked })} style={{ marginTop: 2, accentColor: cl.color, cursor: "pointer", width: 16, height: 16, flexShrink: 0 }} />
+                    <input type="checkbox" checked={!!checks[item.id]} onChange={e => setChecks(p => ({ ...p, [item.id]: e.target.checked }))} style={{ marginTop: 2, accentColor: cl.color, cursor: "pointer", width: 16, height: 16, flexShrink: 0 }} />
                     <div style={{ flex: 1, fontSize: 14, textDecoration: checks[item.id] ? "line-through" : "none" }}>{item.text}</div>
                     <span style={s.badge(item.risk)}>{RISK_LABELS[item.risk]}</span>
                   </div>
@@ -394,7 +419,8 @@ export default function App() {
               const c = checklists[h.type] || { icon: "?", label: "(삭제)" };
               return (
                 <div key={h.id} style={s.histRow}>
-                  <span>{c.icon} {c.label}</span><span>{h.worker}</span>
+                  <span>{c.icon} {c.label}</span>
+                  <span>{h.worker}</span>
                   <span style={{ color: "var(--color-text-secondary)" }}>{h.shipNo}</span>
                   <span style={{ color: "var(--color-text-secondary)" }}>{h.date} {h.time}</span>
                   <span style={s.badge(h.status === "완료" ? "low" : "medium")}>{h.status}</span>
@@ -426,9 +452,9 @@ export default function App() {
           <div style={s.card}>
             <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 12 }}>등록된 호선 목록 <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 400 }}>({ships.length}척)</span></div>
             {ships.length === 0 && <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>등록된 호선이 없습니다.</div>}
-            {ships.map(ship => (
-              <div key={ship.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                {editShipId === ship.id ? (
+            {ships.map(sh => (
+              <div key={sh.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+                {editShipId === sh.id ? (
                   <>
                     <input style={{ ...s.input, width: 100 }} value={editShipNo} onChange={e => setEditShipNo(e.target.value)} />
                     <input style={{ ...s.input, flex: 1 }} value={editShipName} onChange={e => setEditShipName(e.target.value)} />
@@ -437,9 +463,9 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <div style={{ flex: 1 }}><span style={{ fontWeight: 500, fontSize: 14 }}>{ship.no}</span>{ship.name && <span style={{ fontSize: 13, color: "var(--color-text-secondary)", marginLeft: 8 }}>{ship.name}</span>}</div>
-                    <button style={s.btnSm("#185fa5")} onClick={() => startEditShip(ship)}>수정</button>
-                    <button style={s.btnSm("#a32d2d")} onClick={() => deleteShip(ship.id)}>삭제</button>
+                    <div style={{ flex: 1 }}><span style={{ fontWeight: 500, fontSize: 14 }}>{sh.no}</span>{sh.name && <span style={{ fontSize: 13, color: "var(--color-text-secondary)", marginLeft: 8 }}>{sh.name}</span>}</div>
+                    <button style={s.btnSm("#185fa5")} onClick={() => startEditShip(sh)}>수정</button>
+                    <button style={s.btnSm("#a32d2d")} onClick={() => deleteShip(sh.id)}>삭제</button>
                   </>
                 )}
               </div>
@@ -451,15 +477,13 @@ export default function App() {
       {/* ── 항목 관리 ── */}
       {tab === 4 && (
         <>
-          {/* 카테고리 목록 화면 */}
           {!mgmtType ? (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>작업 유형 관리 <span style={{ fontSize: 12 }}>· 카테고리를 수정하거나 새로 추가하세요</span></div>
+                <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>작업 유형 관리</div>
                 <button style={s.btnGhost} onClick={() => { setShowNewCat(!showNewCat); setEditCatKey(null); }}>+ 새 작업 추가</button>
               </div>
 
-              {/* 새 카테고리 추가 폼 */}
               {showNewCat && (
                 <div style={{ ...s.card, border: "1px dashed #185fa5" }}>
                   <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 12, color: "#185fa5" }}>새 작업 유형 추가</div>
@@ -475,12 +499,7 @@ export default function App() {
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>색상</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                      {PRESET_COLORS.map(c => (
-                        <button key={c} onClick={() => setNewCatColor(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: newCatColor === c ? "2.5px solid var(--color-text-primary)" : "2px solid transparent", cursor: "pointer", padding: 0, outline: "none" }} />
-                      ))}
-                      <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} style={{ width: 28, height: 22, border: "0.5px solid var(--color-border-secondary)", borderRadius: 4, padding: 0, cursor: "pointer", background: "none" }} />
-                    </div>
+                    <ColorPicker value={newCatColor} onChange={setNewCatColor} />
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button style={s.btn(!newCatLabel.trim())} onClick={addCat} disabled={!newCatLabel.trim()}>추가하기</button>
@@ -489,36 +508,19 @@ export default function App() {
                 </div>
               )}
 
-              {/* 카테고리 카드 목록 */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {Object.entries(checklists).map(([k, v]) => (
                   <div key={k}>
                     {editCatKey === k ? (
                       <div style={{ ...s.card, border: `1.5px solid ${v.color}` }}>
                         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: v.color }}>카테고리 수정 중</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "60px 1fr", gap: 10, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>아이콘</div>
-                            <input style={{ ...s.input, textAlign: "center", fontSize: 20 }} value={editCatIcon} onChange={e => setEditCatIcon(e.target.value)} maxLength={4} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>카테고리명 *</div>
-                            <input style={s.input} value={editCatLabel} onChange={e => setEditCatLabel(e.target.value)} onKeyDown={e => e.key === "Enter" && saveEditCat()} />
-                          </div>
-                        </div>
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>색상</div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                            {PRESET_COLORS.map(c => (
-                              <button key={c} onClick={() => setEditCatColor(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: editCatColor === c ? "2.5px solid var(--color-text-primary)" : "2px solid transparent", cursor: "pointer", padding: 0, outline: "none" }} />
-                            ))}
-                            <input type="color" value={editCatColor} onChange={e => setEditCatColor(e.target.value)} style={{ width: 28, height: 22, border: "0.5px solid var(--color-border-secondary)", borderRadius: 4, padding: 0, cursor: "pointer", background: "none" }} />
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button style={s.btn(!editCatLabel.trim())} onClick={saveEditCat} disabled={!editCatLabel.trim()}>저장</button>
-                          <button style={s.btnSm()} onClick={() => setEditCatKey(null)}>취소</button>
-                        </div>
+                        <CatEditForm
+                          onSave={saveEditCat} onCancel={() => setEditCatKey(null)}
+                          label={editCatLabel} setLabel={setEditCatLabel}
+                          icon={editCatIcon}   setIcon={setEditCatIcon}
+                          color={editCatColor} setColor={setEditCatColor}
+                          saveLabel="저장"
+                        />
                       </div>
                     ) : (
                       <div style={{ ...s.card, borderLeft: `4px solid ${v.color}`, display: "flex", alignItems: "center", gap: 12, marginBottom: 0 }}>
@@ -545,13 +547,12 @@ export default function App() {
                 ))}
                 {Object.keys(checklists).length === 0 && (
                   <div style={{ ...s.card, textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "2rem" }}>
-                    등록된 작업 유형이 없습니다. 위에서 새 작업을 추가해 주세요.
+                    등록된 작업 유형이 없습니다.
                   </div>
                 )}
               </div>
             </>
           ) : (
-            /* 항목 목록 화면 */
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <button onClick={() => { setMgmtType(null); setEditItemId(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--color-text-secondary)" }}>← 뒤로</button>
@@ -578,7 +579,9 @@ export default function App() {
                 </div>
               </div>
               <div style={s.card}>
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 10 }}>항목 목록 <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 400 }}>({checklists[mgmtType].items.length}개)</span></div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 10 }}>
+                  항목 목록 <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 400 }}>({checklists[mgmtType].items.length}개)</span>
+                </div>
                 {checklists[mgmtType].items.length === 0 && <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>등록된 항목이 없습니다.</div>}
                 {checklists[mgmtType].items.map((item, idx) => (
                   <div key={item.id} style={{ padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
