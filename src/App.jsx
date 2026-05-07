@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 useEffect(() => { localStorage.setItem('checklists', JSON.stringify(checklists)); }, [checklists]);
 useEffect(() => { localStorage.setItem('ships',      JSON.stringify(ships));      }, [ships]);
 useEffect(() => { localStorage.setItem('history',    JSON.stringify(history));    }, [history]);
-import { useEffect } from "react";
+
 
 
 
