@@ -85,6 +85,72 @@ const sampleHistory = [
   { id: 5, type: "welding", date: "2026-05-05", time: "07:50", worker: "정우성", shipNo: "1234", status: "완료", warnings: 0 },
 ];
 
+const s = {
+  wrap: { fontFamily: "sans-serif", color: "var(--color-text-primary)", maxWidth: 720, margin: "0 auto", padding: "0 0 2rem" },
+  header: { background: "#0c447c", color: "#fff", padding: "1rem 1.25rem", borderRadius: "var(--border-radius-lg)", marginBottom: "1rem" },
+  tabs: { display: "flex", gap: 2, marginBottom: "1rem", borderBottom: "0.5px solid var(--color-border-tertiary)", flexWrap: "wrap" },
+  tab: (a) => ({ padding: "8px 12px", fontSize: 13, fontWeight: a ? 500 : 400, color: a ? "#185fa5" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderBottom: a ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1 }),
+  card: { background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1rem 1.25rem", marginBottom: 12 },
+  metricGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 },
+  metric: { background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem" },
+  typeGrid: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 },
+  typeBtn: (sel, color) => ({ background: sel ? color + "18" : "var(--color-background-primary)", border: sel ? `1.5px solid ${color}` : "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", cursor: "pointer", textAlign: "left" }),
+  badge: (risk) => ({ fontSize: 11, padding: "2px 7px", borderRadius: 99, background: RISK_COLORS[risk].bg, color: RISK_COLORS[risk].color, border: `0.5px solid ${RISK_COLORS[risk].border}`, whiteSpace: "nowrap", display: "inline-block" }),
+  progressBar: (pct, color) => ({ height: 6, background: color, borderRadius: 99, width: pct + "%", transition: "width .3s" }),
+  progressTrack: { height: 6, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 8 },
+  input: { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 14, background: "var(--color-background-primary)", color: "var(--color-text-primary)" },
+  select: { boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 13, background: "var(--color-background-primary)", color: "var(--color-text-primary)", cursor: "pointer" },
+  btn: (disabled) => ({ padding: "8px 18px", borderRadius: "var(--border-radius-md)", background: disabled ? "var(--color-background-secondary)" : "#185fa5", color: disabled ? "var(--color-text-tertiary)" : "#fff", border: "none", cursor: disabled ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" }),
+  btnSm: (color) => ({ padding: "5px 10px", borderRadius: "var(--border-radius-md)", background: "none", color: color || "var(--color-text-secondary)", border: `0.5px solid ${color || "var(--color-border-secondary)"}`, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }),
+  btnGhost: { padding: "7px 14px", borderRadius: "var(--border-radius-md)", background: "none", color: "#185fa5", border: "1px dashed #185fa5", cursor: "pointer", fontSize: 13, fontWeight: 500 },
+  warnBox: { background: "#fcebeb", border: "0.5px solid #f09595", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem", marginBottom: 12 },
+  histHead: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, padding: "6px 0 8px", borderBottom: "0.5px solid var(--color-border-secondary)", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500 },
+  histRow: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, alignItems: "center", padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", fontSize: 13 },
+};
+
+// ─────────────────────────────────────────────
+// (3) ColorPicker — App() 바깥으로 이동 ★
+// ─────────────────────────────────────────────
+function ColorPicker({ value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      {PRESET_COLORS.map(c => (
+        <button key={c} onClick={() => onChange(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: value === c ? "2.5px solid var(--color-text-primary)" : "2px solid transparent", cursor: "pointer", padding: 0, outline: "none", flexShrink: 0 }} />
+      ))}
+      <input type="color" value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: 28, height: 22, border: "0.5px solid var(--color-border-secondary)", borderRadius: 4, padding: 0, cursor: "pointer", background: "none" }}
+        title="직접 선택" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// (4) CatEditForm — App() 바깥으로 이동 ★
+// ─────────────────────────────────────────────
+function CatEditForm({ onSave, onCancel, label, setLabel, icon, setIcon, color, setColor, saveLabel }) {
+  return (
+    <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", marginBottom: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "60px 1fr", gap: 10, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>아이콘</div>
+          <input style={{ ...s.input, textAlign: "center", fontSize: 20 }} value={icon} onChange={e => setIcon(e.target.value)} maxLength={4} />
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>카테고리명 *</div>
+          <input style={s.input} placeholder="작업 유형 이름" value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => e.key === "Enter" && onSave()} />
+        </div>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>색상</div>
+        <ColorPicker value={color} onChange={setColor} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={s.btn(!label.trim())} onClick={onSave} disabled={!label.trim()}>{saveLabel || "저장"}</button>
+        <button style={s.btnSm()} onClick={onCancel}>취소</button>
+      </div>
+    </div>
+  );
+}
 export default function App() {
   const [tab, setTab] = useState(0);
   const [checklists, setChecklists] = useState(() => load('checklists', INIT_CHECKLISTS));
@@ -191,69 +257,6 @@ export default function App() {
   }
 
   const filteredHistory = filterType === "all" ? history : history.filter(h => h.type === filterType);
-
-  const s = {
-    wrap: { fontFamily: "sans-serif", color: "var(--color-text-primary)", maxWidth: 720, margin: "0 auto", padding: "0 0 2rem" },
-    header: { background: "#0c447c", color: "#fff", padding: "1rem 1.25rem", borderRadius: "var(--border-radius-lg)", marginBottom: "1rem" },
-    tabs: { display: "flex", gap: 2, marginBottom: "1rem", borderBottom: "0.5px solid var(--color-border-tertiary)", flexWrap: "wrap" },
-    tab: (a) => ({ padding: "8px 12px", fontSize: 13, fontWeight: a ? 500 : 400, color: a ? "#185fa5" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderBottom: a ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1 }),
-    card: { background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1rem 1.25rem", marginBottom: 12 },
-    metricGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 },
-    metric: { background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem" },
-    typeGrid: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 },
-    typeBtn: (sel, color) => ({ background: sel ? color + "18" : "var(--color-background-primary)", border: sel ? `1.5px solid ${color}` : "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", cursor: "pointer", textAlign: "left" }),
-    badge: (risk) => ({ fontSize: 11, padding: "2px 7px", borderRadius: 99, background: RISK_COLORS[risk].bg, color: RISK_COLORS[risk].color, border: `0.5px solid ${RISK_COLORS[risk].border}`, whiteSpace: "nowrap", display: "inline-block" }),
-    progressBar: (pct, color) => ({ height: 6, background: color, borderRadius: 99, width: pct + "%", transition: "width .3s" }),
-    progressTrack: { height: 6, background: "var(--color-background-secondary)", borderRadius: 99, marginBottom: 8 },
-    input: { width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 14, background: "var(--color-background-primary)", color: "var(--color-text-primary)" },
-    select: { boxSizing: "border-box", padding: "8px 10px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", fontSize: 13, background: "var(--color-background-primary)", color: "var(--color-text-primary)", cursor: "pointer" },
-    btn: (disabled) => ({ padding: "8px 18px", borderRadius: "var(--border-radius-md)", background: disabled ? "var(--color-background-secondary)" : "#185fa5", color: disabled ? "var(--color-text-tertiary)" : "#fff", border: "none", cursor: disabled ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" }),
-    btnSm: (color) => ({ padding: "5px 10px", borderRadius: "var(--border-radius-md)", background: "none", color: color || "var(--color-text-secondary)", border: `0.5px solid ${color || "var(--color-border-secondary)"}`, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }),
-    btnGhost: { padding: "7px 14px", borderRadius: "var(--border-radius-md)", background: "none", color: "#185fa5", border: "1px dashed #185fa5", cursor: "pointer", fontSize: 13, fontWeight: 500 },
-    warnBox: { background: "#fcebeb", border: "0.5px solid #f09595", borderRadius: "var(--border-radius-md)", padding: "0.75rem 1rem", marginBottom: 12 },
-    histHead: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, padding: "6px 0 8px", borderBottom: "0.5px solid var(--color-border-secondary)", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500 },
-    histRow: { display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr 70px 60px", gap: 8, alignItems: "center", padding: "10px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", fontSize: 13 },
-  };
-
-  // 카테고리 색상 팔레트 피커 컴포넌트
-  function ColorPicker({ value, onChange }) {
-    return (
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        {PRESET_COLORS.map(c => (
-          <button key={c} onClick={() => onChange(c)} style={{ width: 22, height: 22, borderRadius: "50%", background: c, border: value === c ? "2.5px solid var(--color-text-primary)" : "2px solid transparent", cursor: "pointer", padding: 0, outline: "none", flexShrink: 0 }} />
-        ))}
-        <input type="color" value={value} onChange={e => onChange(e.target.value)}
-          style={{ width: 28, height: 22, border: "0.5px solid var(--color-border-secondary)", borderRadius: 4, padding: 0, cursor: "pointer", background: "none" }}
-          title="직접 선택" />
-      </div>
-    );
-  }
-
-  // 카테고리 인라인 편집 폼
-  function CatEditForm({ onSave, onCancel, label, setLabel, icon, setIcon, color, setColor, saveLabel }) {
-    return (
-      <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "0.85rem 1rem", marginBottom: 4 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "60px 1fr", gap: 10, marginBottom: 10 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>아이콘</div>
-            <input style={{ ...s.input, textAlign: "center", fontSize: 20 }} value={icon} onChange={e => setIcon(e.target.value)} maxLength={4} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 5 }}>카테고리명 *</div>
-            <input style={s.input} placeholder="작업 유형 이름" value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => e.key === "Enter" && onSave()} />
-          </div>
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 6 }}>색상</div>
-          <ColorPicker value={color} onChange={setColor} />
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={s.btn(!label.trim())} onClick={onSave} disabled={!label.trim()}>{saveLabel || "저장"}</button>
-          <button style={s.btnSm()} onClick={onCancel}>취소</button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={s.wrap}>
