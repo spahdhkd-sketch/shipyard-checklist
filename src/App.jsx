@@ -152,8 +152,9 @@ function CatEditForm({ onSave, onCancel, label, setLabel, icon, setIcon, color, 
   );
 }
 export default function App() {
-  const [tab, setTab] = useState(0);
   const [checklists, setChecklists] = useState(() => load('checklists', INIT_CHECKLISTS));
+  const [tab, setTab] = useState(0);
+  
 
   // 호선
   const [ships,      setShips]      = useState(() => load('ships',      initShips));
