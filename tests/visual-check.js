@@ -373,11 +373,13 @@ function assertCheck(name, condition) {
       const text = document.body.innerText;
       return {
         hasToolPicker: text.includes("사용 공기구"),
+        hasAdminToggle: Boolean(document.querySelector('[data-action="toggle-admin"]')),
         hasWireDescription: text.includes("탑재용 와이어 선택 시 표시"),
         hasCommonDescription: text.includes("공통 항목"),
       };
     })()`);
     assertCheck("item management tool picker appears", itemsState.hasToolPicker);
+    assertCheck("item management admin toggle appears", itemsState.hasAdminToggle);
     assertCheck("linked tool description appears", itemsState.hasWireDescription);
     assertCheck("common item description appears", itemsState.hasCommonDescription);
     const itemsShot = await screenshot(client, "04-items-management-desktop.png");

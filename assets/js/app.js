@@ -960,6 +960,12 @@
       </div>`;
     }
 
+    function adminToggleButton() {
+      return `<button class="toggle ${state.adminMode ? "active" : ""}" data-action="toggle-admin" type="button" aria-pressed="${state.adminMode ? "true" : "false"}">
+        <span class="toggle-track"></span><span>수정 ${state.adminMode ? "ON" : "OFF"}</span>
+      </button>`;
+    }
+
     function renderDashboard() {
       const todayRows = state.inspections.filter((row) => row.date === today());
       const todayCount = todayRows.length;
@@ -1627,14 +1633,14 @@
 
     function renderItems() {
       if (!state.manageCategoryId) {
-        return `${pageHead("항목 관리", "작업 유형을 만들고, 유형 안에 섹션을 나눈 뒤 점검 항목을 추가합니다.")}
+        return `${pageHead("항목 관리", "작업 유형을 만들고, 유형 안에 섹션을 나눈 뒤 점검 항목을 추가합니다.", adminToggleButton())}
         <div class="panel panel-pad" style="margin-bottom:14px">
           <div class="section-title">공기구/준비물 관리</div>
           ${renderToolManager()}
         </div>
         <div class="panel panel-pad" style="margin-bottom:14px">
           <div class="section-title">작업 유형 추가</div>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 이력 화면에서 수정 모드를 ON으로 전환한 뒤 가능합니다.</div>`}
+          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
           <div class="form-row">
             <div class="field">
               <label for="catLabel">작업 유형명</label>
@@ -1672,7 +1678,7 @@
         state.manageCategoryId = null;
         return renderItems();
       }
-      return `${pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>`)}
+      return `${pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>${adminToggleButton()}`)}
       <div class="split">
         <div class="panel panel-pad">
           <div class="section-title">섹션 추가</div>
