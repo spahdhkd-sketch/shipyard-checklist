@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="stage-lc-title">
+  <title id="stage-lc-title">L/C</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 45h40"/><path d="M18 45l5-23h18l5 23"/><path d="M24 31h16"/><path d="M21 38h22"/><path d="M47 22l5 5-5 5"/><path d="M42 27h10"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">L/C</text>
+</svg>

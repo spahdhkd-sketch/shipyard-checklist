@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="machine-grinder-title">
+  <title id="machine-grinder-title">그라인더</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#10213d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#10213d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="40" r="11"/><path d="M32 32 47 17l7 7-15 15"/><path d="M16 48l-5 5"/><path d="M20 40h8"/><path d="M47 39l6 4"/><path d="M48 46l7 1"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">그라인더</text>
+</svg>

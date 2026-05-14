@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile Layout Mockup</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #dce5ef;
+      font-family: Arial, "Noto Sans KR", sans-serif;
+      color: #172033;
+    }
+    .phone {
+      width: 390px;
+      min-height: 844px;
+      margin: 0 auto;
+      background: #eef3f7;
+      overflow: hidden;
+    }
+    .header {
+      padding: 12px 14px 14px;
+      color: #fff;
+      background: #002b66;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .date { font-size: 18px; font-weight: 900; }
+    .sub { margin-top: 3px; font-size: 14px; font-weight: 800; opacity: .86; }
+    .online {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.14);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
+    main { padding: 12px 12px 84px; }
+    h2 {
+      margin: 14px 0 10px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .history-card {
+      min-height: 118px;
+      padding: 10px;
+      border: 1px solid #d8e0ea;
+      border-left: 5px solid var(--accent);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(23,32,51,.07);
+    }
+    .history-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--accent);
+      font-size: 14px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+    .history-title {
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+    .history-meta {
+      margin-top: 5px;
+      color: #607084;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .ships {
+      display: grid;
+      gap: 10px;
+    }
+    .ship-card {
+      padding: 12px;
+      border: 1px solid #d8e0ea;
+      border-left: 7px solid var(--stage);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(23,32,51,.07);
+    }
+    .ship-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 118px;
+      gap: 10px;
+      align-items: center;
+    }
+    .ship-no {
+      font-size: 22px;
+      font-weight: 1000;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ship-type {
+      margin-top: 4px;
+      color: #607084;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .stage-select {
+      width: 100%;
+      min-height: 48px;
+      border: 3px solid var(--stage);
+      border-radius: 8px;
+      background: var(--stage-bg);
+      color: var(--stage);
+      font-size: 17px;
+      font-weight: 1000;
+      padding: 8px 9px;
+    }
+    .dates {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .date-box {
+      min-height: 48px;
+      padding: 7px 8px;
+      border: 1px solid #d8e0ea;
+      border-radius: 8px;
+      background: #f7f9fc;
+    }
+    .date-label {
+      font-size: 12px;
+      color: #243653;
+      font-weight: 1000;
+    }
+    .date-value {
+      margin-top: 4px;
+      color: #607084;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 390px;
+      height: 64px;
+      background: #fff;
+      border-top: 1px solid #d8e0ea;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 900;
+      color: #607084;
+    }
+    .active { color: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <header class="header">
+      <div class="top">
+        <div>
+          <div class="date">2026.05.13 (수)</div>
+          <div class="sub">안전한 하루 되세요!</div>
+        </div>
+        <div class="online"><span class="dot"></span>온라인</div>
+      </div>
+    </header>
+    <main>
+      <h2>최근 점검 이력 - 2열 카드</h2>
+      <section class="history-grid">
+        <article class="history-card" style="--accent:#c2410c">
+          <div class="history-icon">탑</div>
+          <div class="history-title">탑재 점검</div>
+          <div class="history-meta">김작업 · H3449<br>완료율 100%</div>
+        </article>
+        <article class="history-card" style="--accent:#1d4ed8">
+          <div class="history-icon">LC</div>
+          <div class="history-title">DP검사 점검</div>
+          <div class="history-meta">박작업 · H3512<br>완료율 92%</div>
+        </article>
+      </section>
+      <h2>호선 카드 - 한 줄 상태 선택</h2>
+      <section class="ships">
+        <article class="ship-card" style="--stage:#c2410c;--stage-bg:#fff7ed">
+          <div class="ship-top">
+            <div>
+              <div class="ship-no">H3449</div>
+              <div class="ship-type">LNG · 작업자 공개</div>
+            </div>
+            <select class="stage-select"><option>탑재</option></select>
+          </div>
+          <div class="dates">
+            <div class="date-box"><div class="date-label">L/C</div><div class="date-value">2026-05-20</div></div>
+            <div class="date-box"><div class="date-label">S/T</div><div class="date-value">미입력</div></div>
+            <div class="date-box"><div class="date-label">C/L</div><div class="date-value">미입력</div></div>
+            <div class="date-box"><div class="date-label">D/L</div><div class="date-value">미입력</div></div>
+          </div>
+        </article>
+        <article class="ship-card" style="--stage:#1d4ed8;--stage-bg:#eff6ff">
+          <div class="ship-top">
+            <div>
+              <div class="ship-no">H3512</div>
+              <div class="ship-type">CNTR · 작업자 공개</div>
+            </div>
+            <select class="stage-select"><option>L/C</option></select>
+          </div>
+          <div class="dates">
+            <div class="date-box"><div class="date-label">L/C</div><div class="date-value">2026-05-11</div></div>
+            <div class="date-box"><div class="date-label">S/T</div><div class="date-value">2026-05-18</div></div>
+            <div class="date-box"><div class="date-label">C/L</div><div class="date-value">미입력</div></div>
+            <div class="date-box"><div class="date-label">D/L</div><div class="date-value">미입력</div></div>
+          </div>
+        </article>
+      </section>
+    </main>
+    <nav class="bottom-nav">
+      <span>홈</span><span>점검</span><span class="active">호선</span><span>기록</span><span>더보기</span>
+    </nav>
+  </div>
+</body>
+</html>

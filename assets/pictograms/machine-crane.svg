@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="machine-crane-title">
+  <title id="machine-crane-title">골리앗 크레인</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#10213d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#10213d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15h44"/><path d="M18 15v38"/><path d="M46 15v38"/><path d="M14 53h10"/><path d="M40 53h10"/><path d="M32 15v18"/><path d="M26 33h12"/><path d="M32 33v9"/><path d="m28 45 4 4 4-4"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">골리앗 크레인</text>
+</svg>

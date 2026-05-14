@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="status-online-title">
+  <title id="status-online-title">온라인</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#15803d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#15803d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="14"/><path d="M32 14v-5"/><path d="M32 55v-5"/><path d="M14 32H9"/><path d="M55 32h-5"/><path d="m21 21-4-4"/><path d="m47 47-4-4"/><path d="m43 21 4-4"/><path d="m17 47 4-4"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">온라인</text>
+</svg>

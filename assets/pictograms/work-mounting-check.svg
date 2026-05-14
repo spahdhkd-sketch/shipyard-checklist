@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="work-mounting-check-title">
+  <title id="work-mounting-check-title">탑재 점검</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#c2410c" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#c2410c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 52h40"/><path d="M20 52V34h24v18"/><path d="M32 12v22"/><path d="M24 20h16"/><path d="M43 16l6 6"/><path d="m42 47 4 4 8-10"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">탑재 점검</text>
+</svg>

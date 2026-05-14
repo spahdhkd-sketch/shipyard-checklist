@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="machine-paintgun-title">
+  <title id="machine-paintgun-title">도장 건</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#10213d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#10213d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 24h26v11H14z"/><path d="M40 27h8l6 5"/><path d="M23 35l-5 16h10l5-16"/><path d="M54 28c4 2 4 6 0 8"/><path d="M58 24c6 6 6 16 0 22"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">도장 건</text>
+</svg>

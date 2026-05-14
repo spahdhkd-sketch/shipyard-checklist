@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="machine-lifting-jack-title">
+  <title id="machine-lifting-jack-title">리프팅 잭</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#10213d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#10213d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 50h32"/><path d="M22 50l8-25h11l-8 25"/><path d="M27 25h23"/><path d="M45 25l7-9"/><path d="M22 40h18"/><path d="M18 56h36"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">리프팅 잭</text>
+</svg>

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="status-online-title">
+  <title id="status-online-title">온라인</title>
+  <g fill="none" stroke="#15803d" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="16"/><path d="M32 11V5"/><path d="M32 59v-6"/><path d="M11 32H5"/><path d="M59 32h-6"/><path d="m19 19-5-5"/><path d="m50 50-5-5"/><path d="m45 19 5-5"/><path d="m14 50 5-5"/></g>
+</svg>

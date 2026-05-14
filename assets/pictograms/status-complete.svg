@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="status-complete-title">
+  <title id="status-complete-title">완료</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#15803d" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#15803d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="12" width="34" height="42" rx="4"/><path d="M24 22h16"/><path d="M24 31h12"/><path d="m23 43 6 6 13-17"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">완료</text>
+</svg>

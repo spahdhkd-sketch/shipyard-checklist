@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="machine-crane-title">
+  <title id="machine-crane-title">크레인</title>
+  <g fill="none" stroke="#10213d" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12h50"/><path d="M16 12v43"/><path d="M48 12v43"/><path d="M11 55h13"/><path d="M40 55h13"/><path d="M32 12v21"/><path d="M25 33h14"/><path d="M32 33v10"/><path d="m27 47 5 5 5-5"/></g>
+</svg>

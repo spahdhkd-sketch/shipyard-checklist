@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>공기구 관리 단순화 시안</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #66758a;
+      --line: #d8e1ec;
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --blue: #1d4ed8;
+      --orange: #c2410c;
+      --green: #0f766e;
+      --red: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, "Noto Sans KR", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .canvas {
+      width: 900px;
+      margin: 0 auto;
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+    }
+
+    .phone {
+      background: #f7fafc;
+      border: 1px solid #cad6e5;
+      border-radius: 18px;
+      box-shadow: 0 24px 50px rgba(15, 23, 42, .16);
+      overflow: hidden;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      background: #111827;
+      color: #fff;
+    }
+
+    .top strong {
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .top span {
+      font-size: 12px;
+      color: #bdd0e7;
+      font-weight: 800;
+    }
+
+    .screen {
+      padding: 14px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .section-title strong {
+      font-size: 17px;
+      font-weight: 1000;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .add-btn {
+      min-height: 34px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--blue);
+      color: #fff;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .tool-card {
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 7px 5px;
+      text-align: center;
+      display: grid;
+      gap: 4px;
+      align-content: center;
+    }
+
+    .tool-name {
+      font-size: 13px;
+      font-weight: 1000;
+      line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+
+    .badge {
+      justify-self: center;
+      min-height: 19px;
+      padding: 3px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 1000;
+      line-height: 1;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .pre { color: var(--orange); background: #fff7ed; border-color: #fed7aa; }
+    .post { color: var(--blue); background: #eff6ff; border-color: #bfdbfe; }
+    .both { color: var(--green); background: #f0fdfa; border-color: #99f6e4; }
+
+    .expanded {
+      grid-column: 1 / -1;
+      border: 2px solid var(--blue);
+      background: #f8fbff;
+      min-height: 0;
+      padding: 10px;
+      text-align: left;
+      align-content: stretch;
+    }
+
+    .expanded-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .edit-grid {
+      display: grid;
+      grid-template-columns: 1fr 112px;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .input, .select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid #b8c8da;
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 9px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .save, .delete {
+      min-height: 36px;
+      border-radius: 7px;
+      font-weight: 1000;
+      font-size: 13px;
+    }
+
+    .save {
+      border: 0;
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .delete {
+      border: 1px solid #fecaca;
+      background: #fff1f2;
+      color: var(--red);
+    }
+
+    .add-box {
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px dashed #9fb4cc;
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+
+    .caption {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+    <div>
+      <div class="phone">
+        <div class="top">
+          <div>
+            <strong>기본 보기</strong><br />
+            <span>평소에는 카드만 가볍게 표시</span>
+          </div>
+          <button class="add-btn">+ 추가</button>
+        </div>
+        <div class="screen">
+          <div class="panel">
+            <div class="section-title">
+              <strong>공기구/준비물 관리</strong>
+              <span class="small">13개</span>
+            </div>
+            <div class="tool-grid">
+              <div class="tool-card"><div class="tool-name">용접기</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">와이어</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">슬링벨트</div><span class="badge both">선/후행</span></div>
+              <div class="tool-card"><div class="tool-name">발판</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">당김줄</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">지그</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">체인블럭</div><span class="badge both">선/후행</span></div>
+              <div class="tool-card"><div class="tool-name">에어호스</div><span class="badge post">후행</span></div>
+              <div class="tool-card"><div class="tool-name">그라인더</div><span class="badge both">선/후행</span></div>
+              <div class="tool-card"><div class="tool-name">라쳇풀러</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">난연비닐</div><span class="badge post">후행</span></div>
+              <div class="tool-card"><div class="tool-name">임팩트</div><span class="badge both">선/후행</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">이 화면은 목록성 정보만 남깁니다. 입력창과 저장/삭제 버튼이 사라져서 첫인상이 훨씬 덜 복잡합니다.</p>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="top">
+          <div>
+            <strong>편집 상태</strong><br />
+            <span>선택한 카드만 펼쳐서 수정</span>
+          </div>
+          <button class="add-btn">+ 추가</button>
+        </div>
+        <div class="screen">
+          <div class="panel">
+            <div class="section-title">
+              <strong>공기구/준비물 관리</strong>
+              <span class="small">관리자 수정 ON</span>
+            </div>
+            <div class="add-box">
+              <div class="edit-grid">
+                <input class="input" value="새 공기구" />
+                <select class="select"><option>선행</option></select>
+              </div>
+              <button class="save" style="width:100%">공기구 추가</button>
+            </div>
+            <div class="tool-grid">
+              <div class="tool-card"><div class="tool-name">용접기</div><span class="badge pre">선행</span></div>
+              <div class="tool-card expanded">
+                <div class="expanded-head">
+                  <strong>슬링벨트</strong>
+                  <span class="badge both">선/후행</span>
+                </div>
+                <div class="edit-grid">
+                  <input class="input" value="슬링벨트" />
+                  <select class="select"><option>선/후행</option></select>
+                </div>
+                <div class="actions">
+                  <button class="save">저장</button>
+                  <button class="delete">삭제</button>
+                </div>
+              </div>
+              <div class="tool-card"><div class="tool-name">와이어</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">발판</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">에어호스</div><span class="badge post">후행</span></div>
+              <div class="tool-card"><div class="tool-name">그라인더</div><span class="badge both">선/후행</span></div>
+              <div class="tool-card"><div class="tool-name">라쳇풀러</div><span class="badge pre">선행</span></div>
+              <div class="tool-card"><div class="tool-name">임팩트</div><span class="badge both">선/후행</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">편집은 한 번에 하나만 펼칩니다. 관리 기능은 유지하면서 화면 전체가 입력 폼처럼 보이는 느낌을 줄입니다.</p>
+    </div>
+  </div>
+</body>
+</html>

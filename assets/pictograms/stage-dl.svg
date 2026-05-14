@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="stage-dl-title">
+  <title id="stage-dl-title">D/L</title>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#7e22ce" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#7e22ce" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 42h40l-7 10H19z"/><path d="M20 42l5-18h17l5 18"/><path d="M28 24V12h8v12"/><path d="M24 56h16"/><path d="M44 18l8 8"/><path d="M52 18l-8 8"/></g>
+  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">D/L</text>
+</svg>
