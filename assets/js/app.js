@@ -1,5 +1,4 @@
 ﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const ADMIN_PASSWORD = "gs2026";
     const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
@@ -131,6 +130,7 @@
     }));
     const SHIP_TYPES = ["CNTR", "LNG", "LPG", "COT", "FSRU", "기타"];
     const TOOL_NATURES = ["선행", "후행", "선행/후행"];
+    const CHECKLIST_RULES = window.ChecklistRules;
     const ITEM_VISIBILITY_CONDITIONS = ["항상 표시", ...TOOL_NATURES];
     const DEFAULT_CATEGORY_NATURES = {
       mounting: "선행",
@@ -311,6 +311,7 @@
           warnings: row.warnings || 0,
           completion: row.completion || 0,
           tools: Array.isArray(row.tools) ? row.tools : [],
+          safety_pledge: row.safetyPledge || "",
           created_at: row.createdAt || serverNow().toISOString(),
         }),
         fromDb: (row) => ({
@@ -324,6 +325,7 @@
           warnings: row.warnings || 0,
           completion: row.completion || 0,
           tools: Array.isArray(row.tools) ? row.tools : [],
+          safetyPledge: row.safety_pledge || "",
           createdAt: row.created_at,
         }),
       },
@@ -448,6 +450,7 @@
       return {
         worker: "",
         shipNo: "",
+        safetyPledge: "",
         checks: {},
         selectedToolIds: [],
         toolPrepComplete: false,
@@ -486,12 +489,15 @@
       syncText: "로컬 저장",
       screenMode: localStorage.getItem(storeKey("screenMode")) || "desktop",
       shipSortMode: normalizeShipSortMode(loadJson("shipSortMode", "stage")),
-      adminMode: sessionStorage.getItem("shipyardSafetyAdmin") === "true",
+      adminMode: false,
+      adminEmail: "",
       scrollTimer: null,
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
     };
+    let cachedSupabaseClient = null;
+    let authListenerReady = false;
 
     function initialView() {
       const view = document.body?.dataset?.initialView || "dashboard";
@@ -521,7 +527,7 @@
       }
       return false;
     }
-    function boot() {
+    async function boot() {
       migrateIfNeeded();
       cleanupDeliveredShips(false);
       applyScreenMode();
@@ -535,6 +541,8 @@
       window.addEventListener("popstate", restoreRouteState);
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
+        setupAuthListener();
+        refreshAdminSession({ renderAfter: true });
         syncServerClock();
         pullRemote();
       }
@@ -581,6 +589,7 @@
             categoryId: entry.type,
             worker: entry.worker || "",
             shipNo: entry.shipNo || "",
+            safetyPledge: entry.safetyPledge || "",
             date: entry.date || today(),
             time: entry.time || "",
             status: entry.status || "미완료",
@@ -1219,6 +1228,10 @@
                   ${selectableShips.map((ship) => `<option value="${esc(ship.no)}" ${state.draft.shipNo === ship.no ? "selected" : ""}>${esc(ship.no)} · ${esc(ship.type || "선종 미지정")}</option>`).join("")}
                 </select>
               </div>
+              <div class="field safety-pledge-field">
+                <label for="safetyPledge">안전다짐</label>
+                <textarea class="textarea" id="safetyPledge" placeholder="오늘 하루의 안전다짐 작성을 해주세요">${esc(state.draft.safetyPledge)}</textarea>
+              </div>
             </div>
           </div>
           ${selectableShips.length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
@@ -1284,7 +1297,7 @@
           ${items.length ? items.map((row) => `
             <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}">
               <input type="checkbox" data-check-item="${row.id}" ${state.draft.checks[row.id] ? "checked" : ""} />
-              <span class="check-text">${esc(row.text)}</span>
+              <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
               ${badge(row.risk)}
             </label>`).join("") : `<div class="notice">이 섹션에는 항목이 없습니다.</div>`}
         </section>`;
@@ -1328,7 +1341,7 @@
       ${isDeliveryScope ? "" : `<div class="segmented" style="margin-bottom:12px">
         ${filterButtons.map(([id, label]) => `<button class="seg-btn ${state.historyFilter === id ? "active" : ""}" data-history-filter="${id}" type="button">${esc(label)}</button>`).join("")}
       </div>`}
-      ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 비밀번호로 수정 모드를 켠 뒤 사용할 수 있습니다.</div>`)}
+      ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 이메일 로그인 후 사용할 수 있습니다.</div>`)}
       <div class="panel panel-pad">
         ${isDeliveryScope
           ? (deliveryRows.length ? renderDeliveryCards(deliveryRows) : `<div class="empty">7일 이내 인도 예정 호선이 없습니다.</div>`)
@@ -1428,6 +1441,10 @@
               <div class="field">
                 <label>점검 일시</label>
                 <input class="input" value="${esc(`${row.date || "-"} ${row.time || ""}`.trim())}" readonly />
+              </div>
+              <div class="field safety-pledge-field">
+                <label>안전다짐</label>
+                <textarea class="textarea" readonly>${esc(row.safetyPledge || "-")}</textarea>
               </div>
             </div>
           </div>
@@ -1755,6 +1772,7 @@
                 ${visibilityConditionOptions("항상 표시")}
               </select>
             </div>
+            ${renderItemToolPicker({ groupId: `add_${section.id}`, categoryId: cat.id, selectedIds: [] })}
             <button class="btn" data-add-item="${section.id}" ${state.adminMode ? "" : "disabled"} type="button">항목 추가</button>
           </div>
           <div class="list">
@@ -1801,12 +1819,31 @@
               </select>
             </div>
           </div>
-          <div class="small muted" style="margin-top:8px">공기구 개별 연결 대신 성격 조건으로 표시됩니다.</div>
+          ${renderItemToolPicker({ groupId: `edit_${row.id}`, categoryId: row.categoryId, selectedIds: row.toolIds })}
         </div>
         <div class="item-actions manage-actions">
           <button class="btn" data-save-item="${row.id}" type="button">저장</button>
           <button class="btn-danger" data-delete-item="${row.id}" type="button">삭제</button>
         </div>
+      </div>`;
+    }
+
+    function renderItemToolPicker({ groupId, categoryId, selectedIds }) {
+      const tools = visibleToolsForCategory(categoryId);
+      const selected = new Set(sanitizeToolIds(selectedIds));
+      return `<div class="field item-tool-picker">
+        <div class="field-label">사용 공기구</div>
+        ${tools.length ? `<div class="item-tool-options">
+          ${tools.map((tool) => {
+            const inputId = `itemTool_${groupId}_${tool.id}`;
+            return `<label class="item-tool-option" for="${esc(inputId)}">
+              <input id="${esc(inputId)}" type="checkbox" value="${esc(tool.id)}" data-item-tool-group="${esc(groupId)}" ${selected.has(tool.id) ? "checked" : ""} ${state.adminMode ? "" : "disabled"} />
+              <span>${esc(tool.name)}</span>
+              ${natureBadge(tool.nature)}
+            </label>`;
+          }).join("")}
+        </div>` : `<div class="notice">선택 가능한 공기구가 없습니다. 공기구/준비물 관리에서 먼저 추가하세요.</div>`}
+        <div class="small muted">선택하지 않으면 공기구와 무관한 공통 항목으로 표시됩니다.</div>
       </div>`;
     }
 
@@ -1901,7 +1938,25 @@
 
     function describeItemVisibility(row) {
       const condition = normalizeVisibilityCondition(row.visibilityCondition);
-      return condition === "항상 표시" ? "항상 표시" : `${condition} 공기구 선택 시 표시`;
+      const tools = linkedToolsForItem(row).map((tool) => tool.name);
+      if (tools.length) {
+        const toolText = tools.join(", ");
+        return condition === "항상 표시" ? `${toolText} 선택 시 표시` : `${condition} · ${toolText} 선택 시 표시`;
+      }
+      return condition === "항상 표시" ? "공통 항목" : `${condition} 공기구 선택 시 표시`;
+    }
+
+    function linkedToolsForItem(row) {
+      return sanitizeToolIds(row.toolIds)
+        .map((id) => toolById(id))
+        .filter((tool) => tool && tool.deleted !== true);
+    }
+
+    function renderItemToolChips(row) {
+      const selected = new Set(sanitizeToolIds(state.draft.selectedToolIds));
+      const tools = linkedToolsForItem(row).filter((tool) => selected.has(tool.id));
+      if (!tools.length) return "";
+      return `<span class="item-tool-chips">${tools.map((tool) => `<span class="item-tool-chip">${esc(tool.name)}</span>`).join("")}</span>`;
     }
 
     function badge(risk, text = RISKS[risk]?.label || risk) {
@@ -2084,37 +2139,12 @@
       return natureBadge(condition);
     }
 
-    function naturesForCategory(cat) {
-      const nature = normalizeToolNature(cat?.toolNature || defaultToolNatureForCategory(cat));
-      if (nature === "선행") return new Set(["선행", "선행/후행"]);
-      if (nature === "후행") return new Set(["후행", "선행/후행"]);
-      return new Set(TOOL_NATURES);
-    }
-
     function visibleToolsForCategory(categoryId) {
       const cat = categoryById(categoryId);
-      const allowed = naturesForCategory(cat);
-      return activeTools().filter((tool) => allowed.has(normalizeToolNature(tool.nature)));
-    }
-
-    function visibleConditionsForSelectedTools(categoryId) {
-      const selected = sanitizeToolIds(state.draft.selectedToolIds)
-        .map((id) => toolById(id))
-        .filter((tool) => tool && tool.deleted !== true && visibleToolsForCategory(categoryId).some((candidate) => candidate.id === tool.id));
-      const allowed = new Set(["항상 표시"]);
-      selected.forEach((tool) => {
-        const nature = normalizeToolNature(tool.nature);
-        if (nature === "선행") {
-          allowed.add("선행");
-          allowed.add("선행/후행");
-        } else if (nature === "후행") {
-          allowed.add("후행");
-          allowed.add("선행/후행");
-        } else {
-          TOOL_NATURES.forEach((value) => allowed.add(value));
-        }
-      });
-      return allowed;
+      return activeTools().filter((tool) => CHECKLIST_RULES.toolMatchesCategoryNature(
+        tool,
+        cat?.toolNature || defaultToolNatureForCategory(cat),
+      ));
     }
 
     function sanitizeToolIds(toolIds) {
@@ -2206,16 +2236,25 @@
       state.draft = createDraft({
         worker: state.draft.worker,
         shipNo: state.draft.shipNo,
+        safetyPledge: state.draft.safetyPledge,
         checks: {},
       });
     }
 
     function filteredChecklistItems(categoryId) {
-      const visibleConditions = visibleConditionsForSelectedTools(categoryId);
-      return activeItems(categoryId).filter((row) => {
-        const condition = normalizeVisibilityCondition(row.visibilityCondition);
-        return visibleConditions.has(condition);
+      const cat = categoryById(categoryId);
+      return CHECKLIST_RULES.filterChecklistItems({
+        items: activeItems(categoryId),
+        tools: activeTools(),
+        selectedToolIds: state.draft.selectedToolIds,
+        categoryNature: cat?.toolNature || defaultToolNatureForCategory(cat),
       });
+    }
+
+    function selectedItemToolIds(groupId) {
+      return Array.from(document.querySelectorAll("[data-item-tool-group]"))
+        .filter((node) => node.dataset.itemToolGroup === groupId && node.checked)
+        .map((node) => node.value);
     }
 
     function selectedColor() {
@@ -2384,6 +2423,7 @@
 
     document.addEventListener("input", (event) => {
       if (event.target.id === "worker") state.draft.worker = event.target.value;
+      if (event.target.id === "safetyPledge") state.draft.safetyPledge = event.target.value;
       if (event.target.matches("[data-check-item]")) {
         state.draft.checks[event.target.dataset.checkItem] = event.target.checked;
         render();
@@ -2435,6 +2475,7 @@
         categoryId: cat.id,
         worker: state.draft.worker.trim(),
         shipNo: state.draft.shipNo,
+        safetyPledge: state.draft.safetyPledge.trim(),
         date: localDate(now),
         time: recordTime(now),
         status: checkedCount === items.length ? "완료" : "미완료",
@@ -2475,38 +2516,108 @@
       toast("점검 이력은 저장되었지만 서버 동기화에 실패했습니다.");
     }
 
-    function verifyAdmin() {
-      if (state.adminMode) return true;
-      const password = prompt("관리자 비밀번호를 입력하세요.");
-      if (password === ADMIN_PASSWORD) {
-        state.adminMode = true;
-        sessionStorage.setItem("shipyardSafetyAdmin", "true");
-        toast("수정 모드가 켜졌습니다.");
+    function setAdminMode(enabled, email = "") {
+      state.adminMode = Boolean(enabled);
+      state.adminEmail = enabled ? email : "";
+      if (!enabled) {
+        state.toolAddOpen = false;
+        state.editToolId = null;
+        state.editSectionId = null;
+        state.editItemId = null;
+        state.selectedHistoryIds = [];
+      }
+    }
+
+    async function refreshAdminSession(options = {}) {
+      const client = supabaseClient();
+      if (!client) {
+        setAdminMode(false);
+        if (options.renderAfter) render();
+        return false;
+      }
+
+      try {
+        const { data: sessionData, error: sessionError } = await client.auth.getSession();
+        if (sessionError) throw sessionError;
+        const session = sessionData?.session;
+        if (!session) {
+          setAdminMode(false);
+          if (options.renderAfter) render();
+          return false;
+        }
+
+        const { data: isAdmin, error: adminError } = await client.rpc("is_shipyard_admin");
+        if (adminError) throw adminError;
+        setAdminMode(Boolean(isAdmin), session.user?.email || "");
+        if (!isAdmin && options.showStatus) toast("관리자 권한이 없는 계정입니다.");
+        if (options.renderAfter) render();
+        return Boolean(isAdmin);
+      } catch (error) {
+        console.error(error);
+        setAdminMode(false);
+        if (options.showStatus) toast("관리자 권한을 확인하지 못했습니다. Supabase 정책을 확인하세요.");
+        if (options.renderAfter) render();
+        return false;
+      }
+    }
+
+    function setupAuthListener() {
+      const client = supabaseClient();
+      if (!client || authListenerReady) return;
+      authListenerReady = true;
+      client.auth.onAuthStateChange(() => {
+        refreshAdminSession({ renderAfter: true });
+      });
+    }
+
+    async function requestAdminAccess() {
+      const client = supabaseClient();
+      if (!client) {
+        toast("Supabase 연결이 없어 관리자 로그인을 사용할 수 없습니다.");
+        return false;
+      }
+
+      const hasAdminSession = await refreshAdminSession({ showStatus: true, renderAfter: true });
+      if (hasAdminSession) {
+        toast("관리자 수정 모드가 켜졌습니다.");
         return true;
       }
-      if (password !== null) toast("비밀번호가 맞지 않습니다.");
+
+      const email = prompt("관리자 이메일을 입력하세요.");
+      if (!email) return false;
+      const { error } = await client.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: location.href },
+      });
+      if (error) {
+        console.error(error);
+        toast("관리자 로그인 링크를 보내지 못했습니다.");
+        return false;
+      }
+      toast("관리자 로그인 링크를 이메일로 보냈습니다.");
       return false;
     }
 
-    function toggleAdminMode() {
+    async function toggleAdminMode() {
+      const client = supabaseClient();
       if (state.adminMode) {
-        state.adminMode = false;
-        sessionStorage.removeItem("shipyardSafetyAdmin");
-        toast("수정 모드가 꺼졌습니다.");
+        if (client) await client.auth.signOut({ scope: "local" });
+        setAdminMode(false);
+        toast("관리자 수정 모드가 꺼졌습니다.");
         render();
         return;
       }
-      if (verifyAdmin()) render();
+      await requestAdminAccess();
     }
 
     function requireAdmin() {
       if (state.adminMode) return true;
-      toast("수정 모드를 먼저 켜주세요.");
+      toast("관리자 이메일로 로그인한 뒤 수정 모드를 켜주세요.");
       return false;
     }
 
     async function resetHistory() {
-      if (!verifyAdmin()) return;
+      if (!requireAdmin()) return;
       if (!confirm("모든 점검 이력을 초기화할까요? 작업 유형, 섹션, 항목, 호선은 유지됩니다.")) return;
       state.inspections = [];
       state.inspectionItems = [];
@@ -2544,7 +2655,7 @@
     }
 
     function deleteSelectedHistory() {
-      if (!verifyAdmin()) return;
+      if (!requireAdmin()) return;
       const ids = new Set(state.selectedHistoryIds);
       if (!ids.size) return toast("삭제할 이력을 선택하세요.");
       if (!confirm(`선택한 점검 이력 ${ids.size}건을 삭제할까요?`)) return;
@@ -2741,7 +2852,7 @@
         risk,
         required: requiredChoice === "yes" || (requiredChoice === "auto" && risk === "high"),
         active: true,
-        toolIds: [],
+        toolIds: selectedItemToolIds(`add_${sectionId}`),
         visibilityCondition: normalizeVisibilityCondition(visibilityNode?.value),
         order: activeItems(section.categoryId).filter((row) => row.sectionId === sectionId).length + 1,
       });
@@ -2755,12 +2866,14 @@
       const risk = $(`editItemRisk_${id}`).value;
       const required = $(`editItemRequired_${id}`).value === "yes";
       const visibilityCondition = normalizeVisibilityCondition($(`editItemVisibility_${id}`)?.value);
+      const toolIds = selectedItemToolIds(`edit_${id}`);
       if (!text) return toast("점검 항목 내용을 입력하세요.");
       state.items = state.items.map((row) => row.id === id ? {
         ...row,
         text,
         risk,
         required,
+        toolIds,
         visibilityCondition,
       } : row);
       persistAndSync();
@@ -2901,7 +3014,10 @@
 
     function supabaseClient() {
       if (!isSyncConfigured() || !window.supabase) return null;
-      return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      if (!cachedSupabaseClient) {
+        cachedSupabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+      return cachedSupabaseClient;
     }
 
     async function pushRemote() {
@@ -2996,7 +3112,7 @@
       if (!expiredIds.length) return;
       const expired = new Set(expiredIds);
       state.ships = state.ships.filter((ship) => !expired.has(ship.id));
-      if (syncRemote && isSyncConfigured()) deleteRemoteShips(expiredIds);
+      if (syncRemote && state.adminMode && isSyncConfigured()) deleteRemoteShips(expiredIds);
     }
 
     async function deleteRemoteHistory(ids) {
@@ -3035,7 +3151,13 @@
       if (!config) throw new Error("Remote table config is missing.");
       const targetRows = config.rows ? config.rows(rows) : rows;
       if (!targetRows.length) return;
-      const { error } = await client.from(config.table).upsert(targetRows.map(config.toDb), { onConflict: "id" });
+      const payload = targetRows.map(config.toDb);
+      let { error } = await client.from(config.table).upsert(payload, { onConflict: "id" });
+      if (error && config.key === "inspections" && /safety_pledge/i.test(String(error.message || error.details || ""))) {
+        const fallbackPayload = payload.map(({ safety_pledge, ...row }) => row);
+        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+        error = retry.error;
+      }
       if (error) throw error;
     }
 
