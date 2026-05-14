@@ -1,7 +1,7 @@
 # History Label First-Space Line Break
 
 Date: 2026-05-14
-Status: recorded before deployment
+Status: deployed
 
 ## Change Summary
 
@@ -15,12 +15,22 @@ Status: recorded before deployment
 - `assets/js/app.js`
 - `tools/browser-smoke.mjs`
 
-## Verification Before Deploy
+## GitHub Record
+
+- Pre-deploy record commit: `1572c67dac82df78cda40b73c967b7ef33d84e54`
+
+## Verification
 
 - `node --check assets\\js\\app.js`: passed
 - `node --check tools\\browser-smoke.mjs`: passed
-- Full browser smoke currently has an unrelated submit-smoke fixture readiness issue in the test harness, so this deployment should be checked with focused browser verification after deploy.
+- Focused deployed browser check: passed
+  - URL opened: `https://index-html-nu-dun-35.vercel.app/index.html`
+  - Recent history cards found: `4`
+  - First card title HTML observed: `DEMO<br>체크리스트`
 
 ## Deployment
 
-Deployment should occur after this GitHub record, per the requested workflow.
+- Vercel deployment id: `dpl_6HDwpojntmNU8kUrVKVuoCKsNuKZ`
+- Production URL: `https://index-html-pma6rmgeq-spahdhkd-3161s-projects.vercel.app`
+- Alias URL: `https://index-html-nu-dun-35.vercel.app`
+- Vercel status: `Ready`
