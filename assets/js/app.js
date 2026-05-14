@@ -497,6 +497,8 @@
       editItemId: null,
       editToolId: null,
       toolAddOpen: false,
+      openAddItemSectionIds: [],
+      categoryVisualOpen: false,
       draft: loadDraft(),
       historyScope: "all",
       historyFilter: "all",
@@ -1172,6 +1174,10 @@
       </div>`;
     }
 
+    function moreToggle(attrs, expanded) {
+      return `<button class="more-toggle" ${attrs} type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "------접기------" : "------+더보기------"}</button>`;
+    }
+
     function workAccent(id, fallback) {
       return stageForCategory({ id, label: id })?.color || ({
         welding: "#0b66ff",
@@ -1693,6 +1699,7 @@
         state.manageCategoryId = null;
         return renderItems();
       }
+      const visualOpen = state.categoryVisualOpen === true;
       return `${pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>${adminToggleButton()}`)}
       <div class="split">
         <div class="panel panel-pad">
@@ -1714,27 +1721,30 @@
               <div class="small muted">현재 값: ${esc(cat.icon || "-")}</div>
             </div>
           </div>
-          <div class="field" style="margin-bottom:10px">
-            <label for="editCatIcon">아이콘 값</label>
-            <input class="input" id="editCatIcon" value="${esc(cat.icon || "")}" placeholder="예) erection 또는 P" ${state.adminMode ? "" : "disabled"} />
-          </div>
-          <div class="field" style="margin-bottom:10px">
-            <label for="editCatToolNature">공기구 기준 성격</label>
-            <select class="select" id="editCatToolNature" ${state.adminMode ? "" : "disabled"}>
-              ${toolNatureOptions(cat.toolNature)}
-            </select>
-          </div>
-          <button class="toggle ${cat.requireToolCheck !== false ? "active" : ""}" data-toggle-tool-check="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-pressed="${cat.requireToolCheck !== false ? "true" : "false"}" style="width:100%;margin-bottom:10px">
-            <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
-          </button>
-          ${renderPictogramPicker(cat.icon || "", "editCatIcon")}
-          <button class="btn" data-action="save-category-icon" ${state.adminMode ? "" : "disabled"} type="button" style="width:100%;margin-top:10px">기준 저장</button>
-          <div class="tool-admin-stack">
-            <div>
-              <div class="section-title" style="margin-top:16px">픽토그램 라이브러리 관리</div>
-              ${renderPictogramLibraryManager()}
+          ${moreToggle("data-toggle-category-visual", visualOpen)}
+          ${visualOpen ? `<div class="collapsible-panel">
+            <div class="field" style="margin-bottom:10px">
+              <label for="editCatIcon">아이콘 값</label>
+              <input class="input" id="editCatIcon" value="${esc(cat.icon || "")}" placeholder="예) erection 또는 P" ${state.adminMode ? "" : "disabled"} />
             </div>
-          </div>
+            <div class="field" style="margin-bottom:10px">
+              <label for="editCatToolNature">공기구 기준 성격</label>
+              <select class="select" id="editCatToolNature" ${state.adminMode ? "" : "disabled"}>
+                ${toolNatureOptions(cat.toolNature)}
+              </select>
+            </div>
+            <button class="toggle ${cat.requireToolCheck !== false ? "active" : ""}" data-toggle-tool-check="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-pressed="${cat.requireToolCheck !== false ? "true" : "false"}" style="width:100%;margin-bottom:10px">
+              <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
+            </button>
+            ${renderPictogramPicker(cat.icon || "", "editCatIcon")}
+            <button class="btn" data-action="save-category-icon" ${state.adminMode ? "" : "disabled"} type="button" style="width:100%;margin-top:10px">기준 저장</button>
+            <div class="tool-admin-stack">
+              <div>
+                <div class="section-title" style="margin-top:16px">픽토그램 라이브러리 관리</div>
+                ${renderPictogramLibraryManager()}
+              </div>
+            </div>
+          </div>` : ""}
         </aside>
       </div>
       <div class="list" style="margin-top:14px">
@@ -1745,6 +1755,7 @@
     function renderSectionManager(cat, section) {
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
       const editingSection = state.editSectionId === section.id;
+      const addOpen = state.openAddItemSectionIds.includes(section.id);
       return `<section class="section-card">
         <div class="section-card-head">
           ${editingSection ? `
@@ -1766,7 +1777,8 @@
             </div>`}
         </div>
         <div class="section-card-body">
-          <div class="inline-form">
+          ${moreToggle(`data-toggle-add-item="${esc(section.id)}"`, addOpen)}
+          ${addOpen ? `<div class="inline-form item-add-form">
             <div class="field">
               <label for="itemText_${section.id}">점검 항목</label>
               <input class="input" id="itemText_${section.id}" placeholder="점검 내용을 입력하세요" />
@@ -1795,7 +1807,7 @@
             </div>
             ${renderItemToolPicker({ groupId: `add_${section.id}`, categoryId: cat.id, selectedIds: [] })}
             <button class="btn" data-add-item="${section.id}" ${state.adminMode ? "" : "disabled"} type="button">항목 추가</button>
-          </div>
+          </div>` : ""}
           <div class="list">
             ${items.map((row) => state.adminMode ? renderEditableItemRow(row) : `<div class="item-row manage-item-row">
               <div class="item-main">
@@ -2368,6 +2380,10 @@
       }
       if (button.dataset.action === "save-category-icon") saveCategoryIcon();
       if (button.dataset.action === "add-category") addCategory();
+      if (button.hasAttribute("data-toggle-category-visual")) {
+        state.categoryVisualOpen = !state.categoryVisualOpen;
+        render();
+      }
       if (button.dataset.action === "toggle-tool-add") {
         if (!requireAdmin()) return;
         state.toolAddOpen = !state.toolAddOpen;
@@ -2393,18 +2409,29 @@
       if (button.dataset.deletePictogram) deletePictogram(button.dataset.deletePictogram);
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
+        state.openAddItemSectionIds = [];
+        state.categoryVisualOpen = false;
         render();
       }
       if (button.dataset.deleteCategory) deleteCategory(button.dataset.deleteCategory);
       if (button.dataset.action === "back-items") {
         state.manageCategoryId = null;
         state.editSectionId = null;
+        state.openAddItemSectionIds = [];
+        state.categoryVisualOpen = false;
         render();
       }
       if (button.dataset.action === "add-section") addSection();
       if (button.dataset.editSection) editSection(button.dataset.editSection);
       if (button.dataset.saveSection) saveSection(button.dataset.saveSection);
       if (button.dataset.deleteSection) deleteSection(button.dataset.deleteSection);
+      if (button.dataset.toggleAddItem) {
+        const sectionId = button.dataset.toggleAddItem;
+        const open = new Set(state.openAddItemSectionIds);
+        open.has(sectionId) ? open.delete(sectionId) : open.add(sectionId);
+        state.openAddItemSectionIds = [...open];
+        render();
+      }
       if (button.dataset.addItem) addChecklistItem(button.dataset.addItem);
       if (button.dataset.saveItem) saveChecklistItem(button.dataset.saveItem);
       if (button.dataset.deleteItem) deleteChecklistItem(button.dataset.deleteItem);
@@ -2546,6 +2573,8 @@
         state.editToolId = null;
         state.editSectionId = null;
         state.editItemId = null;
+        state.openAddItemSectionIds = [];
+        state.categoryVisualOpen = false;
         state.selectedHistoryIds = [];
       }
     }

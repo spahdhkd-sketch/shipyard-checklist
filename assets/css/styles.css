@@ -1271,6 +1271,29 @@
       color: var(--accent, var(--blue));
     }
 
+    .more-toggle {
+      width: 100%;
+      min-height: 36px;
+      display: block;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .more-toggle:hover {
+      background: rgba(31, 110, 179, .08);
+    }
+
+    .collapsible-panel {
+      margin-top: 10px;
+    }
+
     .tool-prep-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1869,6 +1892,7 @@
     }
 
     .section-card-body { padding: 12px; }
+    .section-card-body .more-toggle { margin-bottom: 10px; }
     .inline-form {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 130px 120px auto;

@@ -372,16 +372,43 @@ function assertCheck(name, condition) {
     const itemsState = await evaluate(client, `(() => {
       const text = document.body.innerText;
       return {
-        hasToolPicker: text.includes("사용 공기구"),
+        hasCollapsedAddItemForm: !document.querySelector('[id^="itemText_"]'),
+        hasAddItemMoreToggle: Boolean(document.querySelector('[data-toggle-add-item="mounting-lift"]')),
+        hasCollapsedIconEditor: !document.querySelector("#editCatIcon"),
+        hasIconEditorMoreToggle: Boolean(document.querySelector("[data-toggle-category-visual]")),
         hasAdminToggle: Boolean(document.querySelector('[data-action="toggle-admin"]')),
         hasWireDescription: text.includes("탑재용 와이어 선택 시 표시"),
         hasCommonDescription: text.includes("공통 항목"),
       };
     })()`);
-    assertCheck("item management tool picker appears", itemsState.hasToolPicker);
+    assertCheck("item add form is collapsed on entry", itemsState.hasCollapsedAddItemForm);
+    assertCheck("item add form more toggle appears", itemsState.hasAddItemMoreToggle);
+    assertCheck("icon editor is collapsed on entry", itemsState.hasCollapsedIconEditor);
+    assertCheck("icon editor more toggle appears", itemsState.hasIconEditorMoreToggle);
     assertCheck("item management admin toggle appears", itemsState.hasAdminToggle);
     assertCheck("linked tool description appears", itemsState.hasWireDescription);
     assertCheck("common item description appears", itemsState.hasCommonDescription);
+    const itemsCollapsedShot = await screenshot(client, "04-items-management-collapsed-desktop.png");
+    await setViewport(client, 390, 844, true);
+    await delay(250);
+    const itemsMobileCollapsedShot = await screenshot(client, "05-items-management-collapsed-mobile.png");
+    await setViewport(client, 1280, 900);
+    await delay(250);
+    await click(client, '[data-toggle-add-item="mounting-lift"]');
+    await click(client, "[data-toggle-category-visual]");
+    const expandedItemsState = await evaluate(client, `(() => {
+      const text = document.body.innerText;
+      return {
+        hasToolPicker: text.includes("사용 공기구"),
+        hasItemTextField: Boolean(document.querySelector("#itemText_mounting-lift")),
+        hasIconField: Boolean(document.querySelector("#editCatIcon")),
+        hasPictogramPicker: Boolean(document.querySelector(".pictogram-picker")),
+      };
+    })()`);
+    assertCheck("item add form expands from more toggle", expandedItemsState.hasItemTextField);
+    assertCheck("item management tool picker appears after expand", expandedItemsState.hasToolPicker);
+    assertCheck("icon editor expands from more toggle", expandedItemsState.hasIconField);
+    assertCheck("pictogram picker appears after expand", expandedItemsState.hasPictogramPicker);
     await evaluate(client, `(() => {
       window.__adminPromptMessages = [];
       window.prompt = (message) => {
@@ -400,12 +427,12 @@ function assertCheck(name, condition) {
     })()`);
     assertCheck("admin password prompt appears", adminState.promptMessages.some((message) => message.includes("관리자 비밀번호")));
     assertCheck("admin mode turns on after password", adminState.togglePressed === "true");
-    const itemsShot = await screenshot(client, "04-items-management-desktop.png");
+    const itemsShot = await screenshot(client, "06-items-management-expanded-desktop.png");
 
     console.log(JSON.stringify({
       appUrl: baseUrl,
-      screenshots: [prepShot, checklistShot, mobileShot, itemsShot],
-      assertions: { prepState, checklistState, itemsState },
+      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot],
+      assertions: { prepState, checklistState, itemsState, expandedItemsState },
     }, null, 2));
   } finally {
     if (client) client.close();
