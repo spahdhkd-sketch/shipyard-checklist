@@ -382,6 +382,24 @@ function assertCheck(name, condition) {
     assertCheck("item management admin toggle appears", itemsState.hasAdminToggle);
     assertCheck("linked tool description appears", itemsState.hasWireDescription);
     assertCheck("common item description appears", itemsState.hasCommonDescription);
+    await evaluate(client, `(() => {
+      window.__adminPromptMessages = [];
+      window.prompt = (message) => {
+        window.__adminPromptMessages.push(String(message || ""));
+        return "gs2026";
+      };
+    })()`);
+    await click(client, '[data-action="toggle-admin"]');
+    const adminState = await evaluate(client, `(() => {
+      const toggle = document.querySelector('[data-action="toggle-admin"]');
+      return {
+        promptMessages: window.__adminPromptMessages || [],
+        togglePressed: toggle ? toggle.getAttribute("aria-pressed") : "",
+        hasAdminNotice: document.body.innerText.includes("관리자 수정 모드가 켜졌습니다"),
+      };
+    })()`);
+    assertCheck("admin password prompt appears", adminState.promptMessages.some((message) => message.includes("관리자 비밀번호")));
+    assertCheck("admin mode turns on after password", adminState.togglePressed === "true");
     const itemsShot = await screenshot(client, "04-items-management-desktop.png");
 
     console.log(JSON.stringify({

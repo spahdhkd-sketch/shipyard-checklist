@@ -1,4 +1,5 @@
 ﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
+    const ADMIN_PASSWORD = "gs2026";
     const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
@@ -445,6 +446,22 @@
       }
     };
     const saveJson = (key, value) => localStorage.setItem(storeKey(key), JSON.stringify(value));
+    const loadAdminMode = () => {
+      try {
+        return sessionStorage.getItem(storeKey("adminMode")) === "true";
+      } catch {
+        return false;
+      }
+    };
+    const saveAdminMode = (enabled) => {
+      try {
+        if (enabled) {
+          sessionStorage.setItem(storeKey("adminMode"), "true");
+        } else {
+          sessionStorage.removeItem(storeKey("adminMode"));
+        }
+      } catch {}
+    };
 
     function createDraft(overrides = {}) {
       return {
@@ -463,6 +480,7 @@
       return createDraft(draft && typeof draft === "object" ? draft : {});
     }
 
+    const initialAdminMode = loadAdminMode();
     const state = {
       view: initialView(),
       categories: loadJson("categories", []),
@@ -489,15 +507,14 @@
       syncText: "로컬 저장",
       screenMode: localStorage.getItem(storeKey("screenMode")) || "desktop",
       shipSortMode: normalizeShipSortMode(loadJson("shipSortMode", "stage")),
-      adminMode: false,
-      adminEmail: "",
+      adminMode: initialAdminMode,
+      adminEmail: initialAdminMode ? "비밀번호 인증" : "",
       scrollTimer: null,
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
     };
     let cachedSupabaseClient = null;
-    let authListenerReady = false;
 
     function initialView() {
       const view = document.body?.dataset?.initialView || "dashboard";
@@ -541,8 +558,6 @@
       window.addEventListener("popstate", restoreRouteState);
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
-        setupAuthListener();
-        refreshAdminSession({ renderAfter: true });
         syncServerClock();
         pullRemote();
       }
@@ -2525,6 +2540,7 @@
     function setAdminMode(enabled, email = "") {
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
+      saveAdminMode(state.adminMode);
       if (!enabled) {
         state.toolAddOpen = false;
         state.editToolId = null;
@@ -2534,91 +2550,33 @@
       }
     }
 
-    async function refreshAdminSession(options = {}) {
-      const client = supabaseClient();
-      if (!client) {
-        setAdminMode(false);
-        if (options.renderAfter) render();
+    function requestAdminAccess() {
+      const password = prompt("관리자 비밀번호를 입력하세요.");
+      if (password === null) return false;
+      if (String(password).trim() !== ADMIN_PASSWORD) {
+        toast("관리자 비밀번호가 올바르지 않습니다.");
         return false;
       }
 
-      try {
-        const { data: sessionData, error: sessionError } = await client.auth.getSession();
-        if (sessionError) throw sessionError;
-        const session = sessionData?.session;
-        if (!session) {
-          setAdminMode(false);
-          if (options.renderAfter) render();
-          return false;
-        }
-
-        const { data: isAdmin, error: adminError } = await client.rpc("is_shipyard_admin");
-        if (adminError) throw adminError;
-        setAdminMode(Boolean(isAdmin), session.user?.email || "");
-        if (!isAdmin && options.showStatus) toast("관리자 권한이 없는 계정입니다.");
-        if (options.renderAfter) render();
-        return Boolean(isAdmin);
-      } catch (error) {
-        console.error(error);
-        setAdminMode(false);
-        if (options.showStatus) toast("관리자 권한을 확인하지 못했습니다. Supabase 정책을 확인하세요.");
-        if (options.renderAfter) render();
-        return false;
-      }
+      setAdminMode(true, "비밀번호 인증");
+      toast("관리자 수정 모드가 켜졌습니다.");
+      render();
+      return true;
     }
 
-    function setupAuthListener() {
-      const client = supabaseClient();
-      if (!client || authListenerReady) return;
-      authListenerReady = true;
-      client.auth.onAuthStateChange(() => {
-        refreshAdminSession({ renderAfter: true });
-      });
-    }
-
-    async function requestAdminAccess() {
-      const client = supabaseClient();
-      if (!client) {
-        toast("Supabase 연결이 없어 관리자 로그인을 사용할 수 없습니다.");
-        return false;
-      }
-
-      const hasAdminSession = await refreshAdminSession({ showStatus: true, renderAfter: true });
-      if (hasAdminSession) {
-        toast("관리자 수정 모드가 켜졌습니다.");
-        return true;
-      }
-
-      const email = prompt("관리자 이메일을 입력하세요.");
-      if (!email) return false;
-      const { error } = await client.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: location.href },
-      });
-      if (error) {
-        console.error(error);
-        toast("관리자 로그인 링크를 보내지 못했습니다.");
-        return false;
-      }
-      toast("관리자 로그인 링크를 이메일로 보냈습니다.");
-      return false;
-    }
-
-    async function toggleAdminMode() {
-      const client = supabaseClient();
+    function toggleAdminMode() {
       if (state.adminMode) {
-        if (client) await client.auth.signOut({ scope: "local" });
         setAdminMode(false);
         toast("관리자 수정 모드가 꺼졌습니다.");
         render();
         return;
       }
-      await requestAdminAccess();
+      requestAdminAccess();
     }
 
     function requireAdmin() {
       if (state.adminMode) return true;
-      toast("관리자 이메일로 로그인한 뒤 수정 모드를 켜주세요.");
+      toast("관리자 비밀번호로 수정 모드를 켜주세요.");
       return false;
     }
 
