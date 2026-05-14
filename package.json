@@ -1,0 +1,19 @@
+{
+  "name": "shipyard-checklist",
+  "version": "1.0.0",
+  "description": "조선소 안전 체크리스트 - Shipyard Safety Checklist",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "checklist",
+    "safety",
+    "shipyard"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@vercel/speed-insights": "^2.0.0"
+  }
+}
