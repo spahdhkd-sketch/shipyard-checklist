@@ -222,7 +222,6 @@ try {
         { id: 'items-smoke-tool-2', categoryId: null, name: 'Smoke Tool 2', nature: '후행', order: 2, deleted: false },
         { id: 'items-smoke-tool-3', categoryId: null, name: 'Smoke Tool 3', nature: '선행/후행', order: 3, deleted: false }
       ]));
-      sessionStorage.setItem('shipyardSafetyAdmin', 'true');
       location.reload();
     })()`,
   });
@@ -287,14 +286,10 @@ try {
   await cdp.send("Page.navigate", { url: `${baseUrl}/ships.html` });
   await Promise.race([stageLoaded, delay(4000)]);
   await delay(1000);
-  await cdp.send("Runtime.evaluate", {
-    expression: `sessionStorage.setItem('shipyardSafetyAdmin', 'true'); location.reload();`,
-  });
-  await delay(1400);
+  await delay(400);
   const stageEditResult = await cdp.send("Runtime.evaluate", {
     returnByValue: true,
     expression: `(() => {
-      sessionStorage.setItem('shipyardSafetyAdmin', 'true');
       const sortSelect = document.querySelector('[data-ship-sort-mode]');
       const saveOrderButton = document.querySelector('[data-action="save-ship-order"]');
       if (sortSelect) {
@@ -303,14 +298,13 @@ try {
       }
       const select = document.querySelector('[data-ship-stage-field]');
       const deleteButtons = document.querySelectorAll('[data-delete-ship]').length;
-      if (!select) return { hasSelect: false, deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton) };
+      if (!select) return { hasSelect: false, deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled) };
       const before = select.value;
-      select.disabled = false;
       select.value = before === 'lc' ? 'mounting' : 'lc';
       select.dispatchEvent(new Event('change', { bubbles: true }));
       const stored = JSON.parse(localStorage.getItem('shipyardSafetyV1.ships') || '[]');
       const ship = stored.find((row) => row.id === select.dataset.shipId);
-      return { hasSelect: true, before, after: select.value, storedStage: ship?.processStage || '', deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton) };
+      return { hasSelect: true, before, after: select.value, selectDisabled: select.disabled, storedStage: ship?.processStage || '', deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled) };
     })()`,
   });
 
@@ -436,7 +430,7 @@ try {
       })()`,
     });
     const submitInjectedLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
-    await cdp.send("Page.navigate", { url: `${baseUrl}/check.html` });
+    await cdp.send("Page.reload", { ignoreCache: true });
     await Promise.race([submitInjectedLoaded, delay(4000)]);
     await waitForValue(
       cdp,
@@ -539,11 +533,11 @@ try {
   assert(itemsPageCheck.result.value.toolAdminColumns === 4, "Global tool cards should render in four columns", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.compactInputs === 0, "Compact tool cards should not show edit inputs", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.addOpenBefore === false, "Tool add form should be collapsed by default", itemsPageCheck.result.value);
-  assert(itemsInteractionCheck.result.value.addOpenAfter, "Tool add form should open on demand", itemsInteractionCheck.result.value);
-  assert(itemsInteractionCheck.result.value.expandedCount === 1, "Exactly one tool card should expand for editing", itemsInteractionCheck.result.value);
-  assert(itemsInteractionCheck.result.value.inputInside && itemsInteractionCheck.result.value.selectInside, "Tool edit inputs should stay inside expanded card", itemsInteractionCheck.result.value);
+  assert(itemsInteractionCheck.result.value.addOpenAfter === false, "Tool add form should stay closed without admin auth", itemsInteractionCheck.result.value);
+  assert(itemsInteractionCheck.result.value.expandedCount === 0, "Tool cards should not expand without admin auth", itemsInteractionCheck.result.value);
   assert(stageEditResult.result.value.hasSortSelect, "Ships page should show sort select", stageEditResult.result.value);
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
+  assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);
   assert(stageEditResult.result.value.sortStored === '"number"', "Ships sort selection should persist", stageEditResult.result.value);
   assert(prepBefore.result.value.prepTitle.length > 0, "Selecting category should open tool prep page", prepBefore.result.value);
   assert(prepBefore.result.value.toolCards === 1, "Tool prep page should show injected tool", prepBefore.result.value);

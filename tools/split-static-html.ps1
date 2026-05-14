@@ -86,7 +86,7 @@ $appScript = [regex]::Replace($appScript, $changePattern, $changeReplacement)
 [System.IO.File]::WriteAllText((Join-Path $root 'assets\css\styles.css'), $css.Trim() + "`r`n", [System.Text.Encoding]::UTF8)
 [System.IO.File]::WriteAllText((Join-Path $root 'assets\js\app.js'), $appScript.Trim() + "`r`n", [System.Text.Encoding]::UTF8)
 
-$bodyMatch = [regex]::Match($text, '(?s)<body>\s*(.*?)\s*<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"></script>\s*<script>')
+$bodyMatch = [regex]::Match($text, '(?s)<body>\s*(.*?)\s*<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2(?:\.\d+\.\d+)?"></script>\s*<script>')
 if (-not $bodyMatch.Success) { throw 'body shell not found' }
 $bodyShell = $bodyMatch.Groups[1].Value.Trim()
 
@@ -100,12 +100,13 @@ function Write-Page($file, $view, $title, $bodyShell) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
   <title>$title</title>
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
 <body data-initial-view="$view">
 $bodyShell
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3" defer></script>
   <script src="assets/js/app.js" defer></script>
 </body>
 </html>
