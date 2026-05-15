@@ -3,8 +3,9 @@ import { readFileSync, existsSync } from "node:fs";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 
-const htmlFiles = ["index.html", "check.html", "history.html", "ships.html", "items.html"];
+const htmlFiles = ["index.html", "check.html", "history.html", "ships.html", "items.html", "unsafe.html", "materials.html", "manage.html"];
 const app = read("assets/js/app.js");
+const vercelConfig = read("vercel.json");
 const passwordMigrationPath = "docs/supabase-password-admin-rls-2026-05-15.sql";
 const passwordMigration = existsSync(new URL(passwordMigrationPath, root)) ? read(passwordMigrationPath) : "";
 
@@ -28,8 +29,11 @@ assert(/create\s+policy\s+"password admin delete safety inspection items"[\s\S]*
 for (const file of htmlFiles) {
   const html = read(file);
   assert(html.includes('http-equiv="Content-Security-Policy"'), `${file} must define a CSP`);
+  assert(html.includes("img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co"), `${file} CSP must allow Supabase-hosted images`);
   assert(html.includes("@supabase/supabase-js@2.105.3"), `${file} must pin supabase-js to an exact version`);
   assert(!html.includes("@supabase/supabase-js@2\""), `${file} must not use major-only supabase-js CDN URL`);
 }
+
+assert(vercelConfig.includes("img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co"), "Vercel CSP header must allow Supabase-hosted images");
 
 console.log("security regression checks passed");
