@@ -1015,6 +1015,18 @@
             <div class="small">호선 및 공정 관리</div>
             <span class="quick-arrow" style="color:#07906f">›</span>
           </button>
+          <button class="quick-card primary" data-action="open-unsafe-register" type="button">
+            <span class="quick-icon">${navIcon("note")}</span>
+            <div class="quick-title">불안전요소 등록</div>
+            <div class="small">위험 요소를 기록합니다</div>
+            <span class="quick-arrow">›</span>
+          </button>
+          <button class="quick-card secondary" data-action="open-missing-materials" type="button">
+            <span class="quick-icon">${navIcon("board")}</span>
+            <div class="quick-title">호선자재 누락</div>
+            <div class="small">누락 자재를 확인합니다</div>
+            <span class="quick-arrow" style="color:#07906f">›</span>
+          </button>
         </div>
       </div>
       <div class="stat-strip">
@@ -2328,6 +2340,8 @@
         render();
         pushRouteState();
       }
+      if (button.dataset.action === "open-unsafe-register") toast("불안전요소 등록 화면은 준비 중입니다.");
+      if (button.dataset.action === "open-missing-materials") toast("호선자재 누락 화면은 준비 중입니다.");
       if (button.dataset.action === "continue-tool-prep") {
         state.draft.toolPrepComplete = true;
         render();
