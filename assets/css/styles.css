@@ -543,6 +543,17 @@
       box-shadow: 0 10px 24px rgba(23, 32, 51, .08);
     }
 
+    .stat-pill.is-alert {
+      border-color: #ef4444;
+      background: linear-gradient(180deg, #fff 0%, #fff7f7 100%);
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .22), 0 16px 34px rgba(239, 68, 68, .22);
+    }
+
+    .stat-pill.is-alert:hover {
+      border-color: #dc2626;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .28), 0 18px 38px rgba(220, 38, 38, .26);
+    }
+
     .stat-value {
       font-size: 22px;
       font-weight: 800;

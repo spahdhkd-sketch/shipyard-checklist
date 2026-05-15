@@ -422,12 +422,41 @@ function assertCheck(name, condition) {
         label: card?.querySelector(".small")?.textContent?.trim() || "",
         value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
         foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
+        highlighted: card?.classList.contains("is-alert") || false,
       };
     })()`);
     assertCheck("home today stat hides completion helper text", unsafeHomeStat.todayFoot === "");
     assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
     assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
     assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인 필요");
+    assertCheck("home unsafe stat highlights when received issues exist", unsafeHomeStat.highlighted);
+    await evaluate(client, `(() => {
+      const prefix = "shipyardSafetyV1.";
+      const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;
+      const issues = JSON.parse(localStorage.getItem(prefix + "unsafeIssues") || "[]")
+        .map((row) => ({ ...row, status: statuses[1] }));
+      localStorage.setItem(prefix + "unsafeIssues", JSON.stringify(issues));
+    })()`);
+    await navigate(client, `${baseUrl}/index.html`);
+    const unsafeZeroHomeStat = await evaluate(client, `(() => {
+      const card = document.querySelector('[data-stat-scope="unsafe"]');
+      return {
+        value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
+        foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
+        highlighted: card?.classList.contains("is-alert") || false,
+      };
+    })()`);
+    assertCheck("home unsafe stat shows zero when no received issues exist", unsafeZeroHomeStat.value.includes("0"));
+    assertCheck("home unsafe stat hides urgent helper text at zero", unsafeZeroHomeStat.foot === "");
+    assertCheck("home unsafe stat removes highlight at zero", !unsafeZeroHomeStat.highlighted);
+    await evaluate(client, `(() => {
+      const prefix = "shipyardSafetyV1.";
+      const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;
+      const issues = JSON.parse(localStorage.getItem(prefix + "unsafeIssues") || "[]")
+        .map((row) => ({ ...row, status: row.id === "unsafe-detail-1" ? statuses[0] : statuses[1] }));
+      localStorage.setItem(prefix + "unsafeIssues", JSON.stringify(issues));
+    })()`);
+    await navigate(client, `${baseUrl}/index.html`);
     await click(client, '[data-stat-scope="unsafe"]');
     const unsafeStatNavigation = await evaluate(client, `(() => ({
       currentPath: location.pathname.split("/").pop(),

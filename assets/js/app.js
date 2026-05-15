@@ -1214,7 +1214,7 @@
       </div>
       <div class="stat-strip">
         ${statPill("오늘 점검", todayCount, "건", "#07966f", "shield", "", "today")}
-        ${statPill("불안전 요소", unsafeCount, "건", "#dc2626", "warning", "즉시 확인 필요", "unsafe")}
+        ${statPill("불안전 요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인 필요" : "", "unsafe")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
       </div>
       <section class="panel panel-pad home-section">
@@ -1253,7 +1253,8 @@
       const attrs = scope === "unsafe"
         ? `data-stat-scope="unsafe" data-action="view-unsafe-received"`
         : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
-      return `<button class="stat-pill" style="--stat:${color}" ${attrs} type="button">
+      const alertClass = scope === "unsafe" && Number(value) > 0 ? " is-alert" : "";
+      return `<button class="stat-pill${alertClass}" style="--stat:${color}" ${attrs} type="button">
         <span class="stat-icon">${statIcon(icon)}</span>
         <div class="small muted" style="font-weight:900;margin-bottom:7px">${esc(label)}</div>
         <div class="stat-value" style="color:${color}">${esc(value)}<span style="font-size:12px;margin-left:3px">${esc(unit)}</span></div>
