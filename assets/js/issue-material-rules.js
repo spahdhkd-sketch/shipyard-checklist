@@ -69,7 +69,7 @@
     if (mode === "latest") return rows.sort(compareDateDesc);
     if (mode === "shipNo") return rows.sort((a, b) => compareText(a.shipNo, b.shipNo) || compareDateDesc(a, b));
     if (mode === "worker") return rows.sort((a, b) => compareText(a.workerNameSnapshot, b.workerNameSnapshot) || compareDateDesc(a, b));
-    if (mode === "materialName") return rows.sort((a, b) => (statusIndex(a.status, statuses) - statusIndex(b.status, statuses)) || compareText(a.materialName, b.materialName) || compareDateDesc(a, b));
+    if (mode === "materialName") return rows.sort((a, b) => compareText(a.materialName, b.materialName) || compareDateDesc(a, b));
     return rows.sort((a, b) => (statusIndex(a.status, statuses) - statusIndex(b.status, statuses)) || compareDateDesc(a, b));
   }
 

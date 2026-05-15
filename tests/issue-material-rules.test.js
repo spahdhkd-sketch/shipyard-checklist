@@ -71,7 +71,7 @@ assert.deepStrictEqual(
 
 assert.deepStrictEqual(
   sortRecords(materialRecords, "materialName", MATERIAL_STATUSES).map((row) => row.id),
-  ["m2", "m1", "m3"],
+  ["m1", "m2", "m3"],
 );
 
 console.log("issue-material-rules tests passed");
