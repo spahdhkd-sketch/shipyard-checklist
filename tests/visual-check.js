@@ -136,6 +136,17 @@ const seed = {
     selectedToolIds: [],
     toolPrepComplete: false,
   },
+  workers: [
+    { id: "worker-1", name: "김민수", team: "배관팀", createdAt: "2026-05-15T00:00:00.000Z", updatedAt: "2026-05-15T00:00:00.000Z" },
+  ],
+  unsafeIssues: [],
+  missingMaterials: [],
+  issuePhotos: [],
+  unsafeDraft: { shipNo: "", content: "", workerId: "", photos: [] },
+  materialDraft: { shipNo: "", materialName: "", content: "", workerId: "" },
+  unsafeFilters: { shipNo: "", status: "", workerId: "", sort: "status" },
+  materialFilters: { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" },
+  manageTab: "workers",
   shipSortMode: "stage",
 };
 
@@ -429,10 +440,56 @@ function assertCheck(name, condition) {
     assertCheck("admin mode turns on after password", adminState.togglePressed === "true");
     const itemsShot = await screenshot(client, "06-items-management-expanded-desktop.png");
 
+    await navigate(client, `${baseUrl}/unsafe.html`);
+    const unsafeState = await evaluate(client, `(() => {
+      return {
+        hasTitle: document.body.innerText.includes("불안전요소 등록"),
+        hasShipSelect: Boolean(document.querySelector("#unsafeShipNo")),
+        hasWorkerSelect: Boolean(document.querySelector("#unsafeWorkerId")),
+      };
+    })()`);
+    assertCheck("unsafe registration title", unsafeState.hasTitle);
+    assertCheck("unsafe ship select", unsafeState.hasShipSelect);
+    assertCheck("unsafe worker select", unsafeState.hasWorkerSelect);
+    const unsafeShot = await screenshot(client, "07-unsafe-registration-desktop.png");
+
+    await navigate(client, `${baseUrl}/materials.html`);
+    const materialState = await evaluate(client, `(() => {
+      return {
+        hasTitle: document.body.innerText.includes("호선자재 누락"),
+        hasMaterialName: Boolean(document.querySelector("#materialName")),
+        hasWorkerSelect: Boolean(document.querySelector("#materialWorkerId")),
+      };
+    })()`);
+    assertCheck("material registration title", materialState.hasTitle);
+    assertCheck("material name input", materialState.hasMaterialName);
+    assertCheck("material worker select", materialState.hasWorkerSelect);
+    const materialShot = await screenshot(client, "08-material-registration-desktop.png");
+
+    await evaluate(client, `(() => {
+      sessionStorage.removeItem("shipyardSafetyV1.adminMode");
+    })()`);
+    await navigate(client, `${baseUrl}/manage.html`);
+    await evaluate(client, `(() => {
+      window.prompt = () => "gs2026";
+    })()`);
+    await click(client, '[data-action="toggle-admin"]');
+    const manageState = await evaluate(client, `(() => {
+      return {
+        hasManageTitle: document.body.innerText.includes("관리"),
+        hasWorkersTab: document.body.innerText.includes("작업자"),
+        hasWorkerNameInput: Boolean(document.querySelector("#workerName")),
+      };
+    })()`);
+    assertCheck("manage title", manageState.hasManageTitle);
+    assertCheck("workers tab", manageState.hasWorkersTab);
+    assertCheck("worker name input", manageState.hasWorkerNameInput);
+    const manageShot = await screenshot(client, "09-manage-workers-desktop.png");
+
     console.log(JSON.stringify({
       appUrl: baseUrl,
-      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot],
-      assertions: { prepState, checklistState, itemsState, expandedItemsState },
+      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot, unsafeShot, materialShot, manageShot],
+      assertions: { prepState, checklistState, itemsState, expandedItemsState, unsafeState, materialState, manageState },
     }, null, 2));
   } finally {
     if (client) client.close();
