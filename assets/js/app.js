@@ -693,6 +693,7 @@
     async function boot() {
       migrateIfNeeded();
       cleanupDeliveredShips(false);
+      prepareInitialManageFilters();
       applyScreenMode();
       updateHeaderClock();
       render();
@@ -1252,6 +1253,32 @@
 
     function unsafeReceivedStatus() {
       return ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0];
+    }
+
+    function markUnsafeReceivedEntry() {
+      try {
+        sessionStorage.setItem(storeKey("unsafeReceivedEntry"), "true");
+      } catch {}
+    }
+
+    function consumeUnsafeReceivedEntry() {
+      try {
+        const marked = sessionStorage.getItem(storeKey("unsafeReceivedEntry")) === "true";
+        sessionStorage.removeItem(storeKey("unsafeReceivedEntry"));
+        return marked;
+      } catch {
+        return false;
+      }
+    }
+
+    function setUnsafeStatusFilter(status) {
+      state.unsafeFilters = { ...state.unsafeFilters, status };
+      saveJson("unsafeFilters", state.unsafeFilters);
+    }
+
+    function prepareInitialManageFilters() {
+      if (state.view !== "manage" || state.manageTab !== "unsafe") return;
+      setUnsafeStatusFilter(consumeUnsafeReceivedEntry() ? unsafeReceivedStatus() : "");
     }
 
     function unsafeReceivedCount() {
@@ -2908,7 +2935,14 @@
       const button = event.target.closest("button");
       if (!button) return;
 
-      if (button.dataset.view) changeView(button.dataset.view);
+      if (button.dataset.view) {
+        if (button.dataset.view === "manage") {
+          if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
+          changeView("manage");
+        } else {
+          changeView(button.dataset.view);
+        }
+      }
       if (button.dataset.action === "view-unsafe-received") openUnsafeReceivedList();
       if (button.dataset.screenMode) setScreenMode(button.dataset.screenMode);
       if (button.dataset.dashboardCategory) {
@@ -2948,6 +2982,7 @@
       }
       if (button.dataset.action === "view-unsafe-list") {
         state.manageTab = "unsafe";
+        setUnsafeStatusFilter("");
         saveJson("manageTab", state.manageTab);
         changeView("manage");
       }
@@ -2985,6 +3020,7 @@
       if (button.dataset.manageTab) {
         state.manageTab = button.dataset.manageTab;
         state.unsafeDetailId = "";
+        if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
         saveJson("manageTab", state.manageTab);
         render();
       }
@@ -3117,11 +3153,12 @@
     }
 
     function openUnsafeReceivedList() {
+      const willNavigate = currentPageName() !== pageForView("manage").toLowerCase();
       state.manageTab = "unsafe";
       state.unsafeDetailId = "";
-      state.unsafeFilters = { ...state.unsafeFilters, status: unsafeReceivedStatus() };
+      if (willNavigate) markUnsafeReceivedEntry();
+      setUnsafeStatusFilter(unsafeReceivedStatus());
       saveJson("manageTab", state.manageTab);
-      saveJson("unsafeFilters", state.unsafeFilters);
       changeView("manage");
     }
 

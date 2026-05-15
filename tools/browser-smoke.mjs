@@ -428,6 +428,31 @@ try {
   });
   await cdp.send("Emulation.clearDeviceMetricsOverride");
 
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      localStorage.setItem('${STORAGE_PREFIX}manageTab', JSON.stringify('unsafe'));
+      localStorage.setItem('${STORAGE_PREFIX}unsafeFilters', JSON.stringify({ shipNo: '', status: '접수', workerId: '', sort: 'status' }));
+      localStorage.setItem('${STORAGE_PREFIX}unsafeIssues', JSON.stringify([
+        { id: 'unsafe-default-1', shipNo: 'H-100', content: '접수 상태', workerId: '', workerNameSnapshot: '테스터', status: '접수', adminMemo: '', createdAt: '2026-05-15T00:00:00.000Z', updatedAt: '2026-05-15T00:00:00.000Z', completedAt: '' },
+        { id: 'unsafe-default-2', shipNo: 'H-101', content: '조치중 상태', workerId: '', workerNameSnapshot: '테스터', status: '조치중', adminMemo: '', createdAt: '2026-05-15T00:01:00.000Z', updatedAt: '2026-05-15T00:01:00.000Z', completedAt: '' }
+      ]));
+    })()`,
+  });
+  const unsafeManageDefaultLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
+  await cdp.send("Page.navigate", { url: `${baseUrl}/manage.html` });
+  await Promise.race([unsafeManageDefaultLoaded, delay(4000)]);
+  await delay(1000);
+  const unsafeManageDefaultResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => ({
+      activeTab: document.querySelector('[data-manage-tab].active')?.textContent?.trim() || '',
+      statusFilter: document.querySelector('[data-record-filter="unsafe:status"]')?.value || '',
+      visibleRecords: document.querySelectorAll('[data-unsafe-record-detail]').length,
+      storedFilter: JSON.parse(localStorage.getItem('${STORAGE_PREFIX}unsafeFilters') || '{}')
+    }))()`,
+  });
+
   const stageEditErrorsStart = runtimeErrors.length;
   const stageLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
   await cdp.send("Page.navigate", { url: `${baseUrl}/ships.html` });
@@ -702,6 +727,10 @@ try {
   assert(mobileResult.result.value.visibleModeButtons === 2, "Admin mobile mode should keep screen switch visible", mobileResult.result.value);
   assert(mobileResult.result.value.activeVisibleToggle === "모바일", "Admin mobile switch should return to mobile mode", mobileResult.result.value);
   assert(mobileResult.result.value.activeToggleCount === 2, "Only one screen mode should stay active in each remaining switch group", mobileResult.result.value);
+  assert(unsafeManageDefaultResult.result.value.activeTab === "불안전요소", "Manage page should open the unsafe tab from saved tab state", unsafeManageDefaultResult.result.value);
+  assert(unsafeManageDefaultResult.result.value.statusFilter === "", "Unsafe manage tab should default to all statuses", unsafeManageDefaultResult.result.value);
+  assert(unsafeManageDefaultResult.result.value.visibleRecords === 2, "Unsafe manage tab should show all statuses by default", unsafeManageDefaultResult.result.value);
+  assert(unsafeManageDefaultResult.result.value.storedFilter.status === "", "Unsafe default status filter should persist as all", unsafeManageDefaultResult.result.value);
   assert(stageEditResult.result.value.hasSortSelect, "Ships page should show sort select", stageEditResult.result.value);
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);
@@ -739,6 +768,7 @@ try {
     itemsPageCheck: itemsPageCheck.result.value,
     categoryRename: categoryRenameResult.result.value,
     mobileToggle: { ...mobileResult.result.value, errors: runtimeErrors.slice(mobileErrorsStart) },
+    unsafeManageDefault: unsafeManageDefaultResult.result.value,
     stageEdit: { ...stageEditResult.result.value, errors: runtimeErrors.slice(stageEditErrorsStart) },
     prepFlow: {
       beforeSelection: prepBefore.result.value,
