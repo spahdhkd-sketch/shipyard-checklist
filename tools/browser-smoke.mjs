@@ -331,6 +331,12 @@ try {
   });
   await delay(1000);
 
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
   const loaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
   await cdp.send("Page.navigate", { url: `${baseUrl}/index.html` });
   await Promise.race([loaded, delay(4000)]);
@@ -338,18 +344,89 @@ try {
 
   const mobileErrorsStart = runtimeErrors.length;
   await cdp.send("Runtime.evaluate", {
-    expression: `document.querySelector('[data-screen-mode="mobile"]')?.click()`,
+    expression: `(() => {
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminMode');
+      localStorage.setItem('${STORAGE_PREFIX}screenMode', 'mobile');
+      location.reload();
+    })()`,
+  });
+  await delay(1000);
+  const mobileNonAdminResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      return {
+        bodyClass: document.body.className,
+        visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
+        mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
+        sidebarVisible: isVisible(document.querySelector('.sidebar')),
+        adminModeClass: document.body.classList.contains('admin-mode')
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      localStorage.setItem('${STORAGE_PREFIX}screenMode', 'mobile');
+      location.reload();
+    })()`,
+  });
+  await delay(1000);
+  const mobileAdminResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      return {
+        bodyClass: document.body.className,
+        visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
+        activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
+        sidebarVisible: isVisible(document.querySelector('.sidebar')),
+        adminModeClass: document.body.classList.contains('admin-mode')
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `Array.from(document.querySelectorAll('[data-screen-mode="desktop"]')).find((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length)?.click()`,
+  });
+  await delay(500);
+  const mobileAdminDesktopResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      return {
+        bodyClass: document.body.className,
+        visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
+        activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
+        sidebarVisible: isVisible(document.querySelector('.sidebar')),
+        sidebarSwitchExists: Boolean(document.querySelector('#viewSwitch')),
+        storedMode: localStorage.getItem('${STORAGE_PREFIX}screenMode')
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `Array.from(document.querySelectorAll('[data-screen-mode="mobile"]')).find((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length)?.click()`,
   });
   await delay(500);
   const mobileResult = await cdp.send("Runtime.evaluate", {
     returnByValue: true,
-    expression: `(() => ({
-      bodyClass: document.body.className,
-      activeToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).map((node) => node.textContent.trim()).join('|'),
-      activeToggleCount: document.querySelectorAll('[data-screen-mode].active').length,
-      sidebarSwitchExists: Boolean(document.querySelector('#viewSwitch'))
-    }))()`,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      return {
+        bodyClass: document.body.className,
+        activeToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).map((node) => node.textContent.trim()).join('|'),
+        activeToggleCount: document.querySelectorAll('[data-screen-mode].active').length,
+        activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
+        mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
+        sidebarVisible: isVisible(document.querySelector('.sidebar')),
+        sidebarSwitchExists: Boolean(document.querySelector('#viewSwitch')),
+        storedMode: localStorage.getItem('${STORAGE_PREFIX}screenMode')
+      };
+    })()`,
   });
+  await cdp.send("Emulation.clearDeviceMetricsOverride");
 
   const stageEditErrorsStart = runtimeErrors.length;
   const stageLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
@@ -611,8 +688,20 @@ try {
   assert(categoryRenameResult.result.value.storedLabel === "Rename Smoke After", "Saving a category title should persist the renamed work type", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.cardHasNewLabel, "Renamed work type should update the items category card", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.heading.includes("Rename Smoke After"), "Renamed work type should update the section management heading", categoryRenameResult.result.value);
-  assert(mobileResult.result.value.sidebarSwitchExists === false, "Sidebar screen switch should be removed", mobileResult.result.value);
-  assert(mobileResult.result.value.activeToggleCount === 2, "Only the remaining top/mobile screen toggles should stay active", mobileResult.result.value);
+  assert(mobileNonAdminResult.result.value.adminModeClass === false, "Mobile screen switch should start outside admin mode", mobileNonAdminResult.result.value);
+  assert(mobileNonAdminResult.result.value.visibleModeButtons === 0, "Mobile screen switch should be hidden without admin mode", mobileNonAdminResult.result.value);
+  assert(mobileNonAdminResult.result.value.mobileHeaderVisible === true, "Non-admin mobile should stay in mobile layout", mobileNonAdminResult.result.value);
+  assert(mobileAdminResult.result.value.adminModeClass === true, "Mobile screen switch should know admin mode is active", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.visibleModeButtons === 2, "Mobile screen switch should appear in admin mode", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.activeVisibleToggle === "모바일", "Admin mobile screen switch should show mobile as active", mobileAdminResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.sidebarSwitchExists === false, "Sidebar screen switch should stay removed", mobileAdminDesktopResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.visibleModeButtons === 2, "Admin desktop mode should keep a visible switch to return to mobile", mobileAdminDesktopResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.activeVisibleToggle === "PC", "Admin desktop switch should make PC active on mobile width", mobileAdminDesktopResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.sidebarVisible === true, "Admin desktop switch should reveal desktop navigation on mobile width", mobileAdminDesktopResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.mobileHeaderVisible === false, "Admin desktop switch should hide the mobile header on mobile width", mobileAdminDesktopResult.result.value);
+  assert(mobileResult.result.value.visibleModeButtons === 2, "Admin mobile mode should keep screen switch visible", mobileResult.result.value);
+  assert(mobileResult.result.value.activeVisibleToggle === "모바일", "Admin mobile switch should return to mobile mode", mobileResult.result.value);
+  assert(mobileResult.result.value.activeToggleCount === 2, "Only one screen mode should stay active in each remaining switch group", mobileResult.result.value);
   assert(stageEditResult.result.value.hasSortSelect, "Ships page should show sort select", stageEditResult.result.value);
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);

@@ -106,15 +106,18 @@
 
     .desktop-preview-toggle {
       position: fixed;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
+      right: 14px;
+      top: 14px;
       z-index: 60;
       padding: 8px;
       border-radius: 12px;
       background: rgba(17, 26, 45, .94);
       border: 1px solid rgba(255,255,255,.14);
       box-shadow: 0 14px 34px rgba(23, 32, 51, .2);
+    }
+
+    body.admin-mode.screen-desktop .desktop-preview-toggle {
+      display: block;
     }
 
     .mode-toggle {
@@ -165,6 +168,10 @@
     .mobile-screen-toggle button.active {
       background: #fff;
       color: #002b66;
+    }
+
+    body.admin-mode.screen-mobile .mobile-screen-toggle {
+      display: grid;
     }
 
     .nav-btn {
@@ -2676,10 +2683,6 @@
     }
 
     @media (min-width: 921px) {
-      .desktop-preview-toggle {
-        display: block;
-      }
-
       body:not(.preview-mobile) {
         background: var(--page);
       }
@@ -2821,18 +2824,10 @@
       .appbar {
         grid-template-columns: 1fr auto;
       }
-
-      .mobile-screen-toggle {
-        display: grid;
-      }
     }
 
     body.preview-mobile .appbar {
       grid-template-columns: 1fr auto;
-    }
-
-    body.preview-mobile .mobile-screen-toggle {
-      display: grid;
     }
 
     @media (max-width: 420px) {
@@ -3380,5 +3375,114 @@
 
       .unsafe-detail .admin-record-controls {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 920px) {
+      body.preview-desktop {
+        min-width: 920px;
+        background: var(--page);
+        overflow-x: auto;
+      }
+
+      body.preview-desktop .app {
+        display: grid;
+        grid-template-columns: var(--nav-width) minmax(0, 1fr);
+        width: 920px;
+        max-width: none;
+        min-height: 100vh;
+        margin: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      body.preview-desktop .sidebar {
+        display: flex;
+      }
+
+      body.preview-desktop .mobile-header,
+      body.preview-desktop .bottom-nav {
+        display: none;
+      }
+
+      body.preview-desktop .main {
+        padding: 26px clamp(18px, 4vw, 42px) 40px;
+      }
+
+      body.preview-desktop .page-head {
+        flex-direction: row;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      body.preview-desktop .toolbar {
+        justify-content: flex-end;
+        width: auto;
+      }
+
+      body.preview-desktop .grid-3,
+      body.preview-desktop .stat-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      body.preview-desktop .grid-2,
+      body.preview-desktop .quick-actions,
+      body.preview-desktop .history-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      body.preview-desktop .work-grid {
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      }
+
+      body.preview-desktop .split {
+        grid-template-columns: minmax(0, 1fr) 330px;
+      }
+
+      body.preview-desktop .process-chart {
+        grid-template-columns: minmax(0, 1fr) 240px;
+      }
+
+      body.preview-desktop .form-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      body.preview-desktop .inline-form {
+        grid-template-columns: minmax(0, 1fr) 130px 120px auto;
+      }
+
+      body.preview-desktop .mini-process,
+      body.preview-desktop .process-lanes {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        overflow: visible;
+      }
+
+      body.preview-desktop .table {
+        display: table;
+      }
+
+      body.preview-desktop .table thead {
+        display: table-header-group;
+      }
+
+      body.preview-desktop .table tbody {
+        display: table-row-group;
+      }
+
+      body.preview-desktop .table tr {
+        display: table-row;
+        border: 0;
+        margin-bottom: 0;
+        overflow: visible;
+      }
+
+      body.preview-desktop .table th,
+      body.preview-desktop .table td {
+        display: table-cell;
+        width: auto;
+      }
+
+      body.preview-desktop .table td::before {
+        display: none;
       }
     }

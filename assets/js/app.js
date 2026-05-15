@@ -997,25 +997,35 @@
       });
     }
 
+    function isNarrowViewport() {
+      return window.matchMedia && window.matchMedia("(max-width: 920px)").matches;
+    }
+
+    function effectiveScreenMode() {
+      if (state.adminMode) return state.screenMode === "mobile" ? "mobile" : "desktop";
+      return isNarrowViewport() ? "mobile" : "desktop";
+    }
+
     function applyScreenMode() {
-      const isNarrow = window.matchMedia && window.matchMedia("(max-width: 920px)").matches;
-      if (isNarrow) {
-        document.body.classList.remove("preview-mobile");
-      } else {
-        document.body.classList.toggle("preview-mobile", state.screenMode === "mobile");
-      }
+      const isNarrow = isNarrowViewport();
+      const mode = effectiveScreenMode();
+      document.body.classList.toggle("admin-mode", state.adminMode);
+      document.body.classList.toggle("screen-mobile", mode === "mobile");
+      document.body.classList.toggle("screen-desktop", mode === "desktop");
+      document.body.classList.toggle("preview-mobile", !isNarrow && mode === "mobile");
+      document.body.classList.toggle("preview-desktop", isNarrow && mode === "desktop");
       updateScreenToggle();
     }
 
     function updateScreenToggle() {
-      const isNarrow = window.matchMedia && window.matchMedia("(max-width: 920px)").matches;
-      const effectiveMode = isNarrow ? "mobile" : state.screenMode;
+      const effectiveMode = effectiveScreenMode();
       document.querySelectorAll("[data-screen-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.screenMode === effectiveMode);
       });
     }
 
     function setScreenMode(mode) {
+      if (!state.adminMode) return;
       state.screenMode = mode === "mobile" ? "mobile" : "desktop";
       localStorage.setItem(storeKey("screenMode"), state.screenMode);
       applyScreenMode();
@@ -3318,8 +3328,13 @@
     }
 
     function setAdminMode(enabled, email = "") {
+      const wasAdmin = state.adminMode;
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
+      if (state.adminMode && !wasAdmin && isNarrowViewport()) {
+        state.screenMode = "mobile";
+        localStorage.setItem(storeKey("screenMode"), state.screenMode);
+      }
       saveAdminMode(state.adminMode);
       if (!enabled) {
         state.toolAddOpen = false;
@@ -3331,6 +3346,7 @@
         state.categoryVisualOpen = false;
         state.selectedHistoryIds = [];
       }
+      applyScreenMode();
     }
 
     function requestAdminAccess() {
