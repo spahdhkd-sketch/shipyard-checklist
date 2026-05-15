@@ -81,10 +81,27 @@ create policy "public all missing materials" on public.missing_materials for all
 drop policy if exists "public all issue photos" on public.issue_photos;
 create policy "public all issue photos" on public.issue_photos for all to anon, authenticated using (true) with check (true);
 
--- Storage bucket required:
--- insert into storage.buckets (id, name, public)
--- values ('issue-photos', 'issue-photos', true)
--- on conflict (id) do nothing;
---
--- Storage policies should allow anon/authenticated select, insert, update, delete
--- for bucket_id = 'issue-photos', matching the approved password-admin/anon-write model.
+insert into storage.buckets (id, name, public)
+values ('issue-photos', 'issue-photos', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "public read issue photos" on storage.objects;
+create policy "public read issue photos" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'issue-photos');
+
+drop policy if exists "public insert issue photos" on storage.objects;
+create policy "public insert issue photos" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'issue-photos');
+
+drop policy if exists "public update issue photos" on storage.objects;
+create policy "public update issue photos" on storage.objects
+  for update to anon, authenticated
+  using (bucket_id = 'issue-photos')
+  with check (bucket_id = 'issue-photos');
+
+drop policy if exists "public delete issue photos" on storage.objects;
+create policy "public delete issue photos" on storage.objects
+  for delete to anon, authenticated
+  using (bucket_id = 'issue-photos');
