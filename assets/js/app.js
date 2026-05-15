@@ -1213,7 +1213,7 @@
         </div>
       </div>
       <div class="stat-strip">
-        ${statPill("오늘 점검", todayCount, "건", "#07966f", "shield", `완료 ${todayDone} / 진행 ${Math.max(todayCount - todayDone, 0)}`, "today")}
+        ${statPill("오늘 점검", todayCount, "건", "#07966f", "shield", "", "today")}
         ${statPill("불안전 요소", unsafeCount, "건", "#dc2626", "warning", "즉시 확인 필요", "unsafe")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
       </div>

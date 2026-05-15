@@ -415,13 +415,16 @@ function assertCheck(name, condition) {
     })()`);
     await navigate(client, `${baseUrl}/index.html`);
     const unsafeHomeStat = await evaluate(client, `(() => {
+      const todayCard = document.querySelector('[data-stat-scope="today"]');
       const card = document.querySelector('[data-stat-scope="unsafe"]');
       return {
+        todayFoot: todayCard?.querySelector(".stat-foot")?.textContent?.trim() || "",
         label: card?.querySelector(".small")?.textContent?.trim() || "",
         value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
         foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
       };
     })()`);
+    assertCheck("home today stat hides completion helper text", unsafeHomeStat.todayFoot === "");
     assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
     assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
     assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인 필요");
