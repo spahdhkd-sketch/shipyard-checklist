@@ -132,6 +132,8 @@
     const SHIP_TYPES = ["CNTR", "LNG", "LPG", "COT", "FSRU", "기타"];
     const TOOL_NATURES = ["선행", "후행", "선행/후행"];
     const CHECKLIST_RULES = window.ChecklistRules;
+    const ISSUE_MATERIAL_RULES = window.IssueMaterialRules;
+    const ISSUE_PHOTO_BUCKET = "issue-photos";
     const ITEM_VISIBILITY_CONDITIONS = ["항상 표시", ...TOOL_NATURES];
     const DEFAULT_CATEGORY_NATURES = {
       mounting: "선행",
@@ -352,6 +354,108 @@
           sectionTitle: row.section_title || "",
         }),
       },
+      {
+        table: "workers",
+        key: "workers",
+        toDb: (row) => ({
+          id: row.id,
+          name: row.name,
+          team: row.team || "",
+          created_at: row.createdAt || serverNow().toISOString(),
+          updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
+        }),
+        fromDb: (row) => ({
+          id: row.id,
+          name: row.name,
+          team: row.team || "",
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }),
+      },
+      {
+        table: "unsafe_issues",
+        key: "unsafeIssues",
+        toDb: (row) => ({
+          id: row.id,
+          ship_no: row.shipNo,
+          content: row.content,
+          worker_id: row.workerId || null,
+          worker_name_snapshot: row.workerNameSnapshot || "",
+          worker_team_snapshot: row.workerTeamSnapshot || "",
+          status: row.status || ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0],
+          admin_memo: row.adminMemo || "",
+          created_at: row.createdAt || serverNow().toISOString(),
+          updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
+          completed_at: row.completedAt || null,
+        }),
+        fromDb: (row) => ({
+          id: row.id,
+          shipNo: row.ship_no,
+          content: row.content,
+          workerId: row.worker_id || "",
+          workerNameSnapshot: row.worker_name_snapshot || "",
+          workerTeamSnapshot: row.worker_team_snapshot || "",
+          status: row.status || ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0],
+          adminMemo: row.admin_memo || "",
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          completedAt: row.completed_at || "",
+        }),
+      },
+      {
+        table: "missing_materials",
+        key: "missingMaterials",
+        toDb: (row) => ({
+          id: row.id,
+          ship_no: row.shipNo,
+          material_name: row.materialName,
+          content: row.content,
+          worker_id: row.workerId || null,
+          worker_name_snapshot: row.workerNameSnapshot || "",
+          worker_team_snapshot: row.workerTeamSnapshot || "",
+          status: row.status || ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0],
+          admin_memo: row.adminMemo || "",
+          created_at: row.createdAt || serverNow().toISOString(),
+          updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
+          completed_at: row.completedAt || null,
+        }),
+        fromDb: (row) => ({
+          id: row.id,
+          shipNo: row.ship_no,
+          materialName: row.material_name,
+          content: row.content,
+          workerId: row.worker_id || "",
+          workerNameSnapshot: row.worker_name_snapshot || "",
+          workerTeamSnapshot: row.worker_team_snapshot || "",
+          status: row.status || ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0],
+          adminMemo: row.admin_memo || "",
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          completedAt: row.completed_at || "",
+        }),
+      },
+      {
+        table: "issue_photos",
+        key: "issuePhotos",
+        toDb: (row) => ({
+          id: row.id,
+          target_type: row.targetType,
+          target_id: row.targetId,
+          storage_bucket: row.storageBucket || ISSUE_PHOTO_BUCKET,
+          storage_path: row.storagePath,
+          sort_order: row.sortOrder || 0,
+          created_at: row.createdAt || serverNow().toISOString(),
+        }),
+        fromDb: (row) => ({
+          id: row.id,
+          targetType: row.target_type,
+          targetId: row.target_id,
+          storageBucket: row.storage_bucket || ISSUE_PHOTO_BUCKET,
+          storagePath: row.storage_path,
+          sortOrder: row.sort_order || 0,
+          createdAt: row.created_at,
+        }),
+      },
     ];
 
     const starterCategories = [
@@ -475,9 +579,33 @@
       };
     }
 
+    function createUnsafeDraft(overrides = {}) {
+      return {
+        shipNo: "",
+        content: "",
+        workerId: "",
+        photos: [],
+        ...overrides,
+      };
+    }
+
+    function createMaterialDraft(overrides = {}) {
+      return {
+        shipNo: "",
+        materialName: "",
+        content: "",
+        workerId: "",
+        ...overrides,
+      };
+    }
+
     function loadDraft() {
       const draft = loadJson("draft", null);
       return createDraft(draft && typeof draft === "object" ? draft : {});
+    }
+
+    function routeViews() {
+      return [...NAV, { id: "unsafe" }, { id: "materials" }, { id: "manage" }];
     }
 
     const initialAdminMode = loadAdminMode();
@@ -491,6 +619,10 @@
       ships: loadJson("ships", []),
       inspections: loadJson("inspections", []),
       inspectionItems: loadJson("inspectionItems", []),
+      workers: loadJson("workers", []),
+      unsafeIssues: loadJson("unsafeIssues", []),
+      missingMaterials: loadJson("missingMaterials", []),
+      issuePhotos: loadJson("issuePhotos", []),
       selectedCategoryId: null,
       manageCategoryId: null,
       editSectionId: null,
@@ -515,12 +647,19 @@
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
+      unsafeDraft: createUnsafeDraft(loadJson("unsafeDraft", {})),
+      materialDraft: createMaterialDraft(loadJson("materialDraft", {})),
+      unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
+      materialFilters: loadJson("materialFilters", { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" }),
+      manageTab: loadJson("manageTab", "workers"),
+      lastUnsafeIssueId: "",
+      lastMaterialId: "",
     };
     let cachedSupabaseClient = null;
 
     function initialView() {
       const view = document.body?.dataset?.initialView || "dashboard";
-      return NAV.some((nav) => nav.id === view) ? view : "dashboard";
+      return routeViews().some((nav) => nav.id === view) ? view : "dashboard";
     }
 
     function pageForView(view) {
@@ -530,6 +669,9 @@
         ships: "ships.html",
         history: "history.html",
         items: "items.html",
+        unsafe: "unsafe.html",
+        materials: "materials.html",
+        manage: "manage.html",
       }[view] || "index.html";
     }
 
@@ -656,6 +798,21 @@
           })),
       ];
       state.draft = createDraft(state.draft);
+      state.workers = (Array.isArray(state.workers) ? state.workers : []).map((worker) => ({
+        id: worker.id || uid("worker"),
+        name: String(worker.name || "").trim(),
+        team: String(worker.team || "").trim(),
+        createdAt: worker.createdAt || serverNow().toISOString(),
+        updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
+      })).filter((worker) => worker.name);
+      state.unsafeIssues = Array.isArray(state.unsafeIssues) ? state.unsafeIssues : [];
+      state.missingMaterials = Array.isArray(state.missingMaterials) ? state.missingMaterials : [];
+      state.issuePhotos = Array.isArray(state.issuePhotos) ? state.issuePhotos : [];
+      state.unsafeDraft = createUnsafeDraft(state.unsafeDraft);
+      state.materialDraft = createMaterialDraft(state.materialDraft);
+      state.unsafeFilters = { shipNo: "", status: "", workerId: "", sort: "status", ...state.unsafeFilters };
+      state.materialFilters = { shipNo: "", status: "", workerId: "", materialName: "", sort: "status", ...state.materialFilters };
+      if (!["workers", "unsafe", "materials"].includes(state.manageTab)) state.manageTab = "workers";
     }
 
     function dedupeChecklistItems() {
@@ -761,6 +918,15 @@
       saveJson("inspections", state.inspections);
       saveJson("inspectionItems", state.inspectionItems);
       saveJson("draft", state.draft);
+      saveJson("workers", state.workers);
+      saveJson("unsafeIssues", state.unsafeIssues);
+      saveJson("missingMaterials", state.missingMaterials);
+      saveJson("issuePhotos", state.issuePhotos);
+      saveJson("unsafeDraft", state.unsafeDraft);
+      saveJson("materialDraft", state.materialDraft);
+      saveJson("unsafeFilters", state.unsafeFilters);
+      saveJson("materialFilters", state.materialFilters);
+      saveJson("manageTab", state.manageTab);
     }
 
     function routeState() {
@@ -792,7 +958,7 @@
         replaceRouteState();
         return;
       }
-      state.view = NAV.some((nav) => nav.id === route.view) ? route.view : "dashboard";
+      state.view = routeViews().some((nav) => nav.id === route.view) ? route.view : "dashboard";
       state.selectedCategoryId = route.selectedCategoryId || null;
       state.historyScope = route.historyScope || "all";
       state.historyFilter = route.historyFilter || "all";
@@ -884,6 +1050,9 @@
         history: renderHistory,
         ships: renderShips,
         items: renderItems,
+        unsafe: renderUnsafe,
+        materials: renderMaterials,
+        manage: renderManage,
       }[state.view]();
       setSyncStatus(state.syncText, state.syncMode);
     }
@@ -895,6 +1064,9 @@
         history: "점검 이력",
         ships: "공정 보드",
         items: "항목 관리",
+        unsafe: "불안전요소 등록",
+        materials: "호선자재 누락",
+        manage: "관리",
       };
       const title = $("appbarTitle");
       const headline = $("homeHeadline");
@@ -944,8 +1116,12 @@
       }
     }
 
+    function visibleNavItems() {
+      return state.adminMode ? [...NAV, { id: "manage", label: "관리", icon: "settings" }] : NAV;
+    }
+
     function renderNav() {
-      const html = NAV.map((nav) => `
+      const html = visibleNavItems().map((nav) => `
         <button class="nav-btn ${state.view === nav.id ? "active" : ""}" data-view="${nav.id}" type="button">
           <span class="nav-icon">${navIcon(nav.icon)}</span><span>${esc(nav.label)}</span>
         </button>`).join("");
@@ -962,6 +1138,7 @@
         ship: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17h16l-2 3H6z"></path><path d="M6 17l1-7h10l1 7"></path><path d="M9 10V6h6v4"></path><path d="M3 21c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1"></path></svg>`,
         noteCheck: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"></path><path d="M15 3v5h5"></path><path d="M8.5 14l2.5 2.5 4.5-5"></path></svg>`,
         menu: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>`,
+        settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1-2.1 2.1-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7V21h-3v-.6a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1-2.1-2.1.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1H4v-3h.6a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1 2.1-2.1.1.1a1.8 1.8 0 0 0 2 .4 1.8 1.8 0 0 0 1.1-1.7V3h3v.6a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1 2.1 2.1-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.7 1.1h.6v3h-.6a1.8 1.8 0 0 0-1.7 1.1z"></path></svg>`,
       };
       return icons[name] || icons.note;
     }
@@ -1015,13 +1192,13 @@
             <div class="small">호선 및 공정 관리</div>
             <span class="quick-arrow" style="color:#07906f">›</span>
           </button>
-          <button class="quick-card primary" data-action="open-unsafe-register" type="button">
+          <button class="quick-card primary" data-view="unsafe" type="button">
             <span class="quick-icon">${navIcon("note")}</span>
             <div class="quick-title">불안전요소 등록</div>
             <div class="small">위험 요소를 기록합니다</div>
             <span class="quick-arrow">›</span>
           </button>
-          <button class="quick-card secondary" data-action="open-missing-materials" type="button">
+          <button class="quick-card secondary" data-view="materials" type="button">
             <span class="quick-icon">${navIcon("board")}</span>
             <div class="quick-title">호선자재 누락</div>
             <div class="small">누락 자재를 확인합니다</div>
@@ -1764,6 +1941,294 @@
       </div>`;
     }
 
+    function renderUnsafe() {
+      const detail = state.lastUnsafeIssueId ? state.unsafeIssues.find((row) => row.id === state.lastUnsafeIssueId) : null;
+      if (detail) return renderUnsafeComplete(detail);
+      return `${pageHead("불안전요소 등록", "현장 위험 요소를 빠르게 등록합니다.")}
+      <section class="panel panel-pad issue-form">
+        ${selectableShips().length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다.</div>`}
+        ${state.workers.length ? "" : `<div class="notice" style="margin-bottom:12px">등록자 목록이 없습니다. 관리자 모드에서 작업자를 추가하세요.</div>`}
+        <div class="form-row">
+          <div class="field">
+            <label for="unsafeShipNo">호선</label>
+            <select class="select" id="unsafeShipNo">${visibleShipOptionsForIssues(state.unsafeDraft.shipNo)}</select>
+          </div>
+          <div class="field">
+            <label for="unsafeWorkerId">등록자</label>
+            <select class="select" id="unsafeWorkerId">${visibleWorkerOptions(state.unsafeDraft.workerId)}</select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="unsafeContent">내용</label>
+          <textarea class="textarea" id="unsafeContent" placeholder="불안전요소 내용을 입력하세요">${esc(state.unsafeDraft.content)}</textarea>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="unsafePhotos">사진 권장, 최대 3개</label>
+          <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
+          <div class="small muted">사진 없이도 확인 후 등록할 수 있습니다.</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" data-action="submit-unsafe" type="button">등록</button>
+        </div>
+      </section>`;
+    }
+
+    function renderMaterials() {
+      const detail = state.lastMaterialId ? state.missingMaterials.find((row) => row.id === state.lastMaterialId) : null;
+      if (detail) return renderMaterialComplete(detail);
+      return `${pageHead("호선자재 누락", "호선별 누락 자재를 등록합니다.")}
+      <section class="panel panel-pad issue-form">
+        ${selectableShips().length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다.</div>`}
+        ${state.workers.length ? "" : `<div class="notice" style="margin-bottom:12px">등록자 목록이 없습니다. 관리자 모드에서 작업자를 추가하세요.</div>`}
+        <div class="form-row">
+          <div class="field">
+            <label for="materialShipNo">호선</label>
+            <select class="select" id="materialShipNo">${visibleShipOptionsForIssues(state.materialDraft.shipNo)}</select>
+          </div>
+          <div class="field">
+            <label for="materialWorkerId">등록자</label>
+            <select class="select" id="materialWorkerId">${visibleWorkerOptions(state.materialDraft.workerId)}</select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="materialName">자재명</label>
+          <input class="input" id="materialName" value="${esc(state.materialDraft.materialName)}" placeholder="예) 배관 자재" />
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="materialContent">내용</label>
+          <textarea class="textarea" id="materialContent" placeholder="누락 내용을 입력하세요">${esc(state.materialDraft.content)}</textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn" data-action="submit-material" type="button">등록</button>
+        </div>
+      </section>`;
+    }
+
+    function renderManage() {
+      if (!state.adminMode) {
+        return pageHead("관리", "관리자 모드에서 사용할 수 있습니다.", adminToggleButton())
+          + `<div class="notice danger">관리자 모드가 필요합니다.</div>`;
+      }
+
+      const tabs = [
+        ["workers", "작업자"],
+        ["unsafe", "불안전요소"],
+        ["materials", "자재누락"],
+      ];
+      return `${pageHead("관리", "작업자와 접수 기록을 관리합니다.", adminToggleButton())}
+      <div class="manage-tabs" role="tablist" aria-label="관리 탭">
+        ${tabs.map(([id, label]) => `<button class="seg-btn ${state.manageTab === id ? "active" : ""}" data-manage-tab="${id}" type="button">${esc(label)}</button>`).join("")}
+      </div>
+      ${state.manageTab === "workers" ? renderWorkerManager() : ""}
+      ${state.manageTab === "unsafe" ? renderUnsafeManager() : ""}
+      ${state.manageTab === "materials" ? renderMaterialManager() : ""}`;
+    }
+
+    function renderWorkerManager() {
+      return `<section class="panel panel-pad">
+        <div class="section-title">작업자 목록 <span class="small muted">${state.workers.length}명</span></div>
+        <div class="form-row worker-form">
+          <div class="field">
+            <label for="workerName">이름</label>
+            <input class="input" id="workerName" placeholder="예) 김민수" />
+          </div>
+          <div class="field">
+            <label for="workerTeam">소속/팀</label>
+            <input class="input" id="workerTeam" placeholder="예) 배관팀" />
+          </div>
+          <button class="btn" data-action="add-worker" type="button">추가</button>
+        </div>
+        <div class="list worker-list">
+          ${state.workers.length ? state.workers.map(renderWorkerRow).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
+        </div>
+      </section>`;
+    }
+
+    function renderWorkerRow(worker) {
+      return `<div class="item-row worker-row">
+        <div class="item-main">
+          <div class="item-name">${esc(worker.name)}</div>
+          <div class="small muted">${esc(worker.team || "소속/팀 없음")}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn-light" data-edit-worker="${esc(worker.id)}" type="button">수정</button>
+          <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
+        </div>
+      </div>`;
+    }
+
+    function renderUnsafeManager() {
+      const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, state.unsafeFilters);
+      const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.unsafeFilters.sort, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
+      const groups = ISSUE_MATERIAL_RULES.groupUnsafeByStatus(sorted);
+      return `<section class="panel panel-pad">
+        <div class="section-title">불안전요소 <span class="small muted">${filtered.length}건</span></div>
+        ${renderRecordFilters("unsafe")}
+        <div class="record-groups">
+          ${groups.map((group) => renderUnsafeGroup(group)).join("")}
+        </div>
+      </section>`;
+    }
+
+    function renderUnsafeGroup(group) {
+      const collapsed = group.status === ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2];
+      return `<section class="record-group">
+        <div class="record-group-head">
+          <strong>${esc(group.status)}</strong>
+          <span class="small muted">${group.records.length}건</span>
+        </div>
+        ${collapsed ? `<details><summary>완료 기록 보기</summary>${group.records.map((row) => renderUnsafeRecordCard(row)).join("")}</details>` : group.records.map((row) => renderUnsafeRecordCard(row)).join("")}
+      </section>`;
+    }
+
+    function renderMaterialManager() {
+      const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, state.materialFilters);
+      const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.materialFilters.sort, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES);
+      const groups = ISSUE_MATERIAL_RULES.groupMaterialsByShip(sorted);
+      return `<section class="panel panel-pad">
+        <div class="section-title">호선자재 누락 <span class="small muted">${filtered.length}건</span></div>
+        ${renderRecordFilters("materials")}
+        <div class="record-groups">
+          ${groups.map((group) => renderMaterialGroup(group)).join("")}
+        </div>
+      </section>`;
+    }
+
+    function renderMaterialGroup(group) {
+      const doneStatus = ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2];
+      const openRows = group.records.filter((row) => row.status !== doneStatus);
+      const doneRows = group.records.filter((row) => row.status === doneStatus);
+      return `<section class="record-group">
+        <div class="record-group-head">
+          <strong>${esc(group.shipNo)}</strong>
+          <span class="small muted">${group.records.length}건</span>
+        </div>
+        ${openRows.map((row) => renderMaterialRecordCard(row)).join("")}
+        ${doneRows.length ? `<details><summary>완료 기록 ${doneRows.length}건 보기</summary>${doneRows.map((row) => renderMaterialRecordCard(row)).join("")}</details>` : ""}
+      </section>`;
+    }
+
+    function renderRecordFilters(kind) {
+      const filters = kind === "unsafe" ? state.unsafeFilters : state.materialFilters;
+      const statuses = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES;
+      return `<div class="record-filters">
+        <select class="select" data-record-filter="${kind}:shipNo">
+          <option value="">전체 호선</option>
+          ${selectableShips().map((ship) => `<option value="${esc(ship.no)}" ${filters.shipNo === ship.no ? "selected" : ""}>${esc(ship.no)}</option>`).join("")}
+        </select>
+        <select class="select" data-record-filter="${kind}:status">
+          <option value="">전체 상태</option>
+          ${statuses.map((status) => `<option value="${esc(status)}" ${filters.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}
+        </select>
+        <select class="select" data-record-filter="${kind}:workerId">
+          <option value="">전체 등록자</option>
+          ${state.workers.map((worker) => `<option value="${esc(worker.id)}" ${filters.workerId === worker.id ? "selected" : ""}>${esc(worker.name)}</option>`).join("")}
+        </select>
+        ${kind === "materials" ? `<input class="input" data-record-filter="materials:materialName" value="${esc(filters.materialName)}" placeholder="자재명 필터" />` : ""}
+        <select class="select" data-record-filter="${kind}:sort">
+          <option value="status" ${filters.sort === "status" ? "selected" : ""}>상태 우선순</option>
+          <option value="latest" ${filters.sort === "latest" ? "selected" : ""}>최신 등록순</option>
+          <option value="shipNo" ${filters.sort === "shipNo" ? "selected" : ""}>호선 번호순</option>
+          <option value="worker" ${filters.sort === "worker" ? "selected" : ""}>등록자순</option>
+          ${kind === "materials" ? `<option value="materialName" ${filters.sort === "materialName" ? "selected" : ""}>자재명순</option>` : ""}
+        </select>
+      </div>`;
+    }
+
+    function renderAdminRecordControls(kind, row, statuses) {
+      return `<div class="admin-record-controls">
+        <select class="select" data-record-status="${kind}:${esc(row.id)}">
+          ${statuses.map((status) => `<option value="${esc(status)}" ${row.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}
+        </select>
+        <textarea class="textarea" data-record-memo="${kind}:${esc(row.id)}" placeholder="조치/메모">${esc(row.adminMemo || "")}</textarea>
+        <button class="btn-light" data-save-record="${kind}:${esc(row.id)}" type="button">저장</button>
+        <button class="btn-danger" data-delete-record="${kind}:${esc(row.id)}" type="button">삭제</button>
+      </div>`;
+    }
+
+    function renderUnsafeRecordCard(row) {
+      const photo = state.issuePhotos.find((item) => item.targetType === "unsafe_issue" && item.targetId === row.id);
+      const photoUrl = photo ? publicPhotoUrl(photo) : "";
+      return `<article class="record-card">
+        <div class="record-card-main">
+          <div class="record-card-headline">
+            ${photoUrl ? `<img class="record-thumb" src="${esc(photoUrl)}" alt="불안전요소 사진" />` : ""}
+            <div>
+              <strong>${esc(row.shipNo)}</strong>
+              <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
+            </div>
+          </div>
+          <p>${esc(row.content)}</p>
+          ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
+        </div>
+        ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
+      </article>`;
+    }
+
+    function renderMaterialRecordCard(row) {
+      return `<article class="record-card">
+        <div class="record-card-main">
+          <strong>${esc(row.shipNo)} · ${esc(row.materialName)}</strong>
+          <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
+          <p>${esc(row.content)}</p>
+          ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
+        </div>
+        ${renderAdminRecordControls("materials", row, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES)}
+      </article>`;
+    }
+
+    function renderCompletionActions(type) {
+      return `<div class="completion-actions">
+        <button class="btn" data-action="${type === "unsafe" ? "new-unsafe" : "new-material"}" type="button">추가 등록</button>
+        <button class="btn-light" data-action="${type === "unsafe" ? "view-unsafe-list" : "view-material-list"}" type="button">목록 보기</button>
+        <button class="btn-light" data-view="dashboard" type="button">홈으로</button>
+      </div>`;
+    }
+
+    function renderUnsafeComplete(row) {
+      const photos = state.issuePhotos.filter((photo) => photo.targetType === "unsafe_issue" && photo.targetId === row.id);
+      const photoHtml = photos.length
+        ? `<div class="photo-strip">${photos.map((photo) => {
+            const url = publicPhotoUrl(photo);
+            return url ? `<img src="${esc(url)}" alt="불안전요소 사진" />` : "";
+          }).join("")}</div>`
+        : "";
+      return `${pageHead("불안전요소 등록 완료", "접수된 내용을 확인하세요.")}
+      <section class="panel panel-pad completion-card">
+        ${badge("medium", row.status)}
+        <div class="detail-grid">
+          <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
+          <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot)}</strong></div>
+          <div><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
+          <div><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}개 첨부` : "없음"}</strong></div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">내용</span>
+          <div class="readonly-box">${esc(row.content)}</div>
+        </div>
+        ${photoHtml}
+        ${renderCompletionActions("unsafe")}
+      </section>`;
+    }
+
+    function renderMaterialComplete(row) {
+      return `${pageHead("호선자재 누락 등록 완료", "접수된 내용을 확인하세요.")}
+      <section class="panel panel-pad completion-card">
+        ${badge("medium", row.status)}
+        <div class="detail-grid">
+          <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
+          <div><span class="small muted">자재명</span><strong>${esc(row.materialName)}</strong></div>
+          <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot)}</strong></div>
+          <div><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">내용</span>
+          <div class="readonly-box">${esc(row.content)}</div>
+        </div>
+        ${renderCompletionActions("materials")}
+      </section>`;
+    }
+
     function renderSectionManager(cat, section) {
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
       const editingSection = state.editSectionId === section.id;
@@ -2059,12 +2524,34 @@
       return state.ships.filter(isWorkerVisibleShip).sort((a, b) => String(a.no).localeCompare(String(b.no)));
     }
 
+    function selectableShips() {
+      return visibleWorkerShips();
+    }
+
+    function visibleWorkerOptions(selectedId = "") {
+      return `<option value="">등록자 선택</option>${state.workers
+        .map((worker) => `<option value="${esc(worker.id)}" ${worker.id === selectedId ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` / ${esc(worker.team)}` : ""}</option>`)
+        .join("")}`;
+    }
+
+    function visibleShipOptionsForIssues(selectedNo = "") {
+      return `<option value="">호선 선택</option>${selectableShips()
+        .map((ship) => `<option value="${esc(ship.no)}" ${ship.no === selectedNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` / ${esc(ship.type)}` : ""}</option>`)
+        .join("")}`;
+    }
+
     function effectiveShipStage(ship) {
       return shipStageInfo(ship.processStage || "mounting");
     }
 
     function dateOnly(value) {
       return String(value || "").slice(0, 10);
+    }
+
+    function formatDateTime(value) {
+      const date = value ? new Date(value) : null;
+      if (!date || Number.isNaN(date.getTime())) return "-";
+      return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
     }
 
     function addDays(dateValue, days) {
@@ -2306,6 +2793,11 @@
       return $("catColor")?.value || COLORS[0];
     }
 
+    function cssEscape(value) {
+      if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(value);
+      return String(value).replace(/["\\]/g, "\\$&");
+    }
+
     function resolveShipType(selectId, customId) {
       const selected = $(selectId).value;
       if (selected === "기타") return $(customId).value.trim();
@@ -2340,13 +2832,35 @@
         render();
         pushRouteState();
       }
-      if (button.dataset.action === "open-unsafe-register") toast("불안전요소 등록 화면은 준비 중입니다.");
-      if (button.dataset.action === "open-missing-materials") toast("호선자재 누락 화면은 준비 중입니다.");
       if (button.dataset.action === "continue-tool-prep") {
         state.draft.toolPrepComplete = true;
         render();
       }
       if (button.dataset.action === "submit-inspection") submitInspection();
+      if (button.dataset.action === "submit-unsafe") submitUnsafeIssue();
+      if (button.dataset.action === "submit-material") submitMissingMaterial();
+      if (button.dataset.action === "new-unsafe") {
+        state.lastUnsafeIssueId = "";
+        state.unsafeDraft = createUnsafeDraft();
+        persist();
+        render();
+      }
+      if (button.dataset.action === "new-material") {
+        state.lastMaterialId = "";
+        state.materialDraft = createMaterialDraft();
+        persist();
+        render();
+      }
+      if (button.dataset.action === "view-unsafe-list") {
+        state.manageTab = "unsafe";
+        saveJson("manageTab", state.manageTab);
+        changeView("manage");
+      }
+      if (button.dataset.action === "view-material-list") {
+        state.manageTab = "materials";
+        saveJson("manageTab", state.manageTab);
+        changeView("manage");
+      }
       if (button.dataset.historyFilter) {
         state.historyFilter = button.dataset.historyFilter;
         state.historyDetailId = null;
@@ -2373,6 +2887,16 @@
         pushRouteState();
       }
       if (button.dataset.action === "toggle-admin") toggleAdminMode();
+      if (button.dataset.manageTab) {
+        state.manageTab = button.dataset.manageTab;
+        saveJson("manageTab", state.manageTab);
+        render();
+      }
+      if (button.dataset.action === "add-worker") addWorker();
+      if (button.dataset.editWorker) editWorker(button.dataset.editWorker);
+      if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
+      if (button.dataset.saveRecord) saveAdminRecord(button.dataset.saveRecord);
+      if (button.dataset.deleteRecord) deleteAdminRecord(button.dataset.deleteRecord);
       if (button.dataset.action === "reset-history") resetHistory();
       if (button.dataset.action === "delete-selected-history") deleteSelectedHistory();
       if (button.dataset.action === "add-ship") addShip();
@@ -2486,6 +3010,18 @@
     document.addEventListener("input", (event) => {
       if (event.target.id === "worker") state.draft.worker = event.target.value;
       if (event.target.id === "safetyPledge") state.draft.safetyPledge = event.target.value;
+      if (event.target.id === "unsafeContent") {
+        state.unsafeDraft.content = event.target.value;
+        saveJson("unsafeDraft", state.unsafeDraft);
+      }
+      if (event.target.id === "materialName") {
+        state.materialDraft.materialName = event.target.value;
+        saveJson("materialDraft", state.materialDraft);
+      }
+      if (event.target.id === "materialContent") {
+        state.materialDraft.content = event.target.value;
+        saveJson("materialDraft", state.materialDraft);
+      }
       if (event.target.matches("[data-check-item]")) {
         state.draft.checks[event.target.dataset.checkItem] = event.target.checked;
         render();
@@ -2496,6 +3032,29 @@
       if (event.target.id === "shipNo") {
         state.draft.shipNo = event.target.value;
         render();
+      }
+      if (event.target.id === "unsafeShipNo") {
+        state.unsafeDraft.shipNo = event.target.value;
+        saveJson("unsafeDraft", state.unsafeDraft);
+      }
+      if (event.target.id === "unsafeWorkerId") {
+        state.unsafeDraft.workerId = event.target.value;
+        saveJson("unsafeDraft", state.unsafeDraft);
+      }
+      if (event.target.id === "unsafePhotos") {
+        state.unsafeDraft.photos = Array.from(event.target.files || []).map((file) => file.name);
+        saveJson("unsafeDraft", state.unsafeDraft);
+      }
+      if (event.target.id === "materialShipNo") {
+        state.materialDraft.shipNo = event.target.value;
+        saveJson("materialDraft", state.materialDraft);
+      }
+      if (event.target.id === "materialWorkerId") {
+        state.materialDraft.workerId = event.target.value;
+        saveJson("materialDraft", state.materialDraft);
+      }
+      if (event.target.matches("[data-record-filter]")) {
+        updateRecordFilter(event.target.dataset.recordFilter, event.target.value);
       }
       if (event.target.id === "historySelectAll") {
         toggleVisibleHistory(event.target.checked);
@@ -2578,6 +3137,65 @@
       toast("점검 이력은 저장되었지만 서버 동기화에 실패했습니다.");
     }
 
+    async function submitUnsafeIssue() {
+      const errors = ISSUE_MATERIAL_RULES.validateUnsafeDraft(state.unsafeDraft);
+      if (errors.length) return toast(errors[0]);
+      const input = $("unsafePhotos");
+      const files = Array.from(input?.files || []);
+      if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast("사진은 최대 3개까지 첨부할 수 있습니다.");
+      if (!files.length && !confirm("사진 없이 등록하시겠습니까?")) return;
+      const now = serverNow().toISOString();
+      const id = uid("unsafe");
+      const snapshot = ISSUE_MATERIAL_RULES.createWorkerSnapshot(state.unsafeDraft.workerId, state.workers);
+      const row = {
+        id,
+        shipNo: state.unsafeDraft.shipNo,
+        content: state.unsafeDraft.content.trim(),
+        ...snapshot,
+        status: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0],
+        adminMemo: "",
+        createdAt: now,
+        updatedAt: now,
+        completedAt: "",
+      };
+      state.unsafeIssues.unshift(row);
+      state.lastUnsafeIssueId = id;
+      state.unsafeDraft = createUnsafeDraft();
+      persist();
+      await syncUnsafeIssue(row, files);
+      render();
+      replaceRouteState();
+      toast("불안전요소가 접수되었습니다.");
+    }
+
+    async function submitMissingMaterial() {
+      const errors = ISSUE_MATERIAL_RULES.validateMaterialDraft(state.materialDraft);
+      if (errors.length) return toast(errors[0]);
+      const now = serverNow().toISOString();
+      const id = uid("material");
+      const snapshot = ISSUE_MATERIAL_RULES.createWorkerSnapshot(state.materialDraft.workerId, state.workers);
+      const row = {
+        id,
+        shipNo: state.materialDraft.shipNo,
+        materialName: state.materialDraft.materialName.trim(),
+        content: state.materialDraft.content.trim(),
+        ...snapshot,
+        status: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0],
+        adminMemo: "",
+        createdAt: now,
+        updatedAt: now,
+        completedAt: "",
+      };
+      state.missingMaterials.unshift(row);
+      state.lastMaterialId = id;
+      state.materialDraft = createMaterialDraft();
+      persist();
+      await syncMissingMaterial(row);
+      render();
+      replaceRouteState();
+      toast("호선자재 누락이 접수되었습니다.");
+    }
+
     function setAdminMode(enabled, email = "") {
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
@@ -2621,6 +3239,97 @@
       if (state.adminMode) return true;
       toast("관리자 비밀번호로 수정 모드를 켜주세요.");
       return false;
+    }
+
+    function addWorker() {
+      if (!requireAdmin()) return;
+      const name = $("workerName")?.value.trim() || "";
+      const team = $("workerTeam")?.value.trim() || "";
+      if (!name) return toast("작업자 이름을 입력하세요.");
+      const now = serverNow().toISOString();
+      state.workers.push({ id: uid("worker"), name, team, createdAt: now, updatedAt: now });
+      persistAndSync();
+      render();
+      toast("작업자를 추가했습니다.");
+    }
+
+    function editWorker(id) {
+      if (!requireAdmin()) return;
+      const worker = state.workers.find((row) => row.id === id);
+      if (!worker) return;
+      const name = prompt("작업자 이름", worker.name);
+      if (name === null) return;
+      const team = prompt("소속/팀", worker.team || "");
+      if (team === null) return;
+      const cleanName = name.trim();
+      if (!cleanName) return toast("작업자 이름을 입력하세요.");
+      worker.name = cleanName;
+      worker.team = team.trim();
+      worker.updatedAt = serverNow().toISOString();
+      persistAndSync();
+      render();
+      toast("작업자를 수정했습니다.");
+    }
+
+    async function deleteWorker(id) {
+      if (!requireAdmin()) return;
+      const worker = state.workers.find((row) => row.id === id);
+      if (!worker) return;
+      if (!confirm(`${worker.name} 작업자를 삭제할까요? 기존 기록의 등록자 정보는 유지됩니다.`)) return;
+      state.workers = state.workers.filter((row) => row.id !== id);
+      if (state.unsafeDraft.workerId === id) state.unsafeDraft.workerId = "";
+      if (state.materialDraft.workerId === id) state.materialDraft.workerId = "";
+      persist();
+      await deleteRemoteRows("workers", [id]);
+      if (isSyncConfigured()) await pushRemote();
+      render();
+      toast("작업자를 삭제했습니다.");
+    }
+
+    function updateRecordFilter(token, value) {
+      const [kind, key] = token.split(":");
+      const target = kind === "unsafe" ? state.unsafeFilters : state.materialFilters;
+      target[key] = value;
+      saveJson(kind === "unsafe" ? "unsafeFilters" : "materialFilters", target);
+      render();
+    }
+
+    function saveAdminRecord(token) {
+      if (!requireAdmin()) return;
+      const [kind, id] = token.split(":");
+      const rows = kind === "unsafe" ? state.unsafeIssues : state.missingMaterials;
+      const row = rows.find((item) => item.id === id);
+      if (!row) return;
+      const status = document.querySelector(`[data-record-status="${cssEscape(token)}"]`)?.value || row.status;
+      const memo = document.querySelector(`[data-record-memo="${cssEscape(token)}"]`)?.value || "";
+      row.status = status;
+      row.adminMemo = memo.trim();
+      row.updatedAt = serverNow().toISOString();
+      const doneStatus = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2] : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2];
+      row.completedAt = status === doneStatus ? (row.completedAt || row.updatedAt) : "";
+      persistAndSync();
+      render();
+      toast("기록을 저장했습니다.");
+    }
+
+    async function deleteAdminRecord(token) {
+      if (!requireAdmin()) return;
+      const [kind, id] = token.split(":");
+      const label = kind === "unsafe" ? "불안전요소" : "호선자재 누락";
+      if (!confirm(`${label} 기록을 영구 삭제할까요?`)) return;
+      if (kind === "unsafe") {
+        await deleteUnsafePhotos(id);
+        state.unsafeIssues = state.unsafeIssues.filter((row) => row.id !== id);
+        state.issuePhotos = state.issuePhotos.filter((row) => row.targetId !== id);
+        await deleteRemoteRows("unsafeIssues", [id]);
+      } else {
+        state.missingMaterials = state.missingMaterials.filter((row) => row.id !== id);
+        await deleteRemoteRows("missingMaterials", [id]);
+      }
+      persist();
+      if (isSyncConfigured()) await pushRemote();
+      render();
+      toast("기록을 삭제했습니다.");
     }
 
     async function resetHistory() {
@@ -3003,6 +3712,77 @@
       toast(affected ? "사용 중인 작업 유형은 기본 픽토그램으로 되돌렸습니다." : "픽토그램을 삭제했습니다.");
     }
 
+    function photoExtension(file) {
+      const name = String(file && file.name || "").toLowerCase();
+      const ext = name.split(".").pop();
+      return ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+    }
+
+    async function uploadUnsafePhotos(issueId, files) {
+      const client = supabaseClient();
+      if (!client || !files.length) return [];
+      const uploaded = [];
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const storagePath = `unsafe/${issueId}/original-${index + 1}.${photoExtension(file)}`;
+        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: true });
+        if (error) throw error;
+        uploaded.push({
+          id: uid("photo"),
+          targetType: "unsafe_issue",
+          targetId: issueId,
+          storageBucket: ISSUE_PHOTO_BUCKET,
+          storagePath,
+          sortOrder: index + 1,
+          createdAt: serverNow().toISOString(),
+        });
+      }
+      return uploaded;
+    }
+
+    function publicPhotoUrl(photo) {
+      const client = supabaseClient();
+      if (!client || !photo.storagePath) return "";
+      return client.storage.from(photo.storageBucket || ISSUE_PHOTO_BUCKET).getPublicUrl(photo.storagePath).data.publicUrl || "";
+    }
+
+    async function syncUnsafeIssue(row, files) {
+      try {
+        const photos = await uploadUnsafePhotos(row.id, files);
+        state.issuePhotos.push(...photos);
+        persist();
+        const synced = await persistAndSync();
+        if (!synced) toast("기록은 저장되었지만 서버 동기화에 실패했습니다.");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("사진 업로드에 실패했습니다. 기록은 로컬에 저장되었습니다.");
+        return false;
+      }
+    }
+
+    async function syncMissingMaterial(row) {
+      const synced = await persistAndSync();
+      if (!synced) toast("기록은 저장되었지만 서버 동기화에 실패했습니다.");
+      return row;
+    }
+
+    async function deleteUnsafePhotos(id) {
+      const client = supabaseClient();
+      const photos = state.issuePhotos.filter((row) => row.targetType === "unsafe_issue" && row.targetId === id);
+      if (!client || !photos.length) return;
+      const paths = photos.map((photo) => photo.storagePath).filter(Boolean);
+      if (paths.length) {
+        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).remove(paths);
+        if (error) {
+          console.error(error);
+          toast("사진 삭제에 실패했습니다. Storage 정책을 확인하세요.");
+        }
+      }
+      await deleteRemoteRows("issuePhotos", photos.map((photo) => photo.id));
+    }
+
     async function persistAndSync() {
       persist();
       if (isSyncConfigured()) {
@@ -3150,6 +3930,23 @@
         console.error(error);
         setSyncStatus("동기화 오류", "error");
         toast("호선 서버 삭제에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+        return false;
+      }
+    }
+
+    async function deleteRemoteRows(key, ids) {
+      const client = supabaseClient();
+      const config = remoteConfigByKey(key);
+      if (!client || !config || !ids.length) return false;
+      try {
+        const { error } = await client.from(config.table).delete().in("id", ids);
+        if (error) throw error;
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("서버 삭제에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
         return false;
       }
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
   <title>조선소 안전 체크리스트</title>
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
@@ -58,6 +58,7 @@
   <div id="toast" class="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3" defer></script>
   <script src="assets/js/checklist-rules.js" defer></script>
+  <script src="assets/js/issue-material-rules.js" defer></script>
   <script src="assets/js/app.js" defer></script>
 </body>
 </html>

@@ -3133,3 +3133,159 @@
         font-size: 12px;
       }
     }
+
+    .manage-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      margin-bottom: 14px;
+      border-radius: var(--radius);
+      background: #e7edf5;
+      overflow-x: auto;
+    }
+
+    .manage-tabs .seg-btn {
+      min-width: 94px;
+    }
+
+    .worker-form {
+      align-items: end;
+      margin-bottom: 14px;
+    }
+
+    .worker-row .item-main {
+      min-width: 0;
+    }
+
+    .issue-form .form-actions,
+    .completion-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .completion-actions .btn {
+      flex: 1 1 180px;
+    }
+
+    .completion-actions .btn-light {
+      flex: 1 1 120px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .detail-grid div {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+
+    .detail-grid strong {
+      display: block;
+      margin-top: 4px;
+    }
+
+    .readonly-box {
+      min-height: 54px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .record-filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .record-groups {
+      display: grid;
+      gap: 12px;
+    }
+
+    .record-group {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      padding: 12px;
+    }
+
+    .record-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .record-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      margin-top: 8px;
+    }
+
+    .record-card-main p {
+      margin: 8px 0 0;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .record-card-headline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .record-card-headline strong,
+    .record-card-main > strong {
+      display: block;
+    }
+
+    .admin-record-controls {
+      display: grid;
+      gap: 8px;
+    }
+
+    .photo-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .photo-strip img,
+    .record-thumb {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+
+    .record-thumb {
+      max-width: 92px;
+      flex: 0 0 92px;
+    }
+
+    @media (max-width: 920px) {
+      .record-card {
+        grid-template-columns: 1fr;
+      }
+    }
