@@ -543,10 +543,16 @@
       box-shadow: 0 10px 24px rgba(23, 32, 51, .08);
     }
 
+    .stat-label {
+      font-weight: 900;
+      margin-bottom: 7px;
+    }
+
     .stat-pill.is-alert {
       border-color: #ef4444;
       background: linear-gradient(180deg, #fff 0%, #fff7f7 100%);
       box-shadow: 0 0 0 2px rgba(239, 68, 68, .22), 0 16px 34px rgba(239, 68, 68, .22);
+      animation: unsafeStatPulse 2.2s ease-in-out infinite;
     }
 
     .stat-pill.is-alert:hover {
@@ -554,10 +560,30 @@
       box-shadow: 0 0 0 2px rgba(239, 68, 68, .28), 0 18px 38px rgba(220, 38, 38, .26);
     }
 
+    @keyframes unsafeStatPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, .18), 0 12px 28px rgba(239, 68, 68, .18);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, .34), 0 20px 42px rgba(220, 38, 38, .30);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stat-pill.is-alert {
+        animation: none;
+      }
+    }
+
     .stat-value {
       font-size: 22px;
       font-weight: 800;
       line-height: 1;
+    }
+
+    .stat-unit {
+      font-size: 12px;
+      margin-left: 3px;
     }
 
     .home-section {
@@ -2425,6 +2451,37 @@
       stroke-linecap: round;
       stroke-linejoin: round;
       fill: none;
+    }
+
+    .stat-pill.is-focus {
+      padding-top: 12px;
+    }
+
+    .stat-pill.is-focus .stat-icon {
+      width: 52px;
+      height: 52px;
+      margin-bottom: 9px;
+    }
+
+    .stat-pill.is-focus .stat-icon svg {
+      width: 50px;
+      height: 50px;
+      stroke-width: 1.9;
+    }
+
+    .stat-pill.is-focus .stat-label {
+      margin-bottom: 9px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .stat-pill.is-focus .stat-value {
+      font-size: 34px;
+    }
+
+    .stat-pill.is-focus .stat-unit {
+      font-size: 16px;
+      margin-left: 4px;
     }
 
     .stat-foot {

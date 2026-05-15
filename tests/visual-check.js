@@ -417,19 +417,30 @@ function assertCheck(name, condition) {
     const unsafeHomeStat = await evaluate(client, `(() => {
       const todayCard = document.querySelector('[data-stat-scope="today"]');
       const card = document.querySelector('[data-stat-scope="unsafe"]');
+      const deliveryCard = document.querySelector('[data-stat-scope="delivery"]');
+      const todayIcon = todayCard?.querySelector(".stat-icon svg");
+      const unsafeIcon = card?.querySelector(".stat-icon svg");
+      const deliveryIcon = deliveryCard?.querySelector(".stat-icon svg");
       return {
         todayFoot: todayCard?.querySelector(".stat-foot")?.textContent?.trim() || "",
+        todayIconWidth: todayIcon ? Number.parseFloat(getComputedStyle(todayIcon).width) : 0,
         label: card?.querySelector(".small")?.textContent?.trim() || "",
         value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
         foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
         highlighted: card?.classList.contains("is-alert") || false,
+        unsafeIconWidth: unsafeIcon ? Number.parseFloat(getComputedStyle(unsafeIcon).width) : 0,
+        deliveryIconWidth: deliveryIcon ? Number.parseFloat(getComputedStyle(deliveryIcon).width) : 0,
+        alertAnimation: getComputedStyle(card).animationName || "",
       };
     })()`);
     assertCheck("home today stat hides completion helper text", unsafeHomeStat.todayFoot === "");
+    assertCheck("home today stat uses larger symbol", unsafeHomeStat.todayIconWidth > unsafeHomeStat.deliveryIconWidth);
     assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
     assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
     assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인 필요");
     assertCheck("home unsafe stat highlights when received issues exist", unsafeHomeStat.highlighted);
+    assertCheck("home unsafe stat uses larger symbol", unsafeHomeStat.unsafeIconWidth > unsafeHomeStat.deliveryIconWidth);
+    assertCheck("home unsafe stat pulses alert highlight", unsafeHomeStat.alertAnimation.includes("unsafeStatPulse"));
     await evaluate(client, `(() => {
       const prefix = "shipyardSafetyV1.";
       const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;
@@ -444,11 +455,13 @@ function assertCheck(name, condition) {
         value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
         foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
         highlighted: card?.classList.contains("is-alert") || false,
+        alertAnimation: getComputedStyle(card).animationName || "",
       };
     })()`);
     assertCheck("home unsafe stat shows zero when no received issues exist", unsafeZeroHomeStat.value.includes("0"));
     assertCheck("home unsafe stat hides urgent helper text at zero", unsafeZeroHomeStat.foot === "");
     assertCheck("home unsafe stat removes highlight at zero", !unsafeZeroHomeStat.highlighted);
+    assertCheck("home unsafe stat removes alert pulse at zero", unsafeZeroHomeStat.alertAnimation === "none");
     await evaluate(client, `(() => {
       const prefix = "shipyardSafetyV1.";
       const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;

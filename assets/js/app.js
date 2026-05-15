@@ -1254,10 +1254,11 @@
         ? `data-stat-scope="unsafe" data-action="view-unsafe-received"`
         : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
       const alertClass = scope === "unsafe" && Number(value) > 0 ? " is-alert" : "";
-      return `<button class="stat-pill${alertClass}" style="--stat:${color}" ${attrs} type="button">
+      const focusClass = ["today", "unsafe"].includes(scope) ? " is-focus" : "";
+      return `<button class="stat-pill${focusClass}${alertClass}" style="--stat:${color}" ${attrs} type="button">
         <span class="stat-icon">${statIcon(icon)}</span>
-        <div class="small muted" style="font-weight:900;margin-bottom:7px">${esc(label)}</div>
-        <div class="stat-value" style="color:${color}">${esc(value)}<span style="font-size:12px;margin-left:3px">${esc(unit)}</span></div>
+        <div class="stat-label small muted">${esc(label)}</div>
+        <div class="stat-value" style="color:${color}">${esc(value)}<span class="stat-unit">${esc(unit)}</span></div>
         ${foot ? `<div class="stat-foot">${esc(foot)}</div>` : ""}
       </button>`;
     }
