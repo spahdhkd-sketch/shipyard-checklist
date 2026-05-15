@@ -652,6 +652,7 @@
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
       materialFilters: loadJson("materialFilters", { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" }),
       manageTab: loadJson("manageTab", "workers"),
+      unsafeDetailId: "",
       lastUnsafeIssueId: "",
       lastMaterialId: "",
     };
@@ -2058,6 +2059,9 @@
     }
 
     function renderUnsafeManager() {
+      const detail = state.unsafeDetailId ? state.unsafeIssues.find((row) => row.id === state.unsafeDetailId) : null;
+      if (detail) return renderUnsafeDetail(detail);
+      if (state.unsafeDetailId) state.unsafeDetailId = "";
       const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, state.unsafeFilters);
       const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.unsafeFilters.sort, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
       const groups = ISSUE_MATERIAL_RULES.groupUnsafeByStatus(sorted);
@@ -2146,16 +2150,24 @@
       </div>`;
     }
 
+    function unsafePhotosFor(id) {
+      return state.issuePhotos
+        .filter((item) => item.targetType === "unsafe_issue" && item.targetId === id)
+        .sort((a, b) => (Number(a.sortOrder || 0) - Number(b.sortOrder || 0)) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    }
+
     function renderUnsafeRecordCard(row) {
-      const photo = state.issuePhotos.find((item) => item.targetType === "unsafe_issue" && item.targetId === row.id);
+      const photo = unsafePhotosFor(row.id)[0];
       const photoUrl = photo ? publicPhotoUrl(photo) : "";
-      return `<article class="record-card">
+      const photoCount = unsafePhotosFor(row.id).length;
+      return `<article class="record-card clickable-record" data-unsafe-record-detail="${esc(row.id)}" tabindex="0" role="button" aria-label="${esc(row.shipNo)} 불안전요소 상세 보기">
         <div class="record-card-main">
           <div class="record-card-headline">
             ${photoUrl ? `<img class="record-thumb" src="${esc(photoUrl)}" alt="불안전요소 사진" />` : ""}
             <div>
               <strong>${esc(row.shipNo)}</strong>
               <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
+              ${photoCount > 1 ? `<span class="small muted">사진 ${photoCount}장</span>` : ""}
             </div>
           </div>
           <p>${esc(row.content)}</p>
@@ -2163,6 +2175,39 @@
         </div>
         ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
       </article>`;
+    }
+
+    function renderUnsafeDetail(row) {
+      const photos = unsafePhotosFor(row.id);
+      const photoHtml = photos.length
+        ? `<div class="unsafe-detail-photos">${photos.map((photo, index) => {
+            const url = publicPhotoUrl(photo);
+            return url ? `<figure><img class="unsafe-detail-photo" src="${esc(url)}" alt="불안전요소 사진 ${index + 1}" /><figcaption>사진 ${index + 1}</figcaption></figure>` : "";
+          }).join("")}</div>`
+        : `<div class="empty">첨부된 사진이 없습니다.</div>`;
+      return `<section class="panel panel-pad unsafe-detail">
+        <div class="detail-header">
+          <button class="btn-light" data-action="back-unsafe-list" type="button">목록</button>
+          ${badge("medium", row.status)}
+        </div>
+        <div class="section-title">불안전요소 상세 기록</div>
+        <div class="detail-grid">
+          <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
+          <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot || "-")}</strong></div>
+          <div><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
+          <div><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}장` : "없음"}</strong></div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">내용</span>
+          <div class="readonly-box">${esc(row.content)}</div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">첨부 사진</span>
+          ${photoHtml}
+        </div>
+        ${row.adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(row.adminMemo)}</div></div>` : ""}
+        ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
+      </section>`;
     }
 
     function renderMaterialRecordCard(row) {
@@ -2811,6 +2856,12 @@
         return;
       }
 
+      const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
+      if (unsafeCard && !event.target.closest("button,input,label,select,textarea")) {
+        openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
+        return;
+      }
+
       const button = event.target.closest("button");
       if (!button) return;
 
@@ -2889,7 +2940,12 @@
       if (button.dataset.action === "toggle-admin") toggleAdminMode();
       if (button.dataset.manageTab) {
         state.manageTab = button.dataset.manageTab;
+        state.unsafeDetailId = "";
         saveJson("manageTab", state.manageTab);
+        render();
+      }
+      if (button.dataset.action === "back-unsafe-list") {
+        state.unsafeDetailId = "";
         render();
       }
       if (button.dataset.action === "add-worker") addWorker();
@@ -2989,10 +3045,25 @@
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       const historyCard = event.target.closest("[data-history-detail-card]");
-      if (!historyCard || event.target.closest("button,input,label,select,textarea")) return;
-      event.preventDefault();
-      openHistoryDetail(historyCard.dataset.historyDetailCard);
+      const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
+      if (historyCard && !event.target.closest("button,input,label,select,textarea")) {
+        event.preventDefault();
+        openHistoryDetail(historyCard.dataset.historyDetailCard);
+        return;
+      }
+      if (unsafeCard && !event.target.closest("button,input,label,select,textarea")) {
+        event.preventDefault();
+        openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
+      }
     });
+
+    function openUnsafeDetail(id) {
+      if (!id) return;
+      state.unsafeDetailId = id;
+      state.manageTab = "unsafe";
+      saveJson("manageTab", state.manageTab);
+      render();
+    }
 
     function openHistoryDetail(id) {
       if (!id) return;
@@ -3741,6 +3812,7 @@
     }
 
     function publicPhotoUrl(photo) {
+      if (/^(https?:|data:|blob:)/.test(String(photo.storagePath || ""))) return photo.storagePath;
       const client = supabaseClient();
       if (!client || !photo.storagePath) return "";
       return client.storage.from(photo.storageBucket || ISSUE_PHOTO_BUCKET).getPublicUrl(photo.storagePath).data.publicUrl || "";

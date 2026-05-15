@@ -139,9 +139,51 @@ const seed = {
   workers: [
     { id: "worker-1", name: "김민수", team: "배관팀", createdAt: "2026-05-15T00:00:00.000Z", updatedAt: "2026-05-15T00:00:00.000Z" },
   ],
-  unsafeIssues: [],
+  unsafeIssues: [
+    {
+      id: "unsafe-detail-1",
+      shipNo: "H-101",
+      content: "용접 불티 차단막 미설치",
+      workerId: "worker-1",
+      workerNameSnapshot: "김민수",
+      workerTeamSnapshot: "배관팀",
+      status: "접수",
+      adminMemo: "",
+      createdAt: "2026-05-15T08:30:00.000Z",
+      updatedAt: "2026-05-15T08:30:00.000Z",
+      completedAt: "",
+    },
+  ],
   missingMaterials: [],
-  issuePhotos: [],
+  issuePhotos: [
+    {
+      id: "photo-1",
+      targetType: "unsafe_issue",
+      targetId: "unsafe-detail-1",
+      storageBucket: "issue-photos",
+      storagePath: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120'%3E%3Crect width='160' height='120' fill='%23dbeafe'/%3E%3Ctext x='80' y='66' text-anchor='middle' font-size='18' fill='%231d4ed8'%3E1%3C/text%3E%3C/svg%3E",
+      sortOrder: 1,
+      createdAt: "2026-05-15T08:30:01.000Z",
+    },
+    {
+      id: "photo-2",
+      targetType: "unsafe_issue",
+      targetId: "unsafe-detail-1",
+      storageBucket: "issue-photos",
+      storagePath: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120'%3E%3Crect width='160' height='120' fill='%23dcfce7'/%3E%3Ctext x='80' y='66' text-anchor='middle' font-size='18' fill='%2315803d'%3E2%3C/text%3E%3C/svg%3E",
+      sortOrder: 2,
+      createdAt: "2026-05-15T08:30:02.000Z",
+    },
+    {
+      id: "photo-3",
+      targetType: "unsafe_issue",
+      targetId: "unsafe-detail-1",
+      storageBucket: "issue-photos",
+      storagePath: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 120'%3E%3Crect width='160' height='120' fill='%23fee2e2'/%3E%3Ctext x='80' y='66' text-anchor='middle' font-size='18' fill='%23b91c1c'%3E3%3C/text%3E%3C/svg%3E",
+      sortOrder: 3,
+      createdAt: "2026-05-15T08:30:03.000Z",
+    },
+  ],
   unsafeDraft: { shipNo: "", content: "", workerId: "", photos: [] },
   materialDraft: { shipNo: "", materialName: "", content: "", workerId: "" },
   unsafeFilters: { shipNo: "", status: "", workerId: "", sort: "status" },
@@ -486,10 +528,29 @@ function assertCheck(name, condition) {
     assertCheck("worker name input", manageState.hasWorkerNameInput);
     const manageShot = await screenshot(client, "09-manage-workers-desktop.png");
 
+    await click(client, '[data-manage-tab="unsafe"]');
+    await click(client, '[data-unsafe-record-detail="unsafe-detail-1"]');
+    const unsafeDetailState = await evaluate(client, `(() => {
+      const images = Array.from(document.querySelectorAll(".unsafe-detail-photo"));
+      return {
+        hasDetailTitle: document.body.innerText.includes("불안전요소 상세 기록"),
+        hasBackButton: Boolean(document.querySelector('[data-action="back-unsafe-list"]')),
+        photoCount: images.length,
+        allPhotosLoaded: images.every((img) => img.complete && img.naturalWidth > 0),
+        hasContent: document.body.innerText.includes("용접 불티 차단막 미설치"),
+      };
+    })()`);
+    assertCheck("unsafe detail title appears after card click", unsafeDetailState.hasDetailTitle);
+    assertCheck("unsafe detail has back button", unsafeDetailState.hasBackButton);
+    assertCheck("unsafe detail shows every attached photo", unsafeDetailState.photoCount === 3);
+    assertCheck("unsafe detail photos load", unsafeDetailState.allPhotosLoaded);
+    assertCheck("unsafe detail keeps original content", unsafeDetailState.hasContent);
+    const unsafeDetailShot = await screenshot(client, "10-unsafe-detail-desktop.png");
+
     console.log(JSON.stringify({
       appUrl: baseUrl,
-      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot, unsafeShot, materialShot, manageShot],
-      assertions: { prepState, checklistState, itemsState, expandedItemsState, unsafeState, materialState, manageState },
+      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot, unsafeShot, materialShot, manageShot, unsafeDetailShot],
+      assertions: { prepState, checklistState, itemsState, expandedItemsState, unsafeState, materialState, manageState, unsafeDetailState },
     }, null, 2));
   } finally {
     if (client) client.close();

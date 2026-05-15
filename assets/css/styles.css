@@ -3239,6 +3239,17 @@
       margin-top: 8px;
     }
 
+    .clickable-record {
+      cursor: pointer;
+    }
+
+    .clickable-record:hover,
+    .clickable-record:focus-visible {
+      border-color: var(--line-strong);
+      box-shadow: 0 8px 22px rgba(23, 32, 51, .08);
+      outline: none;
+    }
+
     .record-card-main p {
       margin: 8px 0 0;
       line-height: 1.45;
@@ -3260,6 +3271,51 @@
     .admin-record-controls {
       display: grid;
       gap: 8px;
+    }
+
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .unsafe-detail .admin-record-controls {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto auto;
+      align-items: stretch;
+    }
+
+    .unsafe-detail-photos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .unsafe-detail-photos figure {
+      margin: 0;
+      min-width: 0;
+    }
+
+    .unsafe-detail-photo {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: contain;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      display: block;
+    }
+
+    .unsafe-detail-photos figcaption {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
     }
 
     .photo-strip {
@@ -3286,6 +3342,10 @@
 
     @media (max-width: 920px) {
       .record-card {
+        grid-template-columns: 1fr;
+      }
+
+      .unsafe-detail .admin-record-controls {
         grid-template-columns: 1fr;
       }
     }
