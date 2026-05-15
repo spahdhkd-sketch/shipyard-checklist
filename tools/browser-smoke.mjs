@@ -262,6 +262,74 @@ try {
       };
     })()`,
   });
+  const categoryRenameCheck = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const keys = ['categories', 'sections', 'items'];
+      const backup = Object.fromEntries(keys.map((key) => [key, localStorage.getItem('${STORAGE_PREFIX}' + key)]));
+      sessionStorage.setItem('categoryRenameSmokeBackup', JSON.stringify(backup));
+      sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      localStorage.setItem('${STORAGE_PREFIX}categories', JSON.stringify([
+        { id: 'rename-smoke', label: 'Rename Smoke Before', icon: 'blockAssembly', color: '#1f6eb3', requireToolCheck: true, order: 1 }
+      ]));
+      localStorage.setItem('${STORAGE_PREFIX}sections', JSON.stringify([
+        { id: 'rename-section', categoryId: 'rename-smoke', title: 'Rename Section', order: 1 }
+      ]));
+      localStorage.setItem('${STORAGE_PREFIX}items', JSON.stringify([
+        { id: 'rename-item', categoryId: 'rename-smoke', sectionId: 'rename-section', text: 'Rename item', risk: 'low', required: false, active: true, toolIds: [], order: 1 }
+      ]));
+      location.reload();
+      return { injected: true };
+    })()`,
+  });
+  await waitForValue(
+    cdp,
+    `(() => ({
+      hasRenameCategory: Boolean(document.querySelector('[data-manage-category="rename-smoke"]')),
+      adminPressed: document.querySelector('[data-action="toggle-admin"]')?.getAttribute('aria-pressed') || '',
+      storedLabel: JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]').find((row) => row.id === 'rename-smoke')?.label || ''
+    }))()`,
+    (value) => value.hasRenameCategory && value.adminPressed === "true" && value.storedLabel === "Rename Smoke Before",
+    "rename smoke category in admin mode"
+  );
+  const categoryRenameResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const editButton = document.querySelector('[data-edit-category="rename-smoke"]');
+      editButton?.click();
+      const input = document.querySelector('#editCategoryLabel_rename-smoke');
+      if (input) {
+        input.value = 'Rename Smoke After';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      document.querySelector('[data-save-category="rename-smoke"]')?.click();
+      const stored = JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]');
+      const cardText = document.querySelector('[data-manage-category="rename-smoke"]')?.closest('.category-card')?.textContent || '';
+      document.querySelector('[data-manage-category="rename-smoke"]')?.click();
+      const heading = document.querySelector('h1')?.textContent?.trim() || '';
+      return {
+        hadEditButton: Boolean(editButton),
+        hadInput: Boolean(input),
+        storedLabel: stored.find((row) => row.id === 'rename-smoke')?.label || '',
+        cardHasNewLabel: cardText.includes('Rename Smoke After'),
+        heading
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      const backup = JSON.parse(sessionStorage.getItem('categoryRenameSmokeBackup') || '{}');
+      Object.entries(backup).forEach(([key, value]) => {
+        const storageKey = '${STORAGE_PREFIX}' + key;
+        if (value === null) localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey, value);
+      });
+      sessionStorage.removeItem('categoryRenameSmokeBackup');
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminMode');
+      location.reload();
+    })()`,
+  });
+  await delay(1000);
 
   const loaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
   await cdp.send("Page.navigate", { url: `${baseUrl}/index.html` });
@@ -535,6 +603,12 @@ try {
   assert(itemsPageCheck.result.value.addOpenBefore === false, "Tool add form should be collapsed by default", itemsPageCheck.result.value);
   assert(itemsInteractionCheck.result.value.addOpenAfter === false, "Tool add form should stay closed without admin auth", itemsInteractionCheck.result.value);
   assert(itemsInteractionCheck.result.value.expandedCount === 0, "Tool cards should not expand without admin auth", itemsInteractionCheck.result.value);
+  assert(categoryRenameCheck.result.value.injected === true, "Category rename smoke data should be injected", categoryRenameCheck.result.value);
+  assert(categoryRenameResult.result.value.hadEditButton, "Items page should expose a category title edit button in admin mode", categoryRenameResult.result.value);
+  assert(categoryRenameResult.result.value.hadInput, "Editing a category should reveal a title input", categoryRenameResult.result.value);
+  assert(categoryRenameResult.result.value.storedLabel === "Rename Smoke After", "Saving a category title should persist the renamed work type", categoryRenameResult.result.value);
+  assert(categoryRenameResult.result.value.cardHasNewLabel, "Renamed work type should update the items category card", categoryRenameResult.result.value);
+  assert(categoryRenameResult.result.value.heading.includes("Rename Smoke After"), "Renamed work type should update the section management heading", categoryRenameResult.result.value);
   assert(stageEditResult.result.value.hasSortSelect, "Ships page should show sort select", stageEditResult.result.value);
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);
@@ -570,6 +644,7 @@ try {
       items: itemsClick,
     },
     itemsPageCheck: itemsPageCheck.result.value,
+    categoryRename: categoryRenameResult.result.value,
     mobileToggle: { ...mobileResult.result.value, errors: runtimeErrors.slice(mobileErrorsStart) },
     stageEdit: { ...stageEditResult.result.value, errors: runtimeErrors.slice(stageEditErrorsStart) },
     prepFlow: {

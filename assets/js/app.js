@@ -625,6 +625,7 @@
       issuePhotos: loadJson("issuePhotos", []),
       selectedCategoryId: null,
       manageCategoryId: null,
+      editCategoryId: null,
       editSectionId: null,
       editItemId: null,
       editToolId: null,
@@ -949,6 +950,10 @@
       history.replaceState(routeState(), "", location.pathname + location.search);
     }
 
+    function normalizeHistoryScope(scope) {
+      return ["all", "today", "delivery"].includes(scope) ? scope : "all";
+    }
+
     function restoreRouteState(event) {
       const route = event.state;
       if (!route || route.app !== "shipyardSafety") {
@@ -961,7 +966,7 @@
       }
       state.view = routeViews().some((nav) => nav.id === route.view) ? route.view : "dashboard";
       state.selectedCategoryId = route.selectedCategoryId || null;
-      state.historyScope = route.historyScope || "all";
+      state.historyScope = normalizeHistoryScope(route.historyScope || "all");
       state.historyFilter = route.historyFilter || "all";
       state.historyDetailId = route.historyDetailId || null;
       if (state.view !== "check") state.selectedCategoryId = null;
@@ -1166,7 +1171,7 @@
       const todayCount = todayRows.length;
       const todayDone = todayRows.filter((row) => row.status === "완료").length;
       const doneCount = state.inspections.filter((row) => row.status === "완료").length;
-      const warnCount = state.inspections.reduce((sum, row) => sum + Number(row.warnings || 0), 0);
+      const unsafeCount = unsafeReceivedCount();
       const completion = state.inspections.length ? Math.round(doneCount / state.inspections.length * 100) : 0;
       const latest = state.inspections.slice(0, 4);
       const deliverySoon = upcomingDeliveryShips().length;
@@ -1209,7 +1214,7 @@
       </div>
       <div class="stat-strip">
         ${statPill("오늘 점검", todayCount, "건", "#07966f", "shield", `완료 ${todayDone} / 진행 ${Math.max(todayCount - todayDone, 0)}`, "today")}
-        ${statPill("위험 미확인", warnCount, "건", "#dc2626", "warning", "즉시 확인 필요", "risk")}
+        ${statPill("불안전 요소", unsafeCount, "건", "#dc2626", "warning", "즉시 확인 필요", "unsafe")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
       </div>
       <section class="panel panel-pad home-section">
@@ -1235,8 +1240,20 @@
       </div>`;
     }
 
+    function unsafeReceivedStatus() {
+      return ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0];
+    }
+
+    function unsafeReceivedCount() {
+      const received = unsafeReceivedStatus();
+      return state.unsafeIssues.filter((row) => row.status === received).length;
+    }
+
     function statPill(label, value, unit, color, icon = "board", foot = "", scope = "all") {
-      return `<button class="stat-pill" style="--stat:${color}" data-history-scope="${esc(scope)}" type="button">
+      const attrs = scope === "unsafe"
+        ? `data-stat-scope="unsafe" data-action="view-unsafe-received"`
+        : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
+      return `<button class="stat-pill" style="--stat:${color}" ${attrs} type="button">
         <span class="stat-icon">${statIcon(icon)}</span>
         <div class="small muted" style="font-weight:900;margin-bottom:7px">${esc(label)}</div>
         <div class="stat-value" style="color:${color}">${esc(value)}<span style="font-size:12px;margin-left:3px">${esc(unit)}</span></div>
@@ -1527,10 +1544,10 @@
         if (detailRow) return renderInspectionRecord(detailRow);
         state.historyDetailId = null;
       }
+      state.historyScope = normalizeHistoryScope(state.historyScope);
       const scopeButtons = [
         ["all", "전체 이력"],
         ["today", "오늘 점검"],
-        ["risk", "위험 미확인"],
         ["delivery", "인도 예정"],
       ];
       const filterButtons = [["all", "전체"], ...state.categories.sort(byOrder).map((cat) => [cat.id, cat.label])];
@@ -1541,7 +1558,6 @@
       const historyLead = {
         all: "제출된 점검 내역과 위험 경고 건수를 확인합니다.",
         today: "오늘 제출된 점검이 어떤 작업으로 진행되었는지 확인합니다.",
-        risk: "위험 항목이 미확인으로 남은 점검만 모아 확인합니다.",
         delivery: "7일 이내 인도 예정인 호선을 확인합니다.",
       }[state.historyScope] || "제출된 점검 내역과 위험 경고 건수를 확인합니다.";
 
@@ -1567,9 +1583,9 @@
     }
 
     function filteredHistoryRows() {
+      state.historyScope = normalizeHistoryScope(state.historyScope);
       let rows = state.inspections;
       if (state.historyScope === "today") rows = rows.filter((row) => row.date === today());
-      if (state.historyScope === "risk") rows = rows.filter((row) => Number(row.warnings || 0) > 0);
       if (state.historyFilter !== "all") rows = rows.filter((row) => row.categoryId === state.historyFilter);
       return rows;
     }
@@ -1871,16 +1887,27 @@
           ${renderPictogramPicker("erection")}
         </div>
         <div class="category-grid">
-          ${state.categories.sort(byOrder).map((cat) => `
+          ${state.categories.sort(byOrder).map((cat) => {
+            const editingCategory = state.editCategoryId === cat.id;
+            return `
             <div class="category-card" style="--accent:${esc(categoryAccent(cat))}">
               <span class="category-icon">${categoryVisual(cat)}</span>
-              <div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>
+              ${editingCategory ? `
+                <div class="field">
+                  <label for="editCategoryLabel_${cat.id}">작업 유형명 수정</label>
+                  <input class="input" id="editCategoryLabel_${cat.id}" value="${esc(cat.label)}" />
+                </div>` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
               <div class="small muted" style="margin:6px 0 12px">${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</div>
               <div class="item-actions manage-actions">
-                <button class="btn-light" data-manage-category="${cat.id}" type="button">섹션/항목 관리</button>
-                <button class="btn-danger" data-delete-category="${cat.id}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>
+                ${editingCategory ? `
+                  <button class="btn" data-save-category="${cat.id}" type="button">저장</button>
+                  <button class="btn-light" data-action="cancel-edit-category" type="button">취소</button>` : `
+                  <button class="btn-light" data-manage-category="${cat.id}" type="button">섹션/항목 관리</button>
+                  <button class="btn-light" data-edit-category="${cat.id}" ${state.adminMode ? "" : "disabled"} type="button">수정</button>
+                  <button class="btn-danger" data-delete-category="${cat.id}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>`}
               </div>
-            </div>`).join("")}
+            </div>`;
+          }).join("")}
         </div>`;
       }
 
@@ -2006,19 +2033,22 @@
     }
 
     function renderManage() {
-      if (!state.adminMode) {
-        return pageHead("관리", "관리자 모드에서 사용할 수 있습니다.", adminToggleButton())
-          + `<div class="notice danger">관리자 모드가 필요합니다.</div>`;
-      }
-
       const tabs = [
         ["workers", "작업자"],
         ["unsafe", "불안전요소"],
         ["materials", "자재누락"],
       ];
-      return `${pageHead("관리", "작업자와 접수 기록을 관리합니다.", adminToggleButton())}
+      const unsafeReadOnly = !state.adminMode && state.manageTab === "unsafe";
+      if (!state.adminMode && !unsafeReadOnly) {
+        return pageHead("관리", "관리자 모드에서 사용할 수 있습니다.", adminToggleButton())
+          + `<div class="notice danger">관리자 모드가 필요합니다.</div>`;
+      }
+      const visibleTabs = state.adminMode ? tabs : [["unsafe", "불안전요소"]];
+      const lead = state.adminMode ? "작업자와 접수 기록을 관리합니다." : "불안전요소 접수 현황을 확인합니다.";
+      return `${pageHead("관리", lead, adminToggleButton())}
+      ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`}
       <div class="manage-tabs" role="tablist" aria-label="관리 탭">
-        ${tabs.map(([id, label]) => `<button class="seg-btn ${state.manageTab === id ? "active" : ""}" data-manage-tab="${id}" type="button">${esc(label)}</button>`).join("")}
+        ${visibleTabs.map(([id, label]) => `<button class="seg-btn ${state.manageTab === id ? "active" : ""}" data-manage-tab="${id}" type="button">${esc(label)}</button>`).join("")}
       </div>
       ${state.manageTab === "workers" ? renderWorkerManager() : ""}
       ${state.manageTab === "unsafe" ? renderUnsafeManager() : ""}
@@ -2140,13 +2170,14 @@
     }
 
     function renderAdminRecordControls(kind, row, statuses) {
+      const disabled = state.adminMode ? "" : "disabled";
       return `<div class="admin-record-controls">
-        <select class="select" data-record-status="${kind}:${esc(row.id)}">
+        <select class="select" data-record-status="${kind}:${esc(row.id)}" ${disabled}>
           ${statuses.map((status) => `<option value="${esc(status)}" ${row.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}
         </select>
-        <textarea class="textarea" data-record-memo="${kind}:${esc(row.id)}" placeholder="조치/메모">${esc(row.adminMemo || "")}</textarea>
-        <button class="btn-light" data-save-record="${kind}:${esc(row.id)}" type="button">저장</button>
-        <button class="btn-danger" data-delete-record="${kind}:${esc(row.id)}" type="button">삭제</button>
+        <textarea class="textarea" data-record-memo="${kind}:${esc(row.id)}" placeholder="조치/메모" ${disabled}>${esc(row.adminMemo || "")}</textarea>
+        <button class="btn-light" data-save-record="${kind}:${esc(row.id)}" ${disabled} type="button">저장</button>
+        <button class="btn-danger" data-delete-record="${kind}:${esc(row.id)}" ${disabled} type="button">삭제</button>
       </div>`;
     }
 
@@ -2191,11 +2222,11 @@
           ${badge("medium", row.status)}
         </div>
         <div class="section-title">불안전요소 상세 기록</div>
-        <div class="detail-grid">
+        <div class="detail-grid unsafe-detail-meta-grid">
           <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
           <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot || "-")}</strong></div>
-          <div><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
-          <div><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}장` : "없음"}</strong></div>
+          <div class="unsafe-detail-date-meta"><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
+          <div class="unsafe-detail-photo-meta" aria-hidden="true"><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}장` : "없음"}</strong></div>
         </div>
         <div class="field" style="margin-top:12px">
           <span class="field-label">내용</span>
@@ -2866,6 +2897,7 @@
       if (!button) return;
 
       if (button.dataset.view) changeView(button.dataset.view);
+      if (button.dataset.action === "view-unsafe-received") openUnsafeReceivedList();
       if (button.dataset.screenMode) setScreenMode(button.dataset.screenMode);
       if (button.dataset.dashboardCategory) {
         state.selectedCategoryId = button.dataset.dashboardCategory;
@@ -2919,7 +2951,7 @@
         pushRouteState();
       }
       if (button.dataset.historyScope) {
-        state.historyScope = button.dataset.historyScope;
+        state.historyScope = normalizeHistoryScope(button.dataset.historyScope);
         state.historyDetailId = null;
         state.selectedHistoryIds = [];
         if (state.view === "history") {
@@ -3003,8 +3035,15 @@
       if (button.dataset.deletePictogram) deletePictogram(button.dataset.deletePictogram);
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
+        state.editCategoryId = null;
         state.openAddItemSectionIds = [];
         state.categoryVisualOpen = false;
+        render();
+      }
+      if (button.dataset.editCategory) editCategory(button.dataset.editCategory);
+      if (button.dataset.saveCategory) saveCategory(button.dataset.saveCategory);
+      if (button.dataset.action === "cancel-edit-category") {
+        state.editCategoryId = null;
         render();
       }
       if (button.dataset.deleteCategory) deleteCategory(button.dataset.deleteCategory);
@@ -3063,6 +3102,15 @@
       state.manageTab = "unsafe";
       saveJson("manageTab", state.manageTab);
       render();
+    }
+
+    function openUnsafeReceivedList() {
+      state.manageTab = "unsafe";
+      state.unsafeDetailId = "";
+      state.unsafeFilters = { ...state.unsafeFilters, status: unsafeReceivedStatus() };
+      saveJson("manageTab", state.manageTab);
+      saveJson("unsafeFilters", state.unsafeFilters);
+      changeView("manage");
     }
 
     function openHistoryDetail(id) {
@@ -3274,6 +3322,7 @@
       if (!enabled) {
         state.toolAddOpen = false;
         state.editToolId = null;
+        state.editCategoryId = null;
         state.editSectionId = null;
         state.editItemId = null;
         state.openAddItemSectionIds = [];
@@ -3555,6 +3604,27 @@
       persistAndSync();
       render();
       toast("아이콘과 공기구 기준을 저장했습니다.");
+    }
+
+    function editCategory(id) {
+      if (!requireAdmin()) return;
+      state.editCategoryId = id;
+      render();
+    }
+
+    function saveCategory(id) {
+      if (!requireAdmin()) return;
+      const cat = categoryById(id);
+      if (!cat) return;
+      const label = $(`editCategoryLabel_${id}`).value.trim();
+      if (!label) return toast("작업 유형명을 입력하세요.");
+      const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
+      if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
+      state.categories = state.categories.map((row) => row.id === id ? { ...row, label } : row);
+      state.editCategoryId = null;
+      persistAndSync();
+      render();
+      toast("작업 유형명을 수정했습니다.");
     }
 
     function deleteCategory(id) {

@@ -126,7 +126,18 @@ const seed = {
       order: 1,
     },
   ],
-  inspections: [],
+  inspections: [
+    {
+      id: "inspection-warning-count",
+      categoryId: "mounting",
+      shipNo: "H-101",
+      worker: "김민수",
+      date: "2026-05-15",
+      status: "완료",
+      warnings: 9,
+      createdAt: "2026-05-15T07:30:00.000Z",
+    },
+  ],
   inspectionItems: [],
   draft: {
     worker: "",
@@ -381,6 +392,60 @@ function assertCheck(name, condition) {
       Object.entries(seed).forEach(([key, value]) => localStorage.setItem(prefix + key, JSON.stringify(value)));
     })()`);
 
+    await navigate(client, `${baseUrl}/index.html`);
+    await evaluate(client, `(() => {
+      const prefix = "shipyardSafetyV1.";
+      const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;
+      const issues = JSON.parse(localStorage.getItem(prefix + "unsafeIssues") || "[]");
+      if (issues[0]) issues[0].status = statuses[0];
+      issues.push({
+        id: "unsafe-in-progress-1",
+        shipNo: "H-102",
+        content: "조치중 기록은 홈 카운트에서 제외",
+        workerId: "worker-1",
+        workerNameSnapshot: "김민수",
+        workerTeamSnapshot: "배관팀",
+        status: statuses[1],
+        adminMemo: "",
+        createdAt: "2026-05-15T08:40:00.000Z",
+        updatedAt: "2026-05-15T08:40:00.000Z",
+        completedAt: "",
+      });
+      localStorage.setItem(prefix + "unsafeIssues", JSON.stringify(issues));
+    })()`);
+    await navigate(client, `${baseUrl}/index.html`);
+    const unsafeHomeStat = await evaluate(client, `(() => {
+      const card = document.querySelector('[data-stat-scope="unsafe"]');
+      return {
+        label: card?.querySelector(".small")?.textContent?.trim() || "",
+        value: card?.querySelector(".stat-value")?.textContent?.trim() || "",
+        foot: card?.querySelector(".stat-foot")?.textContent?.trim() || "",
+      };
+    })()`);
+    assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
+    assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
+    assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인 필요");
+    await click(client, '[data-stat-scope="unsafe"]');
+    const unsafeStatNavigation = await evaluate(client, `(() => ({
+      currentPath: location.pathname.split("/").pop(),
+      unsafeTabActive: document.querySelector('[data-manage-tab="unsafe"]')?.classList.contains("active") || false,
+      statusFilter: document.querySelector('[data-record-filter="unsafe:status"]')?.value || "",
+      receivedStatus: window.IssueMaterialRules.UNSAFE_STATUSES[0],
+      statusControlDisabled: document.querySelector('[data-record-status^="unsafe:"]')?.disabled || false,
+      hasUnsafeRecord: Boolean(document.querySelector('[data-unsafe-record-detail="unsafe-detail-1"]')),
+    }))()`);
+    assertCheck("home unsafe stat opens manage page", unsafeStatNavigation.currentPath === "manage.html");
+    assertCheck("home unsafe stat opens unsafe manage tab", unsafeStatNavigation.unsafeTabActive);
+    assertCheck("home unsafe stat applies received status filter", unsafeStatNavigation.statusFilter === unsafeStatNavigation.receivedStatus);
+    assertCheck("home unsafe stat keeps status changes admin-only", unsafeStatNavigation.statusControlDisabled);
+    assertCheck("home unsafe stat shows received unsafe records", unsafeStatNavigation.hasUnsafeRecord);
+
+    await navigate(client, `${baseUrl}/history.html`);
+    const historyScopeState = await evaluate(client, `(() => ({
+      hasRiskScope: Boolean(document.querySelector('[data-history-scope="risk"]')),
+    }))()`);
+    assertCheck("history removes old risk scope", historyScopeState.hasRiskScope === false);
+
     await navigate(client, `${baseUrl}/check.html`);
     await click(client, '[data-select-category="mounting"]');
     const prepState = await evaluate(client, `(() => {
@@ -516,6 +581,7 @@ function assertCheck(name, condition) {
       window.prompt = () => "gs2026";
     })()`);
     await click(client, '[data-action="toggle-admin"]');
+    await click(client, '[data-manage-tab="workers"]');
     const manageState = await evaluate(client, `(() => {
       return {
         hasManageTitle: document.body.innerText.includes("관리"),
@@ -532,9 +598,21 @@ function assertCheck(name, condition) {
     await click(client, '[data-unsafe-record-detail="unsafe-detail-1"]');
     const unsafeDetailState = await evaluate(client, `(() => {
       const images = Array.from(document.querySelectorAll(".unsafe-detail-photo"));
+      const allMetaCards = Array.from(document.querySelectorAll(".unsafe-detail .detail-grid > div"));
+      const metaCards = allMetaCards.filter((card) => getComputedStyle(card).display !== "none");
+      const metaLabels = metaCards.map((card) => card.querySelector(".small")?.textContent?.trim() || "");
+      const dateCard = metaCards.find((card) => card.querySelector(".small")?.textContent?.trim() === "등록일시");
+      const dateStyle = dateCard ? getComputedStyle(dateCard) : null;
+      const hiddenPhotoMetaCard = allMetaCards.find((card) => card.querySelector(".small")?.textContent?.trim() === "사진");
       return {
         hasDetailTitle: document.body.innerText.includes("불안전요소 상세 기록"),
         hasBackButton: Boolean(document.querySelector('[data-action="back-unsafe-list"]')),
+        metaLabels,
+        metaCardCount: metaCards.length,
+        hasPhotoMetaCard: metaLabels.includes("사진"),
+        hiddenPhotoMetaCardExists: Boolean(hiddenPhotoMetaCard),
+        hiddenPhotoMetaCardVisible: hiddenPhotoMetaCard ? getComputedStyle(hiddenPhotoMetaCard).display !== "none" : false,
+        dateSpansFullWidth: Boolean(dateStyle && dateStyle.gridColumnStart === "1" && dateStyle.gridColumnEnd === "-1"),
         photoCount: images.length,
         allPhotosLoaded: images.every((img) => img.complete && img.naturalWidth > 0),
         hasContent: document.body.innerText.includes("용접 불티 차단막 미설치"),
@@ -542,6 +620,10 @@ function assertCheck(name, condition) {
     })()`);
     assertCheck("unsafe detail title appears after card click", unsafeDetailState.hasDetailTitle);
     assertCheck("unsafe detail has back button", unsafeDetailState.hasBackButton);
+    assertCheck("unsafe detail hides photo count from meta cards", unsafeDetailState.hasPhotoMetaCard === false);
+    assertCheck("unsafe detail keeps photo count meta hidden in DOM", unsafeDetailState.hiddenPhotoMetaCardExists && !unsafeDetailState.hiddenPhotoMetaCardVisible);
+    assertCheck("unsafe detail meta grid has no empty fourth card", unsafeDetailState.metaCardCount === 3);
+    assertCheck("unsafe detail date meta spans full width", unsafeDetailState.dateSpansFullWidth);
     assertCheck("unsafe detail shows every attached photo", unsafeDetailState.photoCount === 3);
     assertCheck("unsafe detail photos load", unsafeDetailState.allPhotosLoaded);
     assertCheck("unsafe detail keeps original content", unsafeDetailState.hasContent);
