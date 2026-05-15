@@ -345,7 +345,9 @@ try {
     returnByValue: true,
     expression: `(() => ({
       bodyClass: document.body.className,
-      activeToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).map((node) => node.textContent.trim()).join('|')
+      activeToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).map((node) => node.textContent.trim()).join('|'),
+      activeToggleCount: document.querySelectorAll('[data-screen-mode].active').length,
+      sidebarSwitchExists: Boolean(document.querySelector('#viewSwitch'))
     }))()`,
   });
 
@@ -609,6 +611,8 @@ try {
   assert(categoryRenameResult.result.value.storedLabel === "Rename Smoke After", "Saving a category title should persist the renamed work type", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.cardHasNewLabel, "Renamed work type should update the items category card", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.heading.includes("Rename Smoke After"), "Renamed work type should update the section management heading", categoryRenameResult.result.value);
+  assert(mobileResult.result.value.sidebarSwitchExists === false, "Sidebar screen switch should be removed", mobileResult.result.value);
+  assert(mobileResult.result.value.activeToggleCount === 2, "Only the remaining top/mobile screen toggles should stay active", mobileResult.result.value);
   assert(stageEditResult.result.value.hasSortSelect, "Ships page should show sort select", stageEditResult.result.value);
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);

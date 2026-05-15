@@ -99,46 +99,6 @@
       gap: 7px;
     }
 
-    .view-switch {
-      margin-top: auto;
-      padding: 14px 8px 4px;
-      border-top: 1px solid rgba(255,255,255,.12);
-    }
-
-    .view-switch-label {
-      font-size: 12px;
-      font-weight: 800;
-      color: rgba(255,255,255,.68);
-      margin-bottom: 8px;
-    }
-
-    .view-toggle {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-      padding: 4px;
-      border-radius: var(--radius);
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.12);
-    }
-
-    .view-toggle button {
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: rgba(255,255,255,.68);
-      padding: 8px 6px;
-      font-size: 12px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .view-toggle button.active {
-      background: #fff;
-      color: #111a2d;
-      box-shadow: 0 2px 8px rgba(0,0,0,.16);
-    }
-
     .desktop-preview-toggle,
     .mobile-screen-toggle {
       display: none;
@@ -272,8 +232,7 @@
       box-shadow: 0 0 0 1px rgba(23, 32, 51, .08), 0 28px 70px rgba(23, 32, 51, .18);
     }
 
-    body.preview-mobile .sidebar,
-    body.preview-mobile .view-switch { display: none; }
+    body.preview-mobile .sidebar { display: none; }
     body.preview-mobile .mobile-header { display: block; }
     body.preview-mobile .main { padding: 16px 12px 92px; }
     body.preview-mobile .bottom-nav { display: grid; }
@@ -1973,7 +1932,6 @@
     @media (max-width: 920px) {
       .app { display: block; }
       .sidebar { display: none; }
-      .view-switch { display: none; }
       .mobile-header {
         display: block;
         padding: 16px 14px 12px;
@@ -2135,8 +2093,7 @@
       box-shadow: 0 0 0 1px rgba(23, 32, 51, .08), 0 28px 70px rgba(23, 32, 51, .18);
     }
 
-    .sidebar,
-    .view-switch {
+    .sidebar {
       display: none;
     }
 
@@ -2740,10 +2697,6 @@
 
       body:not(.preview-mobile) .sidebar {
         display: flex;
-      }
-
-      body:not(.preview-mobile) .view-switch {
-        display: block;
       }
 
       body:not(.preview-mobile) .mobile-header,
