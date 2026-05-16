@@ -1114,7 +1114,11 @@
       const headline = $("homeHeadline");
       const date = $("homeDateLabel");
       if (title) title.textContent = titles[state.view] || "홈";
-      if (headline) headline.style.display = "flex";
+      if (headline) {
+        const showHomeHeadline = state.view === "dashboard";
+        headline.style.display = showHomeHeadline ? "flex" : "none";
+        headline.setAttribute("aria-hidden", showHomeHeadline ? "false" : "true");
+      }
       if (date) date.textContent = formatKoreanDate(serverNow());
       updateHeaderClock();
     }
@@ -1509,10 +1513,27 @@
       const pct = items.length ? Math.round(checked / items.length * 100) : 0;
       const selectableShips = visibleWorkerShips();
       const canSubmit = state.draft.worker.trim() && state.draft.shipNo && items.length && highMissing.length === 0;
+      const submitMissingReasons = [
+        state.draft.worker.trim() ? "" : "담당자명 미입력",
+        state.draft.shipNo ? "" : "호선 미선택",
+        items.length ? "" : "등록된 점검 항목 없음",
+        highMissing.length ? `고위험 항목 ${highMissing.length}건 미확인` : "",
+      ].filter(Boolean);
+      const submitDisabledText = submitMissingReasons.length ? `제출할 수 없음: ${submitMissingReasons.join(", ")}` : "제출하기";
 
       return `${pageHead(cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", `<button class="btn-light" data-action="back-check-types" type="button">뒤로</button>`)}
       <div class="split">
         <div>
+          <div class="mobile-check-status" aria-label="모바일 점검 작성 상태">
+            <div class="section-title">작성 상태</div>
+            ${progress(pct, categoryAccent(cat))}
+            <div class="small muted" style="margin-top:8px">${checked}/${items.length} 항목 확인됨 · 진행률 ${pct}%</div>
+            <div class="list" style="margin-top:12px">
+              ${badge(highMissing.length ? "high" : "low", highMissing.length ? `고위험 ${highMissing.length}건 남음` : "고위험 확인 완료")}
+              ${badge("medium", state.draft.worker.trim() ? "담당자 입력됨" : "담당자 필요")}
+              ${badge("medium", state.draft.shipNo ? "호선 선택됨" : "호선 필요")}
+            </div>
+          </div>
           <div class="panel panel-pad" style="margin-bottom:12px">
             <div class="form-row">
               <div class="field">
@@ -1536,10 +1557,10 @@
           ${highMissing.length ? `<div class="notice danger" style="margin-bottom:12px">미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" style="margin-bottom:12px">고위험 항목이 모두 확인되었습니다.</div>`}
           ${renderChecklistSections(cat.id)}
           <div class="check-submit-bar">
-            <button class="btn check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} type="button">제출하기</button>
+            <button class="btn check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>
           </div>
         </div>
-        <aside class="panel panel-pad">
+        <aside class="panel panel-pad check-status-panel">
           <div class="section-title">작성 상태</div>
           ${progress(pct, categoryAccent(cat))}
           <div class="small muted" style="margin-top:8px">${checked}/${items.length} 항목 확인됨</div>
@@ -1557,6 +1578,8 @@
       const selectedIds = new Set(sanitizeToolIds(state.draft.selectedToolIds));
       const selectedCount = tools.filter((tool) => selectedIds.has(tool.id)).length;
       const requireSelection = cat.requireToolCheck !== false;
+      const continueDisabled = requireSelection && !selectedCount;
+      const continueDisabledText = continueDisabled ? "다음 점검표로 이동할 수 없음: 공기구/준비물 선택 필요" : "다음 점검표로";
       return `${pageHead("사용 공기구와 준비물", "사용할 공기구와 준비물을 체크한 뒤 다음 점검표로 이동하세요.", `<button class="btn-light" data-action="back-check-types" type="button">뒤로</button>`)}
       <div class="panel panel-pad">
         <div class="section-title">
@@ -1576,7 +1599,7 @@
         ${requireSelection && !selectedCount ? `<div class="notice danger" style="margin-top:12px">최소 1개의 공기구/준비물을 선택해야 다음 점검표로 이동할 수 있습니다.</div>` : `<div class="notice good" style="margin-top:12px">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`}
         <div class="tool-prep-actions">
           <button class="btn-light" data-action="back-check-types" type="button">작업 유형 다시 선택</button>
-          <button class="btn" data-action="continue-tool-prep" ${(requireSelection && !selectedCount) ? "disabled" : ""} type="button">다음 점검표로</button>
+          <button class="btn" data-action="continue-tool-prep" ${continueDisabled ? "disabled" : ""} title="${esc(continueDisabledText)}" aria-label="${esc(continueDisabledText)}" type="button">다음 점검표로</button>
         </div>
       </div>`;
     }

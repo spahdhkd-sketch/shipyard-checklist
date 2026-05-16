@@ -355,10 +355,19 @@ try {
     returnByValue: true,
     expression: `(() => {
       const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      const phoneTime = document.querySelector('#phoneTime')?.textContent?.trim() || '';
+      const now = new Date();
+      const allowedTimes = [0, -1, 1].map((offset) => {
+        const value = new Date(now.getTime() + offset * 60000);
+        return value.toTimeString().slice(0, 5);
+      });
       return {
         bodyClass: document.body.className,
         visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
         mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
+        phoneTime,
+        phoneTimeMatchesNow: allowedTimes.includes(phoneTime),
+        phoneTimeIsDummy: phoneTime === '09:41',
         sidebarVisible: isVisible(document.querySelector('.sidebar')),
         adminModeClass: document.body.classList.contains('admin-mode')
       };
@@ -380,6 +389,7 @@ try {
         bodyClass: document.body.className,
         visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
         activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        activeVisibleModes: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.dataset.screenMode || '').join('|'),
         mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
         sidebarVisible: isVisible(document.querySelector('.sidebar')),
         adminModeClass: document.body.classList.contains('admin-mode')
@@ -398,6 +408,7 @@ try {
         bodyClass: document.body.className,
         visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
         activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        activeVisibleModes: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.dataset.screenMode || '').join('|'),
         mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
         sidebarVisible: isVisible(document.querySelector('.sidebar')),
         sidebarSwitchExists: Boolean(document.querySelector('#viewSwitch')),
@@ -418,6 +429,7 @@ try {
         activeToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).map((node) => node.textContent.trim()).join('|'),
         activeToggleCount: document.querySelectorAll('[data-screen-mode].active').length,
         activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
+        activeVisibleModes: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.dataset.screenMode || '').join('|'),
         visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
         mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
         sidebarVisible: isVisible(document.querySelector('.sidebar')),
@@ -480,6 +492,12 @@ try {
     })()`,
   });
 
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
   const prepLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
   await cdp.send("Page.navigate", { url: `${baseUrl}/check.html` });
   await Promise.race([prepLoaded, delay(4000)]);
@@ -500,7 +518,10 @@ try {
         { id: 'prep-linked', categoryId: 'prep-smoke', sectionId: 'prep-sec', text: 'Prep linked item', risk: 'high', required: true, active: true, toolIds: ['prep-tool'], order: 2 }
       ]));
       localStorage.setItem('${STORAGE_PREFIX}tools', JSON.stringify([
-        { id: 'prep-tool', categoryId: 'prep-smoke', name: 'Prep tool', order: 1, deleted: false }
+        { id: 'prep-tool', categoryId: 'prep-smoke', name: '탑재용 와이어', order: 1, deleted: false },
+        { id: 'prep-tool-2', categoryId: 'prep-smoke', name: '함마렌치', order: 2, deleted: false },
+        { id: 'prep-tool-3', categoryId: 'prep-smoke', name: 'WD(방청윤활제)', order: 3, deleted: false },
+        { id: 'prep-tool-4', categoryId: 'prep-smoke', name: '작업용 발판', order: 4, deleted: false }
       ]));
       localStorage.setItem('${STORAGE_PREFIX}draft', JSON.stringify({
         worker: '',
@@ -521,10 +542,21 @@ try {
     returnByValue: true,
     expression: `(() => {
       const nextButton = document.querySelector('[data-action="continue-tool-prep"]');
+      const grid = document.querySelector('.tool-prep-grid');
+      const firstCard = document.querySelector('[data-tool-prep-toggle]');
+      const gridColumns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0;
+      const firstRect = firstCard?.getBoundingClientRect();
+      const nextDisabledHint = nextButton?.getAttribute('title') || nextButton?.getAttribute('aria-label') || '';
       return {
         prepTitle: document.querySelector('h1')?.textContent?.trim() || '',
         toolCards: document.querySelectorAll('[data-tool-prep-toggle]').length,
-        nextDisabled: Boolean(nextButton?.disabled)
+        nextDisabled: Boolean(nextButton?.disabled),
+        nextDisabledHint,
+        nextDisabledMentionsTools: nextDisabledHint.includes('공기구'),
+        hasToolPrepGrid: Boolean(grid),
+        gridColumns,
+        firstCardWidth: Math.round(firstRect?.width || 0),
+        firstCardHeight: Math.round(firstRect?.height || 0)
       };
     })()`,
   });
@@ -565,6 +597,7 @@ try {
     })()`,
   });
   await delay(1000);
+  await cdp.send("Emulation.clearDeviceMetricsOverride");
 
   let submitFlow;
   let submitLayoutBefore;
@@ -572,6 +605,12 @@ try {
   let submitAfter;
   try {
     const submitLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
     await cdp.send("Page.navigate", { url: `${baseUrl}/check.html` });
     await Promise.race([submitLoaded, delay(4000)]);
     await delay(1000);
@@ -621,11 +660,32 @@ try {
         const lastSection = sections.at(-1);
         const submitRect = submitButton?.getBoundingClientRect();
         const sectionRect = lastSection?.getBoundingClientRect();
+        const mobileStatus = document.querySelector('.mobile-check-status');
+        const firstInput = document.querySelector('[data-check-item]');
+        const firstItem = firstInput?.closest('.check-item');
+        const inputRect = firstInput?.getBoundingClientRect();
+        const itemRect = firstItem?.getBoundingClientRect();
+        const tapTarget = firstInput?.closest('label') || firstItem;
+        const tapTargetRect = tapTarget?.getBoundingClientRect();
+        const homeHeadline = document.querySelector('#homeHeadline');
+        const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+        const submitDisabledHint = submitButton?.getAttribute('title') || submitButton?.getAttribute('aria-label') || '';
+        const mobileStatusText = mobileStatus?.textContent?.trim() || '';
         return {
           hasSubmit: Boolean(submitButton),
           submitAfterSections: Boolean(submitRect && sectionRect && submitRect.top > sectionRect.bottom),
           submitInsideTopForm: Boolean(submitButton?.closest('.form-row')),
-          disabledBeforeData: Boolean(submitButton?.disabled)
+          disabledBeforeData: Boolean(submitButton?.disabled),
+          submitDisabledHint,
+          mobileStatusVisible: isVisible(mobileStatus),
+          mobileStatusText,
+          mobileStatusMentionsHighRisk: /위험|high/i.test(mobileStatusText),
+          checkInputWidth: Math.round(inputRect?.width || 0),
+          checkInputHeight: Math.round(inputRect?.height || 0),
+          checkTapTargetWidth: Math.round(tapTargetRect?.width || 0),
+          checkTapTargetHeight: Math.round(tapTargetRect?.height || 0),
+          checkItemHeight: Math.round(itemRect?.height || 0),
+          homeHeadlineVisible: isVisible(homeHeadline)
         };
       })()`,
       (value) => value.hasSubmit,
@@ -713,19 +773,22 @@ try {
   assert(categoryRenameResult.result.value.storedLabel === "Rename Smoke After", "Saving a category title should persist the renamed work type", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.cardHasNewLabel, "Renamed work type should update the items category card", categoryRenameResult.result.value);
   assert(categoryRenameResult.result.value.heading.includes("Rename Smoke After"), "Renamed work type should update the section management heading", categoryRenameResult.result.value);
+  assert(results.filter((page) => !["index.html", "check.html"].includes(page.path)).every((page) => page.headerVisible === false), "Home headline should stay hidden outside home/check routes", results);
   assert(mobileNonAdminResult.result.value.adminModeClass === false, "Mobile screen switch should start outside admin mode", mobileNonAdminResult.result.value);
   assert(mobileNonAdminResult.result.value.visibleModeButtons === 0, "Mobile screen switch should be hidden without admin mode", mobileNonAdminResult.result.value);
   assert(mobileNonAdminResult.result.value.mobileHeaderVisible === true, "Non-admin mobile should stay in mobile layout", mobileNonAdminResult.result.value);
+  assert(mobileNonAdminResult.result.value.phoneTimeMatchesNow === true, "Mobile status time should reflect the current browser time", mobileNonAdminResult.result.value);
+  assert(mobileNonAdminResult.result.value.phoneTimeIsDummy === false, "Mobile status time should not use the dummy 09:41 placeholder", mobileNonAdminResult.result.value);
   assert(mobileAdminResult.result.value.adminModeClass === true, "Mobile screen switch should know admin mode is active", mobileAdminResult.result.value);
   assert(mobileAdminResult.result.value.visibleModeButtons === 2, "Mobile screen switch should appear in admin mode", mobileAdminResult.result.value);
-  assert(mobileAdminResult.result.value.activeVisibleToggle === "모바일", "Admin mobile screen switch should show mobile as active", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.activeVisibleModes === "mobile", "Admin mobile screen switch should show mobile as active", mobileAdminResult.result.value);
   assert(mobileAdminDesktopResult.result.value.sidebarSwitchExists === false, "Sidebar screen switch should stay removed", mobileAdminDesktopResult.result.value);
   assert(mobileAdminDesktopResult.result.value.visibleModeButtons === 2, "Admin desktop mode should keep a visible switch to return to mobile", mobileAdminDesktopResult.result.value);
-  assert(mobileAdminDesktopResult.result.value.activeVisibleToggle === "PC", "Admin desktop switch should make PC active on mobile width", mobileAdminDesktopResult.result.value);
+  assert(mobileAdminDesktopResult.result.value.activeVisibleModes === "desktop", "Admin desktop switch should make PC active on mobile width", mobileAdminDesktopResult.result.value);
   assert(mobileAdminDesktopResult.result.value.sidebarVisible === true, "Admin desktop switch should reveal desktop navigation on mobile width", mobileAdminDesktopResult.result.value);
   assert(mobileAdminDesktopResult.result.value.mobileHeaderVisible === false, "Admin desktop switch should hide the mobile header on mobile width", mobileAdminDesktopResult.result.value);
   assert(mobileResult.result.value.visibleModeButtons === 2, "Admin mobile mode should keep screen switch visible", mobileResult.result.value);
-  assert(mobileResult.result.value.activeVisibleToggle === "모바일", "Admin mobile switch should return to mobile mode", mobileResult.result.value);
+  assert(mobileResult.result.value.activeVisibleModes === "mobile", "Admin mobile switch should return to mobile mode", mobileResult.result.value);
   assert(mobileResult.result.value.activeToggleCount === 2, "Only one screen mode should stay active in each remaining switch group", mobileResult.result.value);
   assert(unsafeManageDefaultResult.result.value.activeTab === "불안전요소", "Manage page should open the unsafe tab from saved tab state", unsafeManageDefaultResult.result.value);
   assert(unsafeManageDefaultResult.result.value.statusFilter === "", "Unsafe manage tab should default to all statuses", unsafeManageDefaultResult.result.value);
@@ -736,8 +799,13 @@ try {
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);
   assert(stageEditResult.result.value.sortStored === '"number"', "Ships sort selection should persist", stageEditResult.result.value);
   assert(prepBefore.result.value.prepTitle.length > 0, "Selecting category should open tool prep page", prepBefore.result.value);
-  assert(prepBefore.result.value.toolCards === 1, "Tool prep page should show injected tool", prepBefore.result.value);
+  assert(prepBefore.result.value.toolCards === 4, "Tool prep page should show injected tools", prepBefore.result.value);
   assert(prepBefore.result.value.nextDisabled === true, "Continue button should be disabled before selecting required tool", prepBefore.result.value);
+  assert(prepBefore.result.value.nextDisabledMentionsTools === true, "Disabled tool prep continue button should explain the missing 공기구 selection", prepBefore.result.value);
+  assert(prepBefore.result.value.hasToolPrepGrid === true, "Tool prep should render the mobile prep grid", prepBefore.result.value);
+  assert(prepBefore.result.value.gridColumns <= 3, "Mobile tool prep grid should reduce to at most three columns", prepBefore.result.value);
+  assert(prepBefore.result.value.firstCardWidth >= 108, "Mobile tool prep cards should be large enough for gloved taps", prepBefore.result.value);
+  assert(prepBefore.result.value.firstCardHeight >= 74, "Mobile tool prep cards should have enough vertical tap area", prepBefore.result.value);
   assert(prepAfterSelect.result.value.nextDisabled === false, "Continue button should enable after tool selection", prepAfterSelect.result.value);
   assert(prepAfterSelect.result.value.selectedCount === 1, "Selected tool should be reflected in UI", prepAfterSelect.result.value);
   assert(prepChecklist.result.value.title === "Prep Smoke", "Continuing should open checklist for selected category", prepChecklist.result.value);
@@ -749,6 +817,13 @@ try {
   assert(submitLayoutBefore.result.value.submitAfterSections, "Submit button should appear after checklist sections", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.submitInsideTopForm === false, "Submit button should not remain in the top form row", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.disabledBeforeData === true, "Submit should stay disabled before required data is complete", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.submitDisabledHint.trim().length > 0, "Disabled submit button should explain why it is disabled", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileStatusVisible === true, "Mobile checklist should show writing status without relying on the desktop side panel", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileStatusMentionsHighRisk === true, "Mobile checklist status should include high-risk remaining feedback", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.checkInputWidth >= 28 && submitLayoutBefore.result.value.checkInputHeight >= 28, "Mobile checklist checkbox should have a larger touch target", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.checkTapTargetWidth >= 44 && submitLayoutBefore.result.value.checkTapTargetHeight >= 44, "Mobile checklist tap target should be large enough for touch input", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.checkItemHeight >= 58, "Mobile checklist rows should be tall enough to tap reliably", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.homeHeadlineVisible === false, "Mobile greeting headline should collapse outside the home screen", submitLayoutBefore.result.value);
   assert(submitReady.result.value.submitEnabledAfterData === true, "Submit should enable after checks, worker, and ship are complete", submitReady.result.value);
   assert(submitReady.result.value.checkedCount === 2, "Submit smoke should check all injected items", submitReady.result.value);
   assert(submitAfter.result.value.href.includes("history.html") || submitAfter.result.value.title === "기록", "Submit should show history after saving or local sync fallback", submitAfter.result.value);
