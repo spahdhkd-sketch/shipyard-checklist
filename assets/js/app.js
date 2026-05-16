@@ -387,6 +387,7 @@
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
           completed_at: row.completedAt || null,
+          status_history: Array.isArray(row.statusHistory) ? row.statusHistory : [],
         }),
         fromDb: (row) => ({
           id: row.id,
@@ -400,6 +401,7 @@
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           completedAt: row.completed_at || "",
+          statusHistory: Array.isArray(row.status_history) ? row.status_history : [],
         }),
       },
       {
@@ -418,6 +420,7 @@
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
           completed_at: row.completedAt || null,
+          status_history: Array.isArray(row.statusHistory) ? row.statusHistory : [],
         }),
         fromDb: (row) => ({
           id: row.id,
@@ -432,6 +435,7 @@
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           completedAt: row.completed_at || "",
+          statusHistory: Array.isArray(row.status_history) ? row.status_history : [],
         }),
       },
       {
@@ -808,14 +812,35 @@
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
       })).filter((worker) => worker.name);
-      state.unsafeIssues = Array.isArray(state.unsafeIssues) ? state.unsafeIssues : [];
-      state.missingMaterials = Array.isArray(state.missingMaterials) ? state.missingMaterials : [];
+      state.unsafeIssues = normalizeStatusRecords(state.unsafeIssues, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
+      state.missingMaterials = normalizeStatusRecords(state.missingMaterials, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES);
       state.issuePhotos = Array.isArray(state.issuePhotos) ? state.issuePhotos : [];
       state.unsafeDraft = createUnsafeDraft(state.unsafeDraft);
       state.materialDraft = createMaterialDraft(state.materialDraft);
       state.unsafeFilters = { shipNo: "", status: "", workerId: "", sort: "status", ...state.unsafeFilters };
       state.materialFilters = { shipNo: "", status: "", workerId: "", materialName: "", sort: "status", ...state.materialFilters };
       if (!["workers", "unsafe", "materials"].includes(state.manageTab)) state.manageTab = "workers";
+    }
+
+    function normalizeStatusRecords(records, statuses) {
+      return (Array.isArray(records) ? records : []).map((record) => {
+        const row = record && typeof record === "object" ? record : {};
+        const status = statuses.includes(row.status) ? row.status : statuses[0];
+        const createdAt = row.createdAt || row.updatedAt || serverNow().toISOString();
+        const updatedAt = row.updatedAt || createdAt;
+        const normalized = {
+          ...row,
+          status,
+          adminMemo: String(row.adminMemo || "").trim(),
+          createdAt,
+          updatedAt,
+          completedAt: row.completedAt || "",
+        };
+        return {
+          ...normalized,
+          statusHistory: ISSUE_MATERIAL_RULES.buildRecordTimeline(normalized, { initialStatus: statuses[0] }),
+        };
+      });
     }
 
     function dedupeChecklistItems() {
@@ -2220,6 +2245,23 @@
       </div>`;
     }
 
+    function renderRecordTimeline(row, options = {}) {
+      const initialStatus = options.initialStatus || ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0];
+      const timeline = ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus });
+      const visible = options.compact ? timeline.slice(-3) : timeline;
+      if (!visible.length) return "";
+      return `<ol class="record-timeline ${options.compact ? "record-timeline-compact" : ""}">
+        ${visible.map((entry) => `<li>
+          <time class="record-timeline-time" datetime="${esc(entry.changedAt)}">${esc(formatDateTime(entry.changedAt))}</time>
+          <div class="record-timeline-main">
+            ${statusBadge(entry.status)}
+            <span class="record-timeline-actor">${esc(entry.actor || "관리자")}</span>
+          </div>
+          ${entry.memo ? `<div class="record-timeline-note">${esc(entry.memo)}</div>` : ""}
+        </li>`).join("")}
+      </ol>`;
+    }
+
     function unsafePhotosFor(id) {
       return state.issuePhotos
         .filter((item) => item.targetType === "unsafe_issue" && item.targetId === id)
@@ -2242,6 +2284,7 @@
           </div>
           <p>${esc(row.content)}</p>
           ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
+          ${renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] })}
         </div>
         ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
       </article>`;
@@ -2276,6 +2319,10 @@
           ${photoHtml}
         </div>
         ${row.adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(row.adminMemo)}</div></div>` : ""}
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">처리 이력</span>
+          ${renderRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] })}
+        </div>
         ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
       </section>`;
     }
@@ -2287,6 +2334,7 @@
           <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
           <p>${esc(row.content)}</p>
           ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
+          ${renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] })}
         </div>
         ${renderAdminRecordControls("materials", row, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES)}
       </article>`;
@@ -3326,6 +3374,7 @@
         updatedAt: now,
         completedAt: "",
       };
+      row.statusHistory = ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] });
       state.unsafeIssues.unshift(row);
       state.lastUnsafeIssueId = id;
       state.unsafeDraft = createUnsafeDraft();
@@ -3354,6 +3403,7 @@
         updatedAt: now,
         completedAt: "",
       };
+      row.statusHistory = ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] });
       state.missingMaterials.unshift(row);
       state.lastMaterialId = id;
       state.materialDraft = createMaterialDraft();
@@ -3477,11 +3527,23 @@
       if (!row) return;
       const status = document.querySelector(`[data-record-status="${cssEscape(token)}"]`)?.value || row.status;
       const memo = document.querySelector(`[data-record-memo="${cssEscape(token)}"]`)?.value || "";
+      const previousStatus = row.status;
+      const previousMemo = row.adminMemo || "";
+      const updatedAt = serverNow().toISOString();
       row.status = status;
       row.adminMemo = memo.trim();
-      row.updatedAt = serverNow().toISOString();
+      row.updatedAt = updatedAt;
       const doneStatus = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2] : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2];
       row.completedAt = status === doneStatus ? (row.completedAt || row.updatedAt) : "";
+      const statuses = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES;
+      row.statusHistory = status !== previousStatus || row.adminMemo !== previousMemo
+        ? ISSUE_MATERIAL_RULES.appendStatusHistoryEntry(row, {
+            status,
+            memo: row.adminMemo,
+            changedAt: updatedAt,
+            actor: "관리자",
+          }, { initialStatus: statuses[0] })
+        : ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: statuses[0] });
       persistAndSync();
       render();
       toast("기록을 저장했습니다.");
@@ -4156,6 +4218,11 @@
       let { error } = await client.from(config.table).upsert(payload, { onConflict: "id" });
       if (error && config.key === "inspections" && /safety_pledge/i.test(String(error.message || error.details || ""))) {
         const fallbackPayload = payload.map(({ safety_pledge, ...row }) => row);
+        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+        error = retry.error;
+      }
+      if (error && /status_history/i.test(String(error.message || error.details || ""))) {
+        const fallbackPayload = payload.map(({ status_history, ...row }) => row);
         const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
         error = retry.error;
       }

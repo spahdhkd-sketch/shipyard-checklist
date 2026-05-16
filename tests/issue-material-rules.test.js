@@ -4,6 +4,8 @@ const {
   UNSAFE_STATUSES,
   MATERIAL_STATUSES,
   MAX_UNSAFE_PHOTOS,
+  appendStatusHistoryEntry,
+  buildRecordTimeline,
   createWorkerSnapshot,
   filterRecords,
   groupMaterialsByShip,
@@ -72,6 +74,54 @@ assert.deepStrictEqual(
 assert.deepStrictEqual(
   sortRecords(materialRecords, "materialName", MATERIAL_STATUSES).map((row) => row.id),
   ["m1", "m2", "m3"],
+);
+
+const changedRecord = {
+  id: "u4",
+  shipNo: "H-105",
+  status: "조치중",
+  adminMemo: "담당 반장 확인",
+  createdAt: "2026-05-15T08:00:00.000Z",
+  updatedAt: "2026-05-15T09:30:00.000Z",
+  statusHistory: [
+    { id: "h1", status: "접수", memo: "", changedAt: "2026-05-15T08:00:00.000Z", actor: "작업자" },
+  ],
+};
+
+const appendedHistory = appendStatusHistoryEntry(changedRecord, {
+  status: "조치중",
+  memo: "담당 반장 확인",
+  changedAt: "2026-05-15T09:30:00.000Z",
+  actor: "관리자",
+});
+
+assert.deepStrictEqual(appendedHistory.map((entry) => [entry.status, entry.memo, entry.actor]), [
+  ["접수", "", "작업자"],
+  ["조치중", "담당 반장 확인", "관리자"],
+]);
+
+assert.strictEqual(
+  appendStatusHistoryEntry(changedRecord, {
+    status: "접수",
+    memo: "",
+    changedAt: "2026-05-15T08:00:00.000Z",
+    actor: "작업자",
+  }).length,
+  1,
+);
+
+assert.deepStrictEqual(
+  buildRecordTimeline({
+    status: "완료",
+    adminMemo: "조치 완료",
+    createdAt: "2026-05-15T08:00:00.000Z",
+    updatedAt: "2026-05-15T10:00:00.000Z",
+    completedAt: "2026-05-15T10:00:00.000Z",
+  }).map((entry) => [entry.status, entry.memo, entry.changedAt]),
+  [
+    ["접수", "", "2026-05-15T08:00:00.000Z"],
+    ["완료", "조치 완료", "2026-05-15T10:00:00.000Z"],
+  ],
 );
 
 console.log("issue-material-rules tests passed");

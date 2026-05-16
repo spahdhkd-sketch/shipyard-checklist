@@ -3301,6 +3301,85 @@
       gap: 8px;
     }
 
+    .record-timeline {
+      list-style: none;
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      padding: 0;
+    }
+
+    .record-timeline li {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(84px, 112px) minmax(0, 1fr);
+      gap: 4px 10px;
+      padding-left: 16px;
+      min-width: 0;
+    }
+
+    .record-timeline li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 8px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--blue);
+      box-shadow: 0 0 0 3px #eef6ff;
+    }
+
+    .record-timeline li::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 20px;
+      bottom: -12px;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .record-timeline li:last-child::after {
+      display: none;
+    }
+
+    .record-timeline-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.7;
+      white-space: nowrap;
+    }
+
+    .record-timeline-main {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .record-timeline-actor {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .record-timeline-note {
+      grid-column: 2;
+      min-width: 0;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .record-timeline-compact {
+      padding-top: 2px;
+      border-top: 1px dashed var(--line);
+    }
+
     .detail-header {
       display: flex;
       justify-content: space-between;
@@ -3375,6 +3454,14 @@
 
       .unsafe-detail .admin-record-controls {
         grid-template-columns: 1fr;
+      }
+
+      .record-timeline li {
+        grid-template-columns: 1fr;
+      }
+
+      .record-timeline-note {
+        grid-column: 1;
       }
     }
 

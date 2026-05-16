@@ -24,6 +24,72 @@
     return index === -1 ? statuses.length : index;
   }
 
+  function normalizeTimelineEntry(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    const status = compactText(entry.status);
+    const changedAt = compactText(entry.changedAt);
+    if (!status || !changedAt) return null;
+    const actor = compactText(entry.actor) || "관리자";
+    const memo = compactText(entry.memo);
+    return {
+      id: compactText(entry.id) || `${changedAt}:${status}:${actor}`,
+      status,
+      memo,
+      changedAt,
+      actor,
+    };
+  }
+
+  function uniqueTimelineEntries(entries) {
+    const seen = new Set();
+    return entries
+      .map(normalizeTimelineEntry)
+      .filter(Boolean)
+      .filter((entry) => {
+        const key = `${entry.changedAt}\u0000${entry.status}\u0000${entry.memo}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => String(a.changedAt).localeCompare(String(b.changedAt)));
+  }
+
+  function buildRecordTimeline(record, options = {}) {
+    const row = record && typeof record === "object" ? record : {};
+    const initialStatus = compactText(options.initialStatus) || "접수";
+    const entries = Array.isArray(row.statusHistory) ? [...row.statusHistory] : [];
+    const createdAt = compactText(row.createdAt);
+    const updatedAt = compactText(row.completedAt) || compactText(row.updatedAt);
+    const currentStatus = compactText(row.status) || initialStatus;
+    const memo = compactText(row.adminMemo);
+
+    if (createdAt) {
+      entries.push({
+        status: initialStatus,
+        memo: "",
+        changedAt: createdAt,
+        actor: compactText(row.workerNameSnapshot) || "작업자",
+      });
+    }
+
+    if (updatedAt && (currentStatus !== initialStatus || memo)) {
+      entries.push({
+        status: currentStatus,
+        memo,
+        changedAt: updatedAt,
+        actor: "관리자",
+      });
+    }
+
+    return uniqueTimelineEntries(entries);
+  }
+
+  function appendStatusHistoryEntry(record, entry, options = {}) {
+    const row = record && typeof record === "object" ? record : {};
+    const existing = Array.isArray(row.statusHistory) ? row.statusHistory : buildRecordTimeline(row, options);
+    return uniqueTimelineEntries([...existing, entry]);
+  }
+
   function createWorkerSnapshot(workerId, workers) {
     const worker = (Array.isArray(workers) ? workers : []).find((row) => row.id === workerId);
     return {
@@ -97,6 +163,8 @@
     MATERIAL_STATUSES,
     MAX_UNSAFE_PHOTOS,
     UNSAFE_STATUSES,
+    appendStatusHistoryEntry,
+    buildRecordTimeline,
     createWorkerSnapshot,
     filterRecords,
     groupMaterialsByShip,
