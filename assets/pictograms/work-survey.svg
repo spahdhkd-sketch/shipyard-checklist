@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="work-survey-title">
-  <title id="work-survey-title">선주선급검사</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#0f766e" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="28" height="38" rx="4"/><path d="M21 25h14"/><path d="M21 33h10"/><path d="m21 43 4 4 9-12"/><path d="M43 22h8"/><path d="M47 18v8"/><circle cx="48" cy="42" r="7"/></g>
-  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">선주선급검사</text>
-</svg>

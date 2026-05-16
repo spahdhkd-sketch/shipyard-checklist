@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="work-demo-title">
-  <title id="work-demo-title">DEMO 체크</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#0f766e" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="16" width="36" height="32" rx="4"/><path d="m24 32 6 5 11-13"/><path d="M22 54h20"/><path d="M32 48v6"/><path d="M18 10h28"/></g>
-  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DEMO 체크</text>
-</svg>

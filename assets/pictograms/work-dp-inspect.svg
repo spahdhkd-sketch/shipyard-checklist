@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="work-dp-inspect-title">
-  <title id="work-dp-inspect-title">DP 검사</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="14" width="30" height="38" rx="4"/><path d="M22 24h16"/><path d="M22 32h12"/><path d="m23 42 4 4 9-11"/><circle cx="47" cy="45" r="7"/><path d="m52 50 5 5"/></g>
-  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DP 검사</text>
-</svg>

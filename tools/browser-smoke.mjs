@@ -228,16 +228,28 @@ try {
   await delay(1000);
   const itemsPageCheck = await cdp.send("Runtime.evaluate", {
     returnByValue: true,
-    expression: `(() => ({
-      pictogramImages: document.querySelectorAll('.pictogram-picker img.pictogram-art').length,
-      pickerButtons: document.querySelectorAll('.pictogram-picker [data-pick-icon]').length,
-      toolAdminCards: document.querySelectorAll('.tool-admin-card').length,
-      toolAdminColumns: getComputedStyle(document.querySelector('.tool-admin-grid') || document.body).gridTemplateColumns.split(' ').filter(Boolean).length,
-      toolNatureBadges: Array.from(document.querySelectorAll('.tool-admin-card .nature-badge')).map((node) => node.textContent.trim()).slice(0, 10),
-      compactInputs: document.querySelectorAll('.tool-admin-card-compact input, .tool-admin-card-compact select').length,
-      addOpenBefore: Boolean(document.querySelector('#newToolName')),
-      expandedBefore: document.querySelectorAll('.tool-admin-card-expanded').length
-    }))()`,
+    expression: `(() => {
+      const toolSearch = document.querySelector('[data-tool-search]');
+      if (toolSearch) {
+        toolSearch.value = 'Smoke Tool 2';
+        toolSearch.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const visibleToolCards = Array.from(document.querySelectorAll('[data-tool-search-item]')).filter((node) => !node.hidden);
+      return {
+        pictogramLineIcons: document.querySelectorAll('.pictogram-picker svg.line-icon').length,
+        pickerButtons: document.querySelectorAll('.pictogram-picker [data-pick-icon]').length,
+        toolAdminCards: document.querySelectorAll('.tool-admin-card').length,
+        toolAdminColumns: getComputedStyle(document.querySelector('.tool-admin-grid') || document.body).gridTemplateColumns.split(' ').filter(Boolean).length,
+        toolNatureBadges: Array.from(document.querySelectorAll('.tool-admin-card .nature-badge')).map((node) => node.textContent.trim()).slice(0, 10),
+        compactInputs: document.querySelectorAll('.tool-admin-card-compact input, .tool-admin-card-compact select').length,
+        addOpenBefore: Boolean(document.querySelector('#newToolName')),
+        expandedBefore: document.querySelectorAll('.tool-admin-card-expanded').length,
+        hasToolSearch: Boolean(toolSearch),
+        visibleToolCardsAfterSearch: visibleToolCards.length,
+        visibleToolCardText: visibleToolCards.map((node) => node.textContent.trim()).join(' '),
+        toolSearchCount: document.querySelector('[data-tool-search-count]')?.textContent?.trim() || ''
+      };
+    })()`,
   });
   const itemsInteractionCheck = await cdp.send("Runtime.evaluate", {
     returnByValue: true,
@@ -332,7 +344,7 @@ try {
   await delay(1000);
 
   await cdp.send("Emulation.setDeviceMetricsOverride", {
-    width: 390,
+    width: 420,
     height: 844,
     deviceScaleFactor: 1,
     mobile: true,
@@ -467,6 +479,13 @@ try {
 
   const stageEditErrorsStart = runtimeErrors.length;
   const stageLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
+  await cdp.send("Runtime.evaluate", {
+    expression: `localStorage.setItem('${STORAGE_PREFIX}ships', JSON.stringify([
+      { id: 'ship-search-smoke-1', no: 'H3481', type: 'CNTR', note: '', processStage: 'mounting', deliveryType: '', deliveryDate: '', lcDate: '2026-05-01', stDate: '', clDate: '', dlDate: '', createdAt: '2026-05-15T00:00:00.000Z', order: 1 },
+      { id: 'ship-search-smoke-2', no: 'H9999', type: 'LNG', note: '', processStage: 'lc', deliveryType: '', deliveryDate: '', lcDate: '2026-05-02', stDate: '', clDate: '', dlDate: '', createdAt: '2026-05-15T00:01:00.000Z', order: 2 }
+    ]));
+    sessionStorage.removeItem('${STORAGE_PREFIX}adminMode');`,
+  });
   await cdp.send("Page.navigate", { url: `${baseUrl}/ships.html` });
   await Promise.race([stageLoaded, delay(4000)]);
   await delay(1000);
@@ -480,20 +499,26 @@ try {
         sortSelect.value = 'number';
         sortSelect.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      const shipSearch = document.querySelector('[data-ship-search]');
+      if (shipSearch) {
+        shipSearch.value = 'H3481';
+        shipSearch.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const visibleShipCards = Array.from(document.querySelectorAll('[data-ship-search-item]')).filter((node) => !node.hidden);
       const select = document.querySelector('[data-ship-stage-field]');
       const deleteButtons = document.querySelectorAll('[data-delete-ship]').length;
-      if (!select) return { hasSelect: false, deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled) };
+      if (!select) return { hasSelect: false, deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled), hasShipSearch: Boolean(shipSearch), visibleShipsAfterSearch: visibleShipCards.length, visibleShipCardText: visibleShipCards.map((node) => node.textContent.trim()).join(' '), shipSearchCount: document.querySelector('[data-ship-search-count]')?.textContent?.trim() || '' };
       const before = select.value;
       select.value = before === 'lc' ? 'mounting' : 'lc';
       select.dispatchEvent(new Event('change', { bubbles: true }));
       const stored = JSON.parse(localStorage.getItem('shipyardSafetyV1.ships') || '[]');
       const ship = stored.find((row) => row.id === select.dataset.shipId);
-      return { hasSelect: true, before, after: select.value, selectDisabled: select.disabled, storedStage: ship?.processStage || '', deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled) };
+      return { hasSelect: true, before, after: select.value, selectDisabled: select.disabled, storedStage: ship?.processStage || '', deleteButtons, hasSortSelect: Boolean(sortSelect), sortStored: localStorage.getItem('shipyardSafetyV1.shipSortMode'), hasSaveOrderButton: Boolean(saveOrderButton), saveOrderDisabled: Boolean(saveOrderButton?.disabled), hasShipSearch: Boolean(shipSearch), visibleShipsAfterSearch: visibleShipCards.length, visibleShipCardText: visibleShipCards.map((node) => node.textContent.trim()).join(' '), shipSearchCount: document.querySelector('[data-ship-search-count]')?.textContent?.trim() || '' };
     })()`,
   });
 
   await cdp.send("Emulation.setDeviceMetricsOverride", {
-    width: 390,
+    width: 420,
     height: 844,
     deviceScaleFactor: 1,
     mobile: true,
@@ -544,8 +569,10 @@ try {
       const nextButton = document.querySelector('[data-action="continue-tool-prep"]');
       const grid = document.querySelector('.tool-prep-grid');
       const firstCard = document.querySelector('[data-tool-prep-toggle]');
+      const firstName = firstCard?.querySelector('.tool-prep-name');
       const gridColumns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 0;
       const firstRect = firstCard?.getBoundingClientRect();
+      const firstNameStyle = firstName ? getComputedStyle(firstName) : null;
       const nextDisabledHint = nextButton?.getAttribute('title') || nextButton?.getAttribute('aria-label') || '';
       return {
         prepTitle: document.querySelector('h1')?.textContent?.trim() || '',
@@ -556,7 +583,10 @@ try {
         hasToolPrepGrid: Boolean(grid),
         gridColumns,
         firstCardWidth: Math.round(firstRect?.width || 0),
-        firstCardHeight: Math.round(firstRect?.height || 0)
+        firstCardHeight: Math.round(firstRect?.height || 0),
+        firstNameWhiteSpace: firstNameStyle?.whiteSpace || '',
+        firstNameOverflow: firstNameStyle?.overflow || '',
+        firstNameTextOverflow: firstNameStyle?.textOverflow || ''
       };
     })()`,
   });
@@ -606,7 +636,7 @@ try {
   try {
     const submitLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
     await cdp.send("Emulation.setDeviceMetricsOverride", {
-      width: 390,
+      width: 420,
       height: 844,
       deviceScaleFactor: 1,
       mobile: true,
@@ -661,6 +691,9 @@ try {
         const submitRect = submitButton?.getBoundingClientRect();
         const sectionRect = lastSection?.getBoundingClientRect();
         const mobileStatus = document.querySelector('.mobile-check-status');
+        const mobileStatusStyle = mobileStatus ? getComputedStyle(mobileStatus) : null;
+        const mobileStatusBadges = Array.from(mobileStatus?.querySelectorAll('.badge') || []).map((node) => node.textContent.trim());
+        const mobileStatusProgress = mobileStatus?.querySelector('.progress');
         const firstInput = document.querySelector('[data-check-item]');
         const firstItem = firstInput?.closest('.check-item');
         const inputRect = firstInput?.getBoundingClientRect();
@@ -668,6 +701,8 @@ try {
         const tapTarget = firstInput?.closest('label') || firstItem;
         const tapTargetRect = tapTarget?.getBoundingClientRect();
         const homeHeadline = document.querySelector('#homeHeadline');
+        const mobileHeader = document.querySelector('.mobile-header');
+        const mobileHeaderRect = mobileHeader?.getBoundingClientRect();
         const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
         const submitDisabledHint = submitButton?.getAttribute('title') || submitButton?.getAttribute('aria-label') || '';
         const mobileStatusText = mobileStatus?.textContent?.trim() || '';
@@ -680,12 +715,19 @@ try {
           mobileStatusVisible: isVisible(mobileStatus),
           mobileStatusText,
           mobileStatusMentionsHighRisk: /위험|high/i.test(mobileStatusText),
+          mobileStatusBadgeCount: mobileStatusBadges.length,
+          mobileStatusBadges,
+          mobileStatusHasProgress: isVisible(mobileStatusProgress),
+          mobileStatusPosition: mobileStatusStyle?.position || '',
+          mobileStatusBottom: mobileStatusStyle?.bottom || '',
+          mobileStatusTop: mobileStatusStyle?.top || '',
           checkInputWidth: Math.round(inputRect?.width || 0),
           checkInputHeight: Math.round(inputRect?.height || 0),
           checkTapTargetWidth: Math.round(tapTargetRect?.width || 0),
           checkTapTargetHeight: Math.round(tapTargetRect?.height || 0),
           checkItemHeight: Math.round(itemRect?.height || 0),
-          homeHeadlineVisible: isVisible(homeHeadline)
+          homeHeadlineVisible: isVisible(homeHeadline),
+          mobileHeaderHeight: Math.round(mobileHeaderRect?.height || 0)
         };
       })()`,
       (value) => value.hasSubmit,
@@ -759,12 +801,15 @@ try {
     await delay(1000);
   }
 
-  assert(itemsPageCheck.result.value.pictogramImages > 0, "Items page should show pictogram images", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.pictogramLineIcons > 0, "Items page should show pictogram line icons", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.pickerButtons > 0, "Items page should show pictogram picker buttons", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.toolAdminCards > 0, "Items page should show global tool cards", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.toolAdminColumns === 4, "Global tool cards should render in four columns", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.compactInputs === 0, "Compact tool cards should not show edit inputs", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.addOpenBefore === false, "Tool add form should be collapsed by default", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.hasToolSearch, "Items page should show tool search input", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.visibleToolCardsAfterSearch === 1, "Tool search should filter the global tool list", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.visibleToolCardText.includes("Smoke Tool 2"), "Tool search should keep the matching tool visible", itemsPageCheck.result.value);
   assert(itemsInteractionCheck.result.value.addOpenAfter === false, "Tool add form should stay closed without admin auth", itemsInteractionCheck.result.value);
   assert(itemsInteractionCheck.result.value.expandedCount === 0, "Tool cards should not expand without admin auth", itemsInteractionCheck.result.value);
   assert(categoryRenameCheck.result.value.injected === true, "Category rename smoke data should be injected", categoryRenameCheck.result.value);
@@ -798,14 +843,18 @@ try {
   assert(stageEditResult.result.value.hasSaveOrderButton, "Ships page should show save order button", stageEditResult.result.value);
   assert(stageEditResult.result.value.saveOrderDisabled === true, "Save order should be disabled without admin auth", stageEditResult.result.value);
   assert(stageEditResult.result.value.sortStored === '"number"', "Ships sort selection should persist", stageEditResult.result.value);
+  assert(stageEditResult.result.value.hasShipSearch, "Ships page should show ship number search input", stageEditResult.result.value);
+  assert(stageEditResult.result.value.visibleShipsAfterSearch === 1, "Ship search should filter the ship card list", stageEditResult.result.value);
+  assert(stageEditResult.result.value.visibleShipCardText.includes("H3481"), "Ship search should keep the matching ship visible", stageEditResult.result.value);
   assert(prepBefore.result.value.prepTitle.length > 0, "Selecting category should open tool prep page", prepBefore.result.value);
   assert(prepBefore.result.value.toolCards === 4, "Tool prep page should show injected tools", prepBefore.result.value);
   assert(prepBefore.result.value.nextDisabled === true, "Continue button should be disabled before selecting required tool", prepBefore.result.value);
   assert(prepBefore.result.value.nextDisabledMentionsTools === true, "Disabled tool prep continue button should explain the missing 공기구 selection", prepBefore.result.value);
   assert(prepBefore.result.value.hasToolPrepGrid === true, "Tool prep should render the mobile prep grid", prepBefore.result.value);
-  assert(prepBefore.result.value.gridColumns <= 3, "Mobile tool prep grid should reduce to at most three columns", prepBefore.result.value);
+  assert(prepBefore.result.value.gridColumns === 2, "420px mobile tool prep grid should render exactly two columns", prepBefore.result.value);
   assert(prepBefore.result.value.firstCardWidth >= 108, "Mobile tool prep cards should be large enough for gloved taps", prepBefore.result.value);
-  assert(prepBefore.result.value.firstCardHeight >= 74, "Mobile tool prep cards should have enough vertical tap area", prepBefore.result.value);
+  assert(prepBefore.result.value.firstCardHeight >= 80, "Mobile tool prep cards should have at least 80px vertical tap area", prepBefore.result.value);
+  assert(prepBefore.result.value.firstNameWhiteSpace === "nowrap" || prepBefore.result.value.firstNameTextOverflow === "ellipsis", "Mobile tool prep labels should stay to one line or use ellipsis", prepBefore.result.value);
   assert(prepAfterSelect.result.value.nextDisabled === false, "Continue button should enable after tool selection", prepAfterSelect.result.value);
   assert(prepAfterSelect.result.value.selectedCount === 1, "Selected tool should be reflected in UI", prepAfterSelect.result.value);
   assert(prepChecklist.result.value.title === "Prep Smoke", "Continuing should open checklist for selected category", prepChecklist.result.value);
@@ -820,10 +869,15 @@ try {
   assert(submitLayoutBefore.result.value.submitDisabledHint.trim().length > 0, "Disabled submit button should explain why it is disabled", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.mobileStatusVisible === true, "Mobile checklist should show writing status without relying on the desktop side panel", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.mobileStatusMentionsHighRisk === true, "Mobile checklist status should include high-risk remaining feedback", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileStatusHasProgress === true, "Mobile checklist status should keep compact progress visible", submitLayoutBefore.result.value);
+  assert(["fixed", "sticky"].includes(submitLayoutBefore.result.value.mobileStatusPosition), "Mobile checklist status should stick to the bottom of the viewport", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileStatusBottom !== "auto", "Mobile checklist status should be anchored from the bottom", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileStatusBadgeCount === 1 && /위험/.test(submitLayoutBefore.result.value.mobileStatusBadges[0] || ""), "Mobile checklist status should compress to a single remaining-risk badge", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.checkInputWidth >= 28 && submitLayoutBefore.result.value.checkInputHeight >= 28, "Mobile checklist checkbox should have a larger touch target", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.checkTapTargetWidth >= 44 && submitLayoutBefore.result.value.checkTapTargetHeight >= 44, "Mobile checklist tap target should be large enough for touch input", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.checkItemHeight >= 58, "Mobile checklist rows should be tall enough to tap reliably", submitLayoutBefore.result.value);
   assert(submitLayoutBefore.result.value.homeHeadlineVisible === false, "Mobile greeting headline should collapse outside the home screen", submitLayoutBefore.result.value);
+  assert(submitLayoutBefore.result.value.mobileHeaderHeight <= 72, "Mobile header should stay compact outside the home screen", submitLayoutBefore.result.value);
   assert(submitReady.result.value.submitEnabledAfterData === true, "Submit should enable after checks, worker, and ship are complete", submitReady.result.value);
   assert(submitReady.result.value.checkedCount === 2, "Submit smoke should check all injected items", submitReady.result.value);
   assert(submitAfter.result.value.href.includes("history.html") || submitAfter.result.value.title === "기록", "Submit should show history after saving or local sync fallback", submitAfter.result.value);

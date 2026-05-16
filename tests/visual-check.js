@@ -441,6 +441,11 @@ function assertCheck(name, condition) {
     assertCheck("home unsafe stat highlights when received issues exist", unsafeHomeStat.highlighted);
     assertCheck("home unsafe stat uses larger symbol", unsafeHomeStat.unsafeIconWidth > unsafeHomeStat.deliveryIconWidth);
     assertCheck("home unsafe stat pulses alert highlight", unsafeHomeStat.alertAnimation.includes("unsafeStatPulse"));
+    await setViewport(client, 1440, 960);
+    await delay(250);
+    const home1440Shot = await screenshot(client, "00-home-desktop-1440.png");
+    await setViewport(client, 1280, 900);
+    await delay(250);
     await evaluate(client, `(() => {
       const prefix = "shipyardSafetyV1.";
       const statuses = window.IssueMaterialRules.UNSAFE_STATUSES;
@@ -525,7 +530,7 @@ function assertCheck(name, condition) {
     assertCheck("safety pledge placeholder", checklistState.pledgePlaceholder === "오늘 하루의 안전다짐 작성을 해주세요");
     const checklistShot = await screenshot(client, "02-checklist-wire-desktop.png");
 
-    await setViewport(client, 390, 844, true);
+    await setViewport(client, 420, 844, true);
     await delay(250);
     const mobileShot = await screenshot(client, "03-checklist-wire-mobile.png");
 
@@ -552,7 +557,7 @@ function assertCheck(name, condition) {
     assertCheck("linked tool description appears", itemsState.hasWireDescription);
     assertCheck("common item description appears", itemsState.hasCommonDescription);
     const itemsCollapsedShot = await screenshot(client, "04-items-management-collapsed-desktop.png");
-    await setViewport(client, 390, 844, true);
+    await setViewport(client, 420, 844, true);
     await delay(250);
     const itemsMobileCollapsedShot = await screenshot(client, "05-items-management-collapsed-mobile.png");
     await setViewport(client, 1280, 900);
@@ -676,7 +681,7 @@ function assertCheck(name, condition) {
 
     console.log(JSON.stringify({
       appUrl: baseUrl,
-      screenshots: [prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot, unsafeShot, materialShot, manageShot, unsafeDetailShot],
+      screenshots: [home1440Shot, prepShot, checklistShot, mobileShot, itemsCollapsedShot, itemsMobileCollapsedShot, itemsShot, unsafeShot, materialShot, manageShot, unsafeDetailShot],
       assertions: { prepState, checklistState, itemsState, expandedItemsState, unsafeState, materialState, manageState, unsafeDetailState },
     }, null, 2));
   } finally {

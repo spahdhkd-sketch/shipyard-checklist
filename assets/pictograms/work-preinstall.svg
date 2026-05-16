@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 118" role="img" aria-labelledby="work-preinstall-title">
-  <title id="work-preinstall-title">선행 설치</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#c2410c" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#c2410c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 46h34"/><path d="M21 46V25h22v21"/><path d="M18 25h28"/><path d="M27 35h10"/><path d="M46 17l5 5-9 9-5-5z"/></g>
-  <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">선행 설치</text>
-</svg>
