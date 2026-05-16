@@ -236,7 +236,8 @@ try {
       }
       const visibleToolCards = Array.from(document.querySelectorAll('[data-tool-search-item]')).filter((node) => !node.hidden);
       return {
-        pictogramLineIcons: document.querySelectorAll('.pictogram-picker svg.line-icon').length,
+        pictogramImages: document.querySelectorAll('.pictogram-picker .pictogram-image').length,
+        pictogramVisuals: document.querySelectorAll('.pictogram-picker .pictogram-image, .pictogram-picker svg.line-icon').length,
         pickerButtons: document.querySelectorAll('.pictogram-picker [data-pick-icon]').length,
         toolAdminCards: document.querySelectorAll('.tool-admin-card').length,
         toolAdminColumns: getComputedStyle(document.querySelector('.tool-admin-grid') || document.body).gridTemplateColumns.split(' ').filter(Boolean).length,
@@ -825,7 +826,8 @@ try {
     await delay(1000);
   }
 
-  assert(itemsPageCheck.result.value.pictogramLineIcons > 0, "Items page should show pictogram line icons", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.pictogramImages > 0, "Items page should show cropped pictogram images", itemsPageCheck.result.value);
+  assert(itemsPageCheck.result.value.pictogramVisuals === itemsPageCheck.result.value.pickerButtons, "Every pictogram picker button should have a visual", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.pickerButtons > 0, "Items page should show pictogram picker buttons", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.toolAdminCards > 0, "Items page should show global tool cards", itemsPageCheck.result.value);
   assert(itemsPageCheck.result.value.toolAdminColumns === 4, "Global tool cards should render in four columns", itemsPageCheck.result.value);

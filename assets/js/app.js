@@ -72,7 +72,63 @@
       { key: "stInspection", label: "S/T 검사" },
       { key: "dlWork", label: "D/L 작업" },
     ];
-    const PICTOGRAM_ASSETS = {};
+    const ILLUSTRATION_BASE = "assets/icons/shipyard/illustrations/";
+    const illustration = (name) => `${ILLUSTRATION_BASE}${name}.png`;
+    const PICTOGRAM_ASSETS = {
+      blockAssembly: illustration("blockAssembly"),
+      weldingWork: illustration("weldingWork"),
+      hullPainting: illustration("hullPainting"),
+      qualityInspection: illustration("qualityInspection"),
+      materialStorage: illustration("materialStorage"),
+      shipDesign: illustration("shipDesign"),
+      ncCutting: illustration("ncCutting"),
+      curvedBlockProcessing: illustration("curvedBlockProcessing"),
+      steelPlateCutting: illustration("steelPlateCutting"),
+      scaffolding: illustration("scaffolding"),
+      engineInstallation: illustration("engineInstallation"),
+      craneOperation: illustration("craneOperation"),
+      cabinAssembly: illustration("cabinAssembly"),
+      propellerInstallation: illustration("propellerInstallation"),
+      electricalWork: illustration("electricalWork"),
+      upperModuleInstallation: illustration("upperModuleInstallation"),
+      materialTransport: illustration("materialTransport"),
+      boardingWork: illustration("boardingWork"),
+      cutInspection: illustration("cutInspection"),
+      curvedBlockInspection: illustration("curvedBlockProcessing"),
+      yardTransfer: illustration("yardTransfer"),
+      namingCeremony: illustration("namingCeremony"),
+      gasCutting: illustration("gasCutting"),
+      anchorInstallation: illustration("anchorInstallation"),
+      hullGrinding: illustration("gasCutting"),
+      insulationWork: illustration("insulationWork"),
+      wasteDisposal: illustration("wasteDisposal"),
+      safetyTraining: illustration("safetyTraining"),
+      remoteInspection: illustration("remoteInspection"),
+      ecoPainting: illustration("ecoPainting"),
+      launchPrep: illustration("yardTransfer"),
+      launchInspection: illustration("namingCeremony"),
+      seaTrial: illustration("yardTransfer"),
+      controlRoom: illustration("controlRoom"),
+      sonarInstallation: illustration("sonarInstallation"),
+      blockTransport: illustration("materialTransport"),
+      weldingRobot: illustration("weldingRobot"),
+      smartLogistics: illustration("smartLogistics"),
+      environmentalProtection: illustration("ecoPainting"),
+      safetyGear: illustration("safetyGear"),
+      pressureTest: illustration("pressureTest"),
+      dpInstallation: illustration("controlRoom"),
+      dpInspection: illustration("qualityInspection"),
+      classSurvey: illustration("classSurvey"),
+      demoCheck: illustration("demoCheck"),
+      lcWork: illustration("blockAssembly"),
+      stInspection: illustration("qualityInspection"),
+      dlWork: illustration("yardTransfer"),
+      welding: illustration("weldingWork"),
+      workAtHeights: illustration("scaffolding"),
+      erection: illustration("blockAssembly"),
+      confinedSpace: illustration("boardingWork"),
+      confined: illustration("boardingWork"),
+    };
     const BUILT_IN_PICTOGRAMS = PICTOGRAMS.map((icon, index) => ({
       id: icon.key,
       label: icon.label,
@@ -1422,6 +1478,11 @@
       return `<svg class="line-icon line-icon-${esc(name)}" viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
     }
 
+    function pictogramAssetSrc(id) {
+      const key = normalizeIconKey(id);
+      return PICTOGRAM_ASSETS[id] || PICTOGRAM_ASSETS[key] || "";
+    }
+
     function lineIconName(id, fallbackIcon = "") {
       const key = normalizeIconKey(id);
       const text = `${id || ""} ${key || ""} ${fallbackIcon || ""}`.toLowerCase();
@@ -1441,6 +1502,10 @@
     }
 
     function workVisual(id, fallbackIcon) {
+      const src = pictogramAssetSrc(id);
+      if (src) {
+        return `<img class="pictogram-image" src="${esc(src)}" alt="" loading="lazy" decoding="async" aria-hidden="true" />`;
+      }
       return lineIcon(lineIconName(id, fallbackIcon));
     }
 
