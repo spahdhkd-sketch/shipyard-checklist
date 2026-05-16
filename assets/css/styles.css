@@ -124,7 +124,8 @@
     }
 
     .desktop-preview-toggle,
-    .mobile-screen-toggle {
+    .mobile-screen-toggle,
+    .mobile-admin-shortcut {
       display: none;
     }
 
@@ -196,6 +197,40 @@
 
     body.admin-mode.screen-mobile .mobile-screen-toggle {
       display: grid;
+    }
+
+    .mobile-admin-shortcut {
+      width: 34px;
+      height: 34px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      color: rgba(255,255,255,.88);
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease, transform .16s ease;
+    }
+
+    .mobile-admin-shortcut:hover,
+    .mobile-admin-shortcut.active {
+      background: #fff;
+      color: var(--color-sidebar);
+      transform: translateY(-1px);
+    }
+
+    .mobile-admin-shortcut svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    body.admin-mode.screen-mobile .mobile-admin-shortcut:not([hidden]) {
+      display: inline-flex;
     }
 
     .nav-btn {
@@ -2338,16 +2373,21 @@
 
     .appbar {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       align-items: center;
+      gap: 8px;
       min-height: 40px;
     }
 
     .appbar-title {
+      min-width: 0;
       text-align: center;
       font-size: 17px;
       font-weight: 800;
       line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .home-headline {
@@ -3137,12 +3177,12 @@
 
     @media (max-width: 920px) {
       .appbar {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
       }
     }
 
     body.preview-mobile .appbar {
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
     }
 
     @media (max-width: 420px) {

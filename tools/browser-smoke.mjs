@@ -397,14 +397,38 @@ try {
     returnByValue: true,
     expression: `(() => {
       const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      const bottomNavButtons = Array.from(document.querySelectorAll('#mobileNav .nav-btn'));
+      const bottomNavRows = new Set(bottomNavButtons.map((node) => Math.round(node.getBoundingClientRect().top))).size;
+      const adminShortcut = document.querySelector('#mobileAdminShortcut');
       return {
         bodyClass: document.body.className,
         visibleModeButtons: Array.from(document.querySelectorAll('[data-screen-mode]')).filter(isVisible).length,
         activeVisibleToggle: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.textContent.trim()).join('|'),
         activeVisibleModes: Array.from(document.querySelectorAll('[data-screen-mode].active')).filter(isVisible).map((node) => node.dataset.screenMode || '').join('|'),
+        bottomNavCount: bottomNavButtons.length,
+        bottomNavLabels: bottomNavButtons.map((node) => node.textContent.trim()).join('|'),
+        bottomNavRows,
+        adminShortcutVisible: isVisible(adminShortcut),
         mobileHeaderVisible: isVisible(document.querySelector('.mobile-header')),
         sidebarVisible: isVisible(document.querySelector('.sidebar')),
         adminModeClass: document.body.classList.contains('admin-mode')
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.querySelector('#mobileAdminShortcut')?.click()`,
+  });
+  await delay(300);
+  const mobileAdminShortcutResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      const shortcut = document.querySelector('#mobileAdminShortcut');
+      return {
+        title: document.querySelector('#appbarTitle')?.textContent?.trim() || '',
+        shortcutVisible: isVisible(shortcut),
+        shortcutActive: shortcut?.classList.contains('active') || false,
+        bottomNavLabels: Array.from(document.querySelectorAll('#mobileNav .nav-btn')).map((node) => node.textContent.trim()).join('|')
       };
     })()`,
   });
@@ -827,6 +851,14 @@ try {
   assert(mobileAdminResult.result.value.adminModeClass === true, "Mobile screen switch should know admin mode is active", mobileAdminResult.result.value);
   assert(mobileAdminResult.result.value.visibleModeButtons === 2, "Mobile screen switch should appear in admin mode", mobileAdminResult.result.value);
   assert(mobileAdminResult.result.value.activeVisibleModes === "mobile", "Admin mobile screen switch should show mobile as active", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.bottomNavCount === 5, "Admin mobile bottom nav should stay at five primary tabs", mobileAdminResult.result.value);
+  assert(!mobileAdminResult.result.value.bottomNavLabels.includes("관리"), "Admin mobile bottom nav should not include the manage tab", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.bottomNavRows === 1, "Admin mobile bottom nav should stay on one row", mobileAdminResult.result.value);
+  assert(mobileAdminResult.result.value.adminShortcutVisible === true, "Admin mobile should expose manage through the appbar shortcut", mobileAdminResult.result.value);
+  assert(mobileAdminShortcutResult.result.value.shortcutVisible === true, "Manage appbar shortcut should remain visible after navigation", mobileAdminShortcutResult.result.value);
+  assert(mobileAdminShortcutResult.result.value.shortcutActive === true, "Manage appbar shortcut should show active state on manage page", mobileAdminShortcutResult.result.value);
+  assert(mobileAdminShortcutResult.result.value.title === "관리", "Manage appbar shortcut should navigate to the manage page", mobileAdminShortcutResult.result.value);
+  assert(!mobileAdminShortcutResult.result.value.bottomNavLabels.includes("관리"), "Manage page should still keep bottom nav to primary tabs", mobileAdminShortcutResult.result.value);
   assert(mobileAdminDesktopResult.result.value.sidebarSwitchExists === false, "Sidebar screen switch should stay removed", mobileAdminDesktopResult.result.value);
   assert(mobileAdminDesktopResult.result.value.visibleModeButtons === 2, "Admin desktop mode should keep a visible switch to return to mobile", mobileAdminDesktopResult.result.value);
   assert(mobileAdminDesktopResult.result.value.activeVisibleModes === "desktop", "Admin desktop switch should make PC active on mobile width", mobileAdminDesktopResult.result.value);

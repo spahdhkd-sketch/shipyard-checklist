@@ -21,6 +21,7 @@
       { id: "history", label: "기록", icon: "book" },
       { id: "items", label: "더보기", icon: "menu" },
     ];
+    const ADMIN_NAV_ITEM = { id: "manage", label: "관리", icon: "settings" };
     const PICTOGRAMS = [
       { key: "blockAssembly", label: "블록 조립" },
       { key: "weldingWork", label: "용접 작업" },
@@ -1162,16 +1163,24 @@
     }
 
     function visibleNavItems() {
-      return state.adminMode ? [...NAV, { id: "manage", label: "관리", icon: "settings" }] : NAV;
+      return state.adminMode ? [...NAV, ADMIN_NAV_ITEM] : NAV;
     }
 
-    function renderNav() {
-      const html = visibleNavItems().map((nav) => `
+    function mobileNavItems() {
+      return NAV;
+    }
+
+    function renderNavButtons(items) {
+      return items.map((nav) => `
         <button class="nav-btn ${state.view === nav.id ? "active" : ""}" data-view="${nav.id}" type="button">
           <span class="nav-icon">${navIcon(nav.icon)}</span><span>${esc(nav.label)}</span>
         </button>`).join("");
-      $("desktopNav").innerHTML = html;
-      $("mobileNav").innerHTML = html;
+    }
+
+    function renderNav() {
+      $("desktopNav").innerHTML = renderNavButtons(visibleNavItems());
+      $("mobileNav").innerHTML = renderNavButtons(mobileNavItems());
+      updateMobileAdminShortcut();
     }
 
     function navIcon(name) {
@@ -1186,6 +1195,14 @@
         settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1-2.1 2.1-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7V21h-3v-.6a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1-2.1-2.1.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1H4v-3h.6a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1 2.1-2.1.1.1a1.8 1.8 0 0 0 2 .4 1.8 1.8 0 0 0 1.1-1.7V3h3v.6a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1 2.1 2.1-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.7 1.1h.6v3h-.6a1.8 1.8 0 0 0-1.7 1.1z"></path></svg>`,
       };
       return icons[name] || icons.note;
+    }
+
+    function updateMobileAdminShortcut() {
+      const shortcut = $("mobileAdminShortcut");
+      if (!shortcut) return;
+      shortcut.hidden = !state.adminMode;
+      shortcut.classList.toggle("active", state.view === "manage");
+      shortcut.innerHTML = navIcon(ADMIN_NAV_ITEM.icon);
     }
 
     function pageHead(title, lead, actions = "") {
