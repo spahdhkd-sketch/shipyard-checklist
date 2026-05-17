@@ -1,13 +1,13 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
-  <title>조선소 안전 체크리스트</title>
-  <link rel="stylesheet" href="assets/css/styles.css" />
+  <title>통계 대시보드 - 조선소 안전 체크리스트</title>
+  <link rel="stylesheet" href="assets/css/styles-v2.css" />
 </head>
-<body data-initial-view="ships">
+<body data-initial-view="analytics">
 <div class="desktop-preview-toggle" aria-label="데스크탑 미리보기 전환">
     <div class="mode-toggle" role="group" aria-label="화면 전환">
       <button data-screen-mode="desktop" type="button">PC</button>
@@ -27,7 +27,7 @@
     <header class="mobile-header">
       <div class="phone-status"><span id="phoneTime">09:41</span></div>
       <div class="appbar">
-        <div class="appbar-title" id="appbarTitle">홈</div>
+        <div class="appbar-title" id="appbarTitle">통계</div>
         <button id="mobileAdminShortcut" class="mobile-admin-shortcut" data-view="manage" type="button" aria-label="관리 화면으로 이동" title="관리" hidden></button>
         <div class="mobile-screen-toggle" role="group" aria-label="화면 전환">
           <button data-screen-mode="desktop" type="button">PC</button>
@@ -53,6 +53,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3" defer></script>
   <script src="assets/js/checklist-rules.js" defer></script>
   <script src="assets/js/issue-material-rules.js" defer></script>
-  <script src="assets/js/app.js" defer></script>
+  <script src="assets/js/app-v2.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
+  <title>조선소 안전 체크리스트 - redesign v2</title>
+  <link rel="stylesheet" href="assets/css/styles-v2.css" />
+</head>
+<body data-initial-view="dashboard">
+  <div class="desktop-preview-toggle" aria-label="데스크탑 미리보기 전환">
+    <div class="mode-toggle" role="group" aria-label="화면 전환">
+      <button data-screen-mode="desktop" type="button">PC</button>
+      <button data-screen-mode="mobile" type="button">모바일</button>
+    </div>
+  </div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-title">(주)지에스<br />안전 체크리스트</div>
+        <div class="brand-sub">조선소 현장 작업 전 위험 확인과 점검 이력을 관리합니다.</div>
+        <div id="syncBadge" class="sync-badge"><span class="sync-dot"></span><span id="syncText">로컬 저장</span></div>
+      </div>
+      <nav id="desktopNav" class="nav"></nav>
+    </aside>
+
+    <header class="mobile-header">
+      <div class="phone-status"><span id="phoneTime">09:41</span></div>
+      <div class="appbar">
+        <div class="appbar-title" id="appbarTitle">홈</div>
+        <button id="mobileAdminShortcut" class="mobile-admin-shortcut" data-view="manage" type="button" aria-label="관리 화면으로 이동" title="관리" hidden></button>
+        <div class="mobile-screen-toggle" role="group" aria-label="화면 전환">
+          <button data-screen-mode="desktop" type="button">PC</button>
+          <button data-screen-mode="mobile" type="button">모바일</button>
+        </div>
+      </div>
+      <div class="home-headline" id="homeHeadline">
+        <div>
+          <div class="home-date" id="homeDateLabel">2025.05.21 (수)</div>
+          <div class="home-sub">안전한 하루 되세요!</div>
+        </div>
+        <div id="mobileSyncBadge" class="sync-chip"><span class="sync-dot"></span><span id="mobileSyncText">로컬 저장</span></div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div id="page"></div>
+    </main>
+
+    <nav id="mobileNav" class="bottom-nav"></nav>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3" defer></script>
+  <script src="assets/js/checklist-rules.js" defer></script>
+  <script src="assets/js/issue-material-rules.js" defer></script>
+  <script src="assets/js/app-v2.js" defer></script>
+</body>
+</html>
