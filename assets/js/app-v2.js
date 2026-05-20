@@ -495,6 +495,7 @@
         }),
       },
     ];
+    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools"]);
 
     const starterCategories = [
       { id: "welding", label: "용접/절단 작업", icon: "welding", color: "#b8323b", toolNature: "선행/후행", order: 1 },
@@ -678,6 +679,34 @@
         if (row?.id) byId.set(row.id, mergeRemoteRecord(byId.get(row.id), row));
       });
       return Array.from(byId.values()).sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
+    }
+
+    function pendingSyncRowsForKey(key) {
+      const pendingIds = new Set();
+      normalizePendingSyncQueue(state.pendingSyncQueue).forEach((job) => {
+        if (job.type !== "rows") return;
+        (job.rowIdsByKey[key] || []).forEach((id) => pendingIds.add(id));
+      });
+      return (Array.isArray(state[key]) ? state[key] : []).filter((row) => row?.id && pendingIds.has(row.id));
+    }
+
+    function authoritativeRemoteRows(key, remoteRows) {
+      const byId = new Map();
+      (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
+        if (row?.id) byId.set(row.id, row);
+      });
+      pendingSyncRowsForKey(key).forEach((row) => {
+        if (row?.id) byId.set(row.id, row);
+      });
+      return Array.from(byId.values());
+    }
+
+    function applyRemoteTableRows(key, rows) {
+      if (REMOTE_AUTHORITATIVE_KEYS.has(key)) {
+        state[key] = authoritativeRemoteRows(key, rows);
+        return;
+      }
+      if (rows.length) state[key] = mergeRecordArrays(state[key], rows);
     }
 
     function normalizePendingSyncQueue(value) {
@@ -966,7 +995,7 @@
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
         syncServerClock();
-        pullRemote();
+        pullRemote({ force: true });
         flushPendingSyncQueue();
       }
     }
@@ -2256,19 +2285,20 @@
 
     function renderCheck() {
       if (!state.selectedCategoryId) {
+        const categories = state.categories.sort(byOrder);
         return `<section class="write-intro">
           <h1>어떤 작업을 점검할까요?</h1>
           <p>작업 유형을 선택하면 점검을 시작합니다.</p>
         </section>
         ${checkFlowSteps(1)}
         <div class="work-grid">
-          ${state.categories.sort(byOrder).map((cat) => {
+          ${categories.length ? categories.map((cat) => {
             return `<button class="work-card" style="--accent:${esc(categoryAccent(cat))}" data-select-category="${cat.id}" type="button">
               <span class="work-icon">${categoryVisual(cat)}</span>
               <div class="work-title">${esc(workLabel(cat))}</div>
               <span class="work-arrow">›</span>
             </button>`;
-          }).join("")}
+          }).join("") : `<div class="empty">등록된 작업 유형이 없습니다. 관리자 메뉴에서 작업 유형을 추가하세요.</div>`}
         </div>`;
       }
 
@@ -7194,9 +7224,7 @@
       setSyncStatus("서버 확인 중", "pending");
       try {
         const results = await Promise.all(REMOTE_TABLES.map((config) => selectTable(client, config)));
-        results.forEach(({ key, rows }) => {
-          if (rows.length) state[key] = mergeRecordArrays(state[key], rows);
-        });
+        results.forEach(({ key, rows }) => applyRemoteTableRows(key, rows));
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
