@@ -3748,7 +3748,6 @@
         const date = new Date(String(value).includes("T") ? value : `${value}T00:00:00`);
         return !Number.isNaN(date.getTime()) && date >= weekStart && date <= now;
       };
-      const recordTimestamp = (row) => row.createdAt || (row.date ? `${row.date}T${row.time || "00:00:00"}` : "");
       const deltaText = (current, previous) => {
         const diff = Number(current || 0) - Number(previous || 0);
         if (diff > 0) return `어제 대비 +${diff}건`;
@@ -3782,22 +3781,8 @@
       const activeProcessCount = processRows.filter(({ count }) => count > 0).length;
       const weeklyActivityCount = weekInspections.length + weekUnsafe.length + weekMaterials.length;
       const recent = [
-        ...state.inspections.map((row) => {
-          const cat = categoryById(row.categoryId) || { label: "점검" };
-          return {
-            id: row.id,
-            kind: "inspection",
-            type: "점검",
-            shipNo: row.shipNo,
-            content: `${cat.label} 점검`,
-            worker: row.worker,
-            status: row.status,
-            risk: Number(row.warnings || 0) ? "위험" : "정상",
-            time: recordTimestamp(row),
-          };
-        }),
-        ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, risk: "위험", time: row.createdAt })),
-        ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재 누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, risk: "주의", time: row.createdAt })),
+        ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소 등록", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
+        ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
       ].sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
       return `<section class="admin-board analytics-board">
         <div class="admin-board-top">
@@ -3849,19 +3834,17 @@
         </div>
         <section class="analytics-recent-card">
           <div class="material-table-head">
-            <div><strong>최근 활동 · 불안전요소 & 점검</strong><span>우선순위 정렬</span></div>
+            <div><strong>최근 활동 · 불안전요소 등록 & 자재누락</strong><span>행을 선택하면 상세 화면으로 이동합니다</span></div>
             <div class="material-table-actions"><button class="btn-light" data-action="open-analytics-filters" type="button">필터</button><button class="btn" data-action="open-analytics-detail" type="button">상세 보기</button></div>
           </div>
           <div class="analytics-table">
-            <div class="analytics-row analytics-row-head"><span>시각</span><span>호선</span><span>내용</span><span>작업자</span><span>상태</span><span>위험도</span><span>액션</span></div>
-            ${recent.length ? recent.map((row) => `<div class="analytics-row">
+            <div class="analytics-row analytics-row-head"><span>시각</span><span>호선</span><span>내용</span><span>작업자</span><span>상태</span></div>
+            ${recent.length ? recent.map((row) => `<div class="analytics-row" data-analytics-record-kind="${esc(row.kind)}" data-analytics-record-id="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(row.shipNo || "-")} ${esc(row.type)} 상세 보기">
               <span>${esc(relativeRecordTime(row.time))}</span>
               <span><strong>${esc(row.shipNo || "-")}</strong></span>
               <span><strong>${esc(shortUnsafeTitle(row.content))}</strong><em>${esc(row.type)}</em></span>
               <span>${esc(row.worker || "-")}</span>
               <span>${statusChip(row.status)}</span>
-              <span><mark>${esc(row.risk)}</mark></span>
-              <span><button class="btn-light" ${row.kind === "unsafe" ? `data-unsafe-record-detail="${esc(row.id)}"` : row.kind === "materials" ? `data-material-record-detail="${esc(row.id)}"` : `data-history-detail="${esc(row.id)}"`} type="button">→</button></span>
             </div>`).join("") : `<div class="empty">최근 활동이 없습니다.</div>`}
           </div>
         </section>
@@ -4823,6 +4806,12 @@
         return;
       }
 
+      const analyticsRow = event.target.closest("[data-analytics-record-id]");
+      if (analyticsRow && !event.target.closest("button,input,label,select,textarea")) {
+        openAnalyticsRecord(analyticsRow.dataset.analyticsRecordKind, analyticsRow.dataset.analyticsRecordId);
+        return;
+      }
+
       const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
       if (categoryToolRow && !event.target.closest("button,input,label,select,textarea")) {
         toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
@@ -5150,6 +5139,7 @@
 
       const historyCard = event.target.closest("[data-history-detail-card]");
       const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
+      const analyticsRow = event.target.closest("[data-analytics-record-id]");
       if (historyCard && !event.target.closest("button,input,label,select,textarea")) {
         event.preventDefault();
         openHistoryDetail(historyCard.dataset.historyDetailCard);
@@ -5160,12 +5150,25 @@
         openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
         return;
       }
+      if (analyticsRow && !event.target.closest("button,input,label,select,textarea")) {
+        event.preventDefault();
+        openAnalyticsRecord(analyticsRow.dataset.analyticsRecordKind, analyticsRow.dataset.analyticsRecordId);
+        return;
+      }
       const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
       if (categoryToolRow && event.target === categoryToolRow) {
         event.preventDefault();
         toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
       }
     });
+
+    function openAnalyticsRecord(kind, id) {
+      if (kind === "unsafe") {
+        openUnsafeDetail(id);
+        return;
+      }
+      if (kind === "materials") openMaterialDetail(id);
+    }
 
     function openUnsafeDetail(id) {
       if (!id) return;

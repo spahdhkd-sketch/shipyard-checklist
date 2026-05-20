@@ -77,6 +77,11 @@ assert.match(app, /preloadCachedPledgeSignature\(\);[\s\S]*const submitState = b
 assert.match(app, /const previousWorker = state\.draft\.worker;/);
 assert.match(app, /if \(normalizedWorkerName\(previousWorker\) !== normalizedWorkerName\(state\.draft\.worker\)\) state\.draft\.pledgeSignature = "";/);
 assert.match(app, /savePledgeSignatureForWorker\(state\.draft\.worker, state\.draft\.pledgeSignature\)/);
+assert.match(app, /최근 활동 · 불안전요소 등록 & 자재누락/);
+assert.match(app, /data-analytics-record-kind="\$\{esc\(row\.kind\)\}"/);
+assert.match(app, /data-analytics-record-id="\$\{esc\(row\.id\)\}"/);
+assert.match(app, /function openAnalyticsRecord\(kind, id\)/);
+assert.doesNotMatch(app, /<span>위험도<\/span><span>액션<\/span>/);
 
 const css = read("assets/css/styles-v2.css");
 assert.match(css, /--safe-area-bottom/);
@@ -88,6 +93,7 @@ assert.match(css, /\.category-tool-assignment-row/);
 assert.match(css, /\.category-tool-summary/);
 assert.match(css, /\.category-tool-chip/);
 assert.match(css, /\.category-tool-toggle-mark/);
+assert.match(css, /\.analytics-row\[data-analytics-record-id\]/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);
