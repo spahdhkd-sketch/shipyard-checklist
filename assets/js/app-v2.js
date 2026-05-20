@@ -1915,9 +1915,9 @@
 
     function statPill(label, value, unit, color, icon = "board", foot = "", scope = "all") {
       const attrs = scope === "unsafe"
-        ? `data-stat-scope="unsafe" data-view="unsafe"`
+        ? `data-stat-scope="unsafe" data-action="view-unsafe-list"`
         : scope === "materials"
-          ? `data-stat-scope="materials" data-view="materials"`
+          ? `data-stat-scope="materials" data-action="view-material-list"`
         : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
       const alertClass = scope === "unsafe" && Number(value) > 0 ? " is-alert" : "";
       const focusClass = ["today", "unsafe"].includes(scope) ? " is-focus" : "";
