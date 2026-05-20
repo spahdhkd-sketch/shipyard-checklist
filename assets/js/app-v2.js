@@ -716,6 +716,53 @@
       return raw.trim();
     }
 
+    const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache";
+
+    function signatureCacheDateKey() {
+      return today();
+    }
+
+    function normalizedWorkerName(workerName) {
+      return String(workerName || "").trim();
+    }
+
+    function loadPledgeSignatureCache() {
+      return loadJson(PLEDGE_SIGNATURE_CACHE_KEY, {});
+    }
+
+    function savePledgeSignatureCache(cache) {
+      saveJson(PLEDGE_SIGNATURE_CACHE_KEY, cache && typeof cache === "object" ? cache : {});
+    }
+
+    function cachedPledgeSignatureForWorker(workerName) {
+      const worker = normalizedWorkerName(workerName);
+      if (!worker) return "";
+      const cache = loadPledgeSignatureCache();
+      const dayCache = cache[signatureCacheDateKey()];
+      if (!dayCache || typeof dayCache !== "object") return "";
+      return String(dayCache[worker] || "");
+    }
+
+    function savePledgeSignatureForWorker(workerName, signature) {
+      const worker = normalizedWorkerName(workerName);
+      const value = String(signature || "");
+      if (!worker || !value) return;
+      const cache = loadPledgeSignatureCache();
+      const day = signatureCacheDateKey();
+      cache[day] = cache[day] && typeof cache[day] === "object" ? cache[day] : {};
+      cache[day][worker] = value;
+      savePledgeSignatureCache(cache);
+    }
+
+    function preloadCachedPledgeSignature() {
+      if (state.draft.pledgeSignature) return false;
+      const cached = cachedPledgeSignatureForWorker(state.draft.worker);
+      if (!cached) return false;
+      state.draft.pledgeSignature = cached;
+      saveJson("draft", state.draft);
+      return true;
+    }
+
     function createUnsafeDraft(overrides = {}) {
       return {
         step: 1,

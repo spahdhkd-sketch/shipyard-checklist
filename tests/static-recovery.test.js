@@ -39,6 +39,11 @@ assert.match(app, /toolIds: selectedCategoryToolIds\(`category_\$\{id\}`\)/);
 assert.match(app, /"\/checklist": "check"/);
 assert.match(app, /"\/admin": "manage"/);
 assert.match(app, /createdAtMs: Date\.now\(\)/);
+assert.match(app, /const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache"/);
+assert.match(app, /function signatureCacheDateKey\(\)/);
+assert.match(app, /function cachedPledgeSignatureForWorker\(workerName\)/);
+assert.match(app, /function savePledgeSignatureForWorker\(workerName, signature\)/);
+assert.match(app, /function preloadCachedPledgeSignature\(\)/);
 
 const css = read("assets/css/styles-v2.css");
 assert.match(css, /--safe-area-bottom/);
