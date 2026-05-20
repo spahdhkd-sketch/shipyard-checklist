@@ -44,7 +44,7 @@
      - 녹색: 해당 날짜 점검 완료
      - 주황: 미완료 기록 있음
      - 빨강: 대상일인데 점검 기록 없음
-     - 파란 회색: 대한민국 국경일 기준 휴무
+     - 파란 회색: 대한민국 국경일/공휴일/대체공휴일 기준 휴무
      - 회색: 미래일 또는 대상 제외일
 
 3. 주의 필요 작업자
@@ -61,6 +61,8 @@
 - 신규 로컬 상태 `monthlyWorkerRestDays`
 
 Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`의 로컬 반영값을 그대로 사용한다. 휴무일 설정은 1차 구현에서 로컬 저장소 기준으로 관리한다. 원격 동기화가 필요해지면 별도 Supabase 테이블을 추가 설계한다.
+
+공휴일 기준 데이터는 공공데이터포털 `한국천문연구원_특일 정보` 또는 동일 기준으로 정리한 운영 휴무 데이터로 관리한다. 이 데이터는 국경일, 공휴일, 대체공휴일을 포함해야 한다.
 
 ## Month Scope
 
@@ -131,7 +133,26 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 
 통계 섹션 안에 `휴무 설정` 버튼을 추가한다.
 
-휴무 기본값은 대한민국 5대 국경일 기준으로 자동 생성한다.
+휴무 기본값은 선택 월 기준 한 달 전에 반영된 대한민국 국경일/공휴일/대체공휴일 데이터를 따른다.
+
+예를 들어 2026년 5월 통계를 볼 때는 2026년 4월 말까지 반영된 대한민국 휴무 데이터를 기준으로 한다. 앱은 선택 월의 휴무 데이터가 있으면 그 데이터를 우선 사용한다.
+
+데이터 항목은 다음 형태로 관리한다.
+
+```js
+{
+  "2026-05": {
+    "updatedAt": "2026-04-30",
+    "source": "KASI_SPECIAL_DAYS",
+    "days": [
+      { "date": "2026-05-05", "name": "어린이날", "type": "공휴일" },
+      { "date": "2026-05-25", "name": "부처님오신날 대체공휴일", "type": "대체공휴일" }
+    ]
+  }
+}
+```
+
+공휴일 데이터가 없는 경우에는 최소 fallback으로 대한민국 5대 국경일을 사용한다.
 
 - 3·1절: 3월 1일
 - 제헌절: 7월 17일
@@ -139,12 +160,12 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 - 개천절: 10월 3일
 - 한글날: 10월 9일
 
-선택 월에 위 날짜가 포함되면 모든 작업자에게 `휴무` 상태로 표시한다. 휴무일은 점검 대상일과 누락일 계산에서 제외한다.
+선택 월에 휴무 데이터 날짜가 포함되면 모든 작업자에게 `휴무` 상태로 표시한다. 휴무일은 점검 대상일과 누락일 계산에서 제외한다.
 
-휴무 설정 패널은 국경일 자동 휴무 목록을 보여준다.
+휴무 설정 패널은 선택 월의 자동 휴무 목록을 보여준다.
 
-- 선택 월의 국경일 휴무 표시
-- 국경일 휴무 적용 여부 ON/OFF
+- 선택 월의 국경일/공휴일/대체공휴일 휴무 표시
+- 자동 휴무 적용 여부 ON/OFF
 - 현장 추가 휴무일 추가
 - 현장 추가 휴무일 삭제
 
@@ -154,7 +175,16 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 
 ```js
 {
-  "useKoreanNationalHolidays": true,
+  "useKoreanPublicHolidays": true,
+  "holidayData": {
+    "2026-05": {
+      "updatedAt": "2026-04-30",
+      "source": "KASI_SPECIAL_DAYS",
+      "days": [
+        { "date": "2026-05-05", "name": "어린이날", "type": "공휴일" }
+      ]
+    }
+  },
   "customRestDays": ["2026-05-01"]
 }
 ```
@@ -267,9 +297,9 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 - `renderMonthlyWorkerAnalytics()`
 - `renderWorkerHeatmapCell(status)`
 - `renderMonthlyRestDaySettings()`
-- `koreanNationalHolidayName(date)`
+- `koreanPublicHolidayInfo(date)`
 - `isMonthlyRestDay(date)`
-- `toggleMonthlyNationalHolidayMode()`
+- `toggleMonthlyPublicHolidayMode()`
 - `addCustomMonthlyRestDay(date)`
 - `deleteCustomMonthlyRestDay(date)`
 - `exportMonthlyWorkerAnalytics()`
@@ -292,8 +322,8 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 - 미래 날짜가 회색 제외로 표시되는지
 - 이전 달 / 이번 달 / 다음 달 이동이 선택 월을 올바르게 바꾸는지
 - 현재 월에서 다음 달 버튼이 비활성화되는지
-- 대한민국 국경일이 휴무로 자동 표시되고 대상일/누락일에서 제외되는지
-- 국경일 휴무 적용 OFF 시 해당 날짜가 일반 대상일로 계산되는지
+- 선택 월 기준 한 달 전 반영된 대한민국 국경일/공휴일/대체공휴일이 휴무로 자동 표시되고 대상일/누락일에서 제외되는지
+- 자동 휴무 적용 OFF 시 해당 날짜가 일반 대상일로 계산되는지
 - 현장 추가 휴무일이 대상일/누락일에서 제외되는지
 - 월간 내보내기 파일에 선택 월과 날짜별 `완료 / 미완료 / 휴무` 상태가 포함되는지
 
