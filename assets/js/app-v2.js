@@ -1781,7 +1781,6 @@
             <button class="ops-quick-action primary" data-view="check" type="button">
               <span>${navIcon("noteCheck")}</span>
               <strong>작업 전 점검 시작</strong>
-              <small>공기구 확인 후 체크리스트 제출</small>
             </button>
             <button class="ops-quick-action danger" data-view="unsafe" type="button">
               <span>${navIcon("warning")}</span>
@@ -1812,9 +1811,9 @@
       </section>
       <section class="ops-status-grid" aria-labelledby="dashboardStatusHeading">
         ${sectionHeading("dashboardStatusHeading", "오늘 현장 상태")}
-        ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", todayPending ? `${todayPending}건 대기` : "정리됨", "today")}
+        ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", "", "today")}
         ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "접수 없음", "unsafe")}
-        ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", openMaterials ? "자재 확인" : "대기 없음", "materials")}
+        ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", "", "materials")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
       </section>
       <section class="ops-grid" aria-labelledby="dashboardProcessHeading">
