@@ -5474,6 +5474,92 @@
       gap: 6px;
     }
 
+    .category-tool-assignment-panel .section-title {
+      align-items: center;
+    }
+
+    .section-help {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .category-tool-assignment-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .category-tool-assignment-row {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--accent, var(--blue));
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+
+    .category-tool-assignment-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .category-tool-assignment-icon {
+      width: 50px;
+      height: 50px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: var(--accent, var(--blue));
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .category-tool-assignment-icon svg {
+      width: 38px;
+      height: 38px;
+    }
+
+    .category-tool-assignment-head strong {
+      display: block;
+      min-width: 0;
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .category-tool-assignment-head span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .category-tool-assignment-head em {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .category-tool-assignment-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
     .item-tool-option {
       min-width: 0;
       display: grid;
@@ -7030,6 +7116,24 @@
     @media (max-width: 920px) {
       .appbar {
         grid-template-columns: minmax(0, 1fr) auto auto;
+      }
+
+      .category-tool-assignment-head {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
+      .category-tool-assignment-head em {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+
+      .category-tool-assignment-actions {
+        justify-content: stretch;
+      }
+
+      .category-tool-assignment-actions .btn,
+      .category-tool-assignment-actions .btn-light {
+        flex: 1 1 100%;
       }
     }
 

@@ -2715,19 +2715,20 @@
 
     function renderItems() {
       if (!state.manageCategoryId) {
-        return `${pageHead("항목 관리", "작업 유형을 만들고, 유형 안에 섹션을 나눈 뒤 점검 항목을 추가합니다.", adminToggleButton())}
+        return `${pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton())}
         <div class="panel panel-pad" style="margin-bottom:14px">
           <div class="section-title">공기구/준비물 관리</div>
           ${renderToolManager()}
         </div>
-        <div class="panel panel-pad" style="margin-bottom:14px">
+        <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
           <div class="section-title">
-            작업 유형
+            작업 유형별 공기구 지정
             <button class="btn" data-action="toggle-category-add" ${state.adminMode ? "" : "disabled"} type="button">${state.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
           </div>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
+          <p class="section-help">작업자가 점검 메뉴에서 작업 유형을 선택했을 때 보일 공기구/준비물을 여기서 지정합니다.</p>
+          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">수정 모드를 켜면 작업 유형별 공기구를 지정할 수 있습니다.</div>`}
           ${state.categoryAddOpen ? `
-          <div class="collapsible-panel">
+          <div class="collapsible-panel category-add-panel">
           <div class="form-row">
             <div class="field">
               <label for="catLabel">작업 유형명</label>
@@ -2745,9 +2746,16 @@
             <button class="btn" data-action="add-category" ${state.adminMode ? "" : "disabled"} type="button">추가</button>
             <button class="btn-light" data-action="cancel-category-add" type="button">취소</button>
           </div>
-          ${renderCategoryToolPicker({ groupId: "add_category", selectedIds: [] })}
           ${renderPictogramPicker("erection")}
-          </div>` : `<div class="empty compact-empty">작업 유형을 추가하려면 버튼을 누르세요.</div>`}
+          </div>` : ""}
+          ${renderCategoryToolAssignments()}
+        </div>
+        <div class="panel panel-pad" style="margin-bottom:14px">
+          <div class="section-title">
+            섹션/점검 항목 관리
+          </div>
+          <p class="section-help">점검 항목 추가/수정/삭제는 작업 유형을 선택해서 관리합니다.</p>
+          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
         </div>
         <div class="category-grid">
           ${state.categories.sort(byOrder).map((cat) => {
@@ -2759,8 +2767,7 @@
                 <div class="field">
                   <label for="editCategoryLabel_${cat.id}">작업 유형명 수정</label>
                   <input class="input" id="editCategoryLabel_${cat.id}" value="${esc(cat.label)}" />
-                </div>
-                ${renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds })}` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
+                </div>` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
               <div class="small muted" style="margin:6px 0 12px">${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</div>
               <div class="item-actions manage-actions">
                 ${editingCategory ? `
@@ -4193,6 +4200,32 @@
       </div>`;
     }
 
+    function renderCategoryToolAssignments() {
+      const categories = state.categories.slice().sort(byOrder);
+      const tools = activeTools();
+      if (!categories.length) return `<div class="empty compact-empty">등록된 작업 유형이 없습니다. 먼저 작업 유형을 추가하세요.</div>`;
+      return `<div class="category-tool-assignment-list">
+        ${categories.map((cat) => {
+          const selectedCount = sanitizeToolIds(cat.toolIds).length;
+          return `<article class="category-tool-assignment-row" style="--accent:${esc(categoryAccent(cat))}">
+            <div class="category-tool-assignment-head">
+              <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
+              <div>
+                <strong>${esc(cat.label)}</strong>
+                <span>${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</span>
+              </div>
+              <em>${selectedCount ? `${selectedCount}개 지정` : "전체 표시"}</em>
+            </div>
+            ${tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`}
+            <div class="category-tool-assignment-actions">
+              <button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>
+              <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
+            </div>
+          </article>`;
+        }).join("")}
+      </div>`;
+    }
+
     function renderToolManager() {
       const tools = activeTools();
       return `
@@ -5042,6 +5075,7 @@
       }
       if (button.dataset.editCategory) editCategory(button.dataset.editCategory);
       if (button.dataset.saveCategory) saveCategory(button.dataset.saveCategory);
+      if (button.dataset.saveCategoryTools) saveCategoryTools(button.dataset.saveCategoryTools);
       if (button.dataset.action === "cancel-edit-category") {
         state.editCategoryId = null;
         render();
@@ -6102,7 +6136,7 @@
         color: selectedColor(),
         requireToolCheck: true,
         toolNature: "선행",
-        toolIds: selectedCategoryToolIds("add_category"),
+        toolIds: [],
         order: state.categories.length + 1,
       });
       state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
@@ -6141,12 +6175,24 @@
       state.categories = state.categories.map((row) => row.id === id ? {
         ...row,
         label,
-        toolIds: selectedCategoryToolIds(`category_${id}`),
       } : row);
       state.editCategoryId = null;
       persistAndSync();
       render();
       toast("작업 유형명을 수정했습니다.");
+    }
+
+    function saveCategoryTools(id) {
+      if (!requireAdmin()) return;
+      const cat = categoryById(id);
+      if (!cat) return;
+      state.categories = state.categories.map((row) => row.id === id ? {
+        ...row,
+        toolIds: selectedCategoryToolIds(`category_${id}`),
+      } : row);
+      persistAndSync();
+      render();
+      toast(`${cat.label} 공기구 지정을 저장했습니다.`);
     }
 
     async function deleteCategory(id) {
