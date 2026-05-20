@@ -127,6 +127,7 @@ assert.match(css, /\.category-tool-assignment-row/);
 assert.match(css, /\.category-tool-summary/);
 assert.match(css, /\.category-tool-chip/);
 assert.match(css, /\.category-tool-toggle-mark/);
+assert.match(css, /\.tool-admin-grid > \.empty/);
 assert.match(css, /\.analytics-row\[data-analytics-record-id\]/);
 assert.match(css, /\.home-version-badge/);
 assert.match(css, /\.monthly-worker-analytics/);

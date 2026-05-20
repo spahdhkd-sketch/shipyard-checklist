@@ -5660,6 +5660,11 @@
       margin-top: 10px;
     }
 
+    .tool-admin-grid > .empty {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+
     .tool-admin-card,
     .pictogram-admin-row {
       padding: 10px;
@@ -7647,6 +7652,10 @@
     }
 
     @media (max-width: 920px) {
+      .tool-admin-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .tool-admin-add {
         grid-template-columns: 1fr;
       }
