@@ -19,8 +19,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const html = read("index.html");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260521-cache-fix/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260521-cache-fix/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
 
@@ -37,9 +38,9 @@ assert.match(html, /id="homeVersionLabel"/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css/, `${file} should use v2 styles`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260521-cache-fix/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js/, `${file} should use the v2 app runtime`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260521-cache-fix/, `${file} should use the v2 app runtime with cache busting`);
   assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
   assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
   assert.doesNotMatch(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, `${file} should not use remote Supabase CDN`);
@@ -135,10 +136,21 @@ assert.match(css, /\.monthly-worker-cell\.rest/);
 assert.match(css, /\.monthly-worker-cell\.excluded/);
 assert.match(css, /overflow-x: auto/);
 
+const sw = read("sw.js");
+assert.match(sw, /const CACHE = "gs-safety-v4-20260521"/);
+assert.match(sw, /styles-v2\.css\?v=20260521-cache-fix/);
+assert.match(sw, /app-v2\.js\?v=20260521-cache-fix/);
+assert.match(sw, /if \(\s*\/\\\.\(css\|js\)\$\/\.test\(requestUrl\.pathname\)\s*\)/);
+assert.match(sw, /fetch\(event\.request\)[\s\S]+cache\.put\(event\.request, copy\)/);
+
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);
 ["/checklist", "/history", "/admin", "/pledge", "/analytics"].forEach((route) => {
   assert.ok(rewrites.includes(route), `${route} rewrite should exist`);
 });
+const headerSources = vercel.headers.map((row) => row.source);
+assert.ok(headerSources.includes("/sw.js"), "sw.js should have an explicit no-cache header");
+assert.ok(headerSources.includes("/index.html"), "index.html should have an explicit no-cache header");
+assert.ok(JSON.stringify(vercel.headers).includes("no-cache, no-store, must-revalidate"), "HTML and service worker should bypass stale HTTP caches");
 
 console.log("static recovery tests passed");
