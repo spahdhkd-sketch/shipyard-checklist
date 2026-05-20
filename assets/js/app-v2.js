@@ -1579,8 +1579,14 @@
     function updateHeaderClock() {
       const time = $("phoneTime");
       const date = $("homeDateLabel");
+      const version = $("homeVersionLabel");
       if (time) time.textContent = localTime(serverNow());
       if (date) date.textContent = formatKoreanDate(serverNow());
+      if (version) version.textContent = appVersionLabel();
+    }
+
+    function appVersionLabel() {
+      return `version ${String(APP_VERSION).split("-")[0]}`;
     }
 
     function formatKoreanDate(date) {
@@ -1773,9 +1779,6 @@
             <div><span>대기</span><strong>${todayPending}</strong></div>
             <div><span>호선</span><strong>${activeShips}</strong></div>
             <div><span>완료율</span><strong>${completion}%</strong></div>
-          </div>
-          <div class="home-version-strip" aria-label="현재 운영 버전">
-            <span>운영 버전</span><strong>${esc(APP_VERSION)}</strong>
           </div>
         </div>
       </section>

@@ -22,6 +22,7 @@ assert.match(html, /viewport-fit=cover/);
 assert.match(html, /assets\/css\/styles-v2\.css/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
+assert.match(html, /id="homeVersionLabel"/);
 
 [
   "check.html",
@@ -46,7 +47,8 @@ assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 
 const app = read("assets/js/app-v2.js");
 assert.match(app, /const APP_VERSION = "0\.2-20260520"/);
-assert.match(app, /home-version-strip/);
+assert.match(app, /function appVersionLabel\(\)/);
+assert.match(app, /version \$\{String\(APP_VERSION\)\.split\("-"\)\[0\]\}/);
 assert.match(app, /\{ id: "pledge", label: "서약"/);
 assert.match(app, /\{ id: "analytics", label: "통계"/);
 assert.match(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ships", "history", "items"\]\)/);
@@ -115,7 +117,7 @@ assert.match(css, /\.category-tool-summary/);
 assert.match(css, /\.category-tool-chip/);
 assert.match(css, /\.category-tool-toggle-mark/);
 assert.match(css, /\.analytics-row\[data-analytics-record-id\]/);
-assert.match(css, /\.home-version-strip/);
+assert.match(css, /\.home-version-badge/);
 assert.match(css, /\.monthly-worker-analytics/);
 assert.match(css, /\.monthly-worker-heatmap-wrap/);
 assert.match(css, /\.monthly-worker-cell\.done/);

@@ -461,27 +461,6 @@
       background: #fff;
     }
 
-    .home-version-strip {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-height: 34px;
-      padding: 8px 10px;
-      border: 1px solid #dbe4ee;
-      border-radius: 8px;
-      background: #f8fafc;
-      color: #607084;
-      font-size: 11px;
-      font-weight: 900;
-    }
-
-    .home-version-strip strong {
-      color: #1f65e8;
-      font-size: 12px;
-      font-weight: 900;
-    }
-
     .ops-today-head {
       display: flex;
       justify-content: space-between;
@@ -6791,9 +6770,30 @@
       margin-top: 6px;
     }
 
+    .home-date-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .home-date {
       font-size: 16px;
       font-weight: 800;
+    }
+
+    .home-version-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid rgba(191, 219, 254, .9);
+      border-radius: 999px;
+      background: rgba(239, 246, 255, .94);
+      color: #1f65e8;
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 900;
     }
 
     .home-sub {
