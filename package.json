@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "verify": "node --check assets/js/app-v2.js && node --check assets/js/checklist-rules.js && node --check assets/js/issue-material-rules.js && node tests/checklist-rules.test.js && node tests/issue-material-rules.test.js && node tests/static-recovery.test.js"
+  }
+}

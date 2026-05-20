@@ -16,16 +16,15 @@
     };
     const NAV = [
       { id: "dashboard", label: "홈", icon: "home" },
-      { id: "check", label: "점검", icon: "noteCheck" },
+      { id: "check", label: "작업 전 점검", icon: "noteCheck" },
       { id: "ships", label: "호선", icon: "ship" },
-      { id: "history", label: "기록", icon: "book" },
-      { id: "items", label: "더보기", icon: "menu" },
-    ];
-    const ADMIN_NAV_ITEM = { id: "manage", label: "관리", icon: "settings" };
-    const PREVIEW_NAV_ITEMS = [
+      { id: "history", label: "점검 이력", icon: "book" },
+      { id: "items", label: "빠른 메뉴", icon: "menu" },
       { id: "pledge", label: "서약", icon: "noteCheck" },
       { id: "analytics", label: "통계", icon: "board" },
     ];
+    const ADMIN_NAV_ITEM = { id: "manage", label: "관리", icon: "settings" };
+    const PREVIEW_NAV_ITEMS = [];
     const PICTOGRAMS = [
       { key: "blockAssembly", label: "블록 조립" },
       { key: "weldingWork", label: "용접 작업" },
@@ -113,17 +112,17 @@
       launchInspection: illustration("namingCeremony"),
       seaTrial: illustration("yardTransfer"),
       controlRoom: illustration("controlRoom"),
-      sonarInstallation: illustration("sonarInstallation"),
+      sonarInstallation: illustration("controlRoom"),
       blockTransport: illustration("materialTransport"),
-      weldingRobot: illustration("weldingRobot"),
-      smartLogistics: illustration("smartLogistics"),
+      weldingRobot: illustration("weldingWork"),
+      smartLogistics: illustration("materialTransport"),
       environmentalProtection: illustration("ecoPainting"),
-      safetyGear: illustration("safetyGear"),
-      pressureTest: illustration("pressureTest"),
+      safetyGear: illustration("safetyTraining"),
+      pressureTest: illustration("qualityInspection"),
       dpInstallation: illustration("controlRoom"),
       dpInspection: illustration("qualityInspection"),
-      classSurvey: illustration("classSurvey"),
-      demoCheck: illustration("demoCheck"),
+      classSurvey: illustration("qualityInspection"),
+      demoCheck: illustration("cutInspection"),
       lcWork: illustration("blockAssembly"),
       stInspection: illustration("qualityInspection"),
       dlWork: illustration("yardTransfer"),
@@ -183,10 +182,10 @@
       ["saved", "저장된 순서"],
     ];
     const STAGE_META = {
-      mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#c2410c", bg: "#fff7ed" },
+      mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#8F5E35", bg: "#F8F1E8" },
       lc: { stage: "lc", label: "L/C", percent: 45, color: "#1d4ed8", bg: "#eff6ff" },
       st: { stage: "st", label: "S/T", percent: 70, color: "#0f766e", bg: "#f0fdfa" },
-      cl: { stage: "cl", label: "C/L", percent: 92, color: "#15803d", bg: "#f0fdf4" },
+      cl: { stage: "cl", label: "C/L", percent: 92, color: "#4F7A5C", bg: "#F1F6F2" },
       dl: { stage: "dl", label: "D/L", percent: 100, color: "#7e22ce", bg: "#faf5ff" },
     };
     const CATEGORY_STAGE_RULES = [
@@ -565,12 +564,47 @@
       if (index < 0) return esc(text);
       return `${esc(text.slice(0, index))}<br>${esc(text.slice(index + 1))}`;
     };
+    const KST_TIME_ZONE = "Asia/Seoul";
+    const kstDateFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: KST_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const kstTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: KST_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const kstRecordTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: KST_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const kstWeekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: KST_TIME_ZONE,
+      weekday: "short",
+    });
+    const kstDateParts = (date) => {
+      const parts = Object.fromEntries(kstDateFormatter.formatToParts(date).map((part) => [part.type, part.value]));
+      return {
+        year: Number(parts.year),
+        month: Number(parts.month),
+        day: Number(parts.day),
+      };
+    };
     const today = () => localDate(serverNow());
     const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 7)}`;
     const pad2 = (value) => String(value).padStart(2, "0");
-    const localDate = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-    const localTime = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-    const recordTime = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+    const localDate = (date) => {
+      const parts = kstDateParts(date);
+      return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+    };
+    const localTime = (date) => kstTimeFormatter.format(date);
+    const recordTime = (date) => kstRecordTimeFormatter.format(date);
     const normalizeShipNo = (value) => {
       const raw = value.trim().toUpperCase().replace(/\s+/g, "");
       if (!raw) return "";
@@ -589,7 +623,55 @@
         return fallback;
       }
     };
-    const saveJson = (key, value) => localStorage.setItem(storeKey(key), JSON.stringify(value));
+    const saveJson = (key, value) => {
+      try {
+        localStorage.setItem(storeKey(key), JSON.stringify(value));
+        return true;
+      } catch (error) {
+        console.warn("Local storage write failed", key, error);
+        return false;
+      }
+    };
+    function estimateLocalStorageKb() {
+      let total = 0;
+      try {
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+          total += key.length + String(localStorage.getItem(key) || "").length;
+        }
+      } catch {
+        return 0;
+      }
+      return Math.round((total * 2) / 1024);
+    }
+
+    function shouldWarnStorage() {
+      return estimateLocalStorageKb() >= 4096;
+    }
+
+    function recordTimestamp(row) {
+      const value = row?.updatedAt || row?.createdAt || row?.date || "";
+      const time = Date.parse(value);
+      return Number.isFinite(time) ? time : 0;
+    }
+
+    function mergeRemoteRecord(local, remote) {
+      if (!local) return remote;
+      if (!remote) return local;
+      return recordTimestamp(remote) > recordTimestamp(local) ? remote : local;
+    }
+
+    function mergeRecordArrays(localRows, remoteRows) {
+      const byId = new Map();
+      (Array.isArray(localRows) ? localRows : []).forEach((row) => {
+        if (row?.id) byId.set(row.id, row);
+      });
+      (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
+        if (row?.id) byId.set(row.id, mergeRemoteRecord(byId.get(row.id), row));
+      });
+      return Array.from(byId.values()).sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
+    }
     const loadAdminMode = () => {
       try {
         return sessionStorage.getItem(storeKey("adminMode")) === "true";
@@ -633,6 +715,7 @@
 
     function createUnsafeDraft(overrides = {}) {
       return {
+        step: 1,
         shipNo: "",
         content: "",
         workerId: "",
@@ -681,6 +764,8 @@
       unsafeIssues: loadJson("unsafeIssues", []),
       missingMaterials: loadJson("missingMaterials", []),
       issuePhotos: loadJson("issuePhotos", []),
+      pendingPhotoUploads: loadJson("pendingPhotoUploads", []),
+      unsafePhotoFiles: [],
       selectedCategoryId: null,
       manageCategoryId: null,
       editCategoryId: null,
@@ -688,6 +773,7 @@
       editItemId: null,
       editToolId: null,
       toolAddOpen: false,
+      categoryAddOpen: false,
       openAddItemSectionIds: [],
       categoryVisualOpen: false,
       draft: loadDraft(),
@@ -717,13 +803,33 @@
       lastUnsafeIssueId: "",
       lastMaterialId: "",
       lastInspectionId: "",
+      inspectionSubmitting: false,
       pledgeTemplateEditing: false,
     };
     let cachedSupabaseClient = null;
 
     function initialView() {
-      const view = document.body?.dataset?.initialView || "dashboard";
+      const view = viewFromPathname() || document.body?.dataset?.initialView || "dashboard";
       return routeViews().some((nav) => nav.id === view) ? view : "dashboard";
+    }
+
+    function viewFromPathname() {
+      const cleanPath = location.pathname.replace(/\/+$/, "").toLowerCase();
+      const routeMap = {
+        "/": "dashboard",
+        "/checklist": "check",
+        "/check": "check",
+        "/history": "history",
+        "/admin": "manage",
+        "/manage": "manage",
+        "/ships": "ships",
+        "/items": "items",
+        "/unsafe": "unsafe",
+        "/materials": "materials",
+        "/pledge": "pledge",
+        "/analytics": "analytics",
+      };
+      return routeMap[cleanPath] || "";
     }
 
     function pageForView(view) {
@@ -739,6 +845,7 @@
         manage: "manage.html",
         pledge: "pledge.html",
         analytics: "analytics.html",
+        pledgeComplete: currentPageName(),
       }[view] || "index.html";
     }
 
@@ -880,6 +987,7 @@
       state.unsafeIssues = normalizeStatusRecords(state.unsafeIssues, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
       state.missingMaterials = normalizeStatusRecords(state.missingMaterials, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES);
       state.issuePhotos = Array.isArray(state.issuePhotos) ? state.issuePhotos : [];
+      state.pendingPhotoUploads = normalizePendingPhotoUploads(state.pendingPhotoUploads);
       state.unsafeDraft = createUnsafeDraft(state.unsafeDraft);
       state.materialDraft = createMaterialDraft(state.materialDraft);
       state.unsafeFilters = { shipNo: "", status: "", workerId: "", sort: "status", ...state.unsafeFilters };
@@ -906,6 +1014,23 @@
           statusHistory: ISSUE_MATERIAL_RULES.buildRecordTimeline(normalized, { initialStatus: statuses[0] }),
         };
       });
+    }
+
+    function normalizePendingPhotoUploads(records) {
+      return (Array.isArray(records) ? records : [])
+        .filter((row) => row && row.issueId)
+        .map((row, index) => ({
+          id: row.id || uid("pendingPhoto"),
+          issueId: String(row.issueId || ""),
+          fileName: String(row.fileName || `photo-${index + 1}.jpg`),
+          fileType: String(row.fileType || "image/jpeg"),
+          fileSize: Number(row.fileSize || 0),
+          dataUrl: String(row.dataUrl || ""),
+          status: row.status === "uploading" ? "failed" : String(row.status || "failed"),
+          errorMessage: String(row.errorMessage || ""),
+          createdAt: row.createdAt || serverNow().toISOString(),
+          updatedAt: row.updatedAt || row.createdAt || serverNow().toISOString(),
+        }));
     }
 
     function dedupeChecklistItems() {
@@ -1015,11 +1140,16 @@
       saveJson("unsafeIssues", state.unsafeIssues);
       saveJson("missingMaterials", state.missingMaterials);
       saveJson("issuePhotos", state.issuePhotos);
+      saveJson("pendingPhotoUploads", state.pendingPhotoUploads);
       saveJson("unsafeDraft", state.unsafeDraft);
       saveJson("materialDraft", state.materialDraft);
       saveJson("unsafeFilters", state.unsafeFilters);
       saveJson("materialFilters", state.materialFilters);
       saveJson("manageTab", state.manageTab);
+      if (shouldWarnStorage() && !state.storageWarningShown) {
+        state.storageWarningShown = true;
+        toast("저장 공간이 부족합니다. 오래된 이력과 사진을 정리해주세요.");
+      }
     }
 
     function routeState() {
@@ -1051,6 +1181,7 @@
         state.view = "dashboard";
         state.selectedCategoryId = null;
         state.historyDetailId = null;
+        clearCompletionStateForView("dashboard");
         render();
         scrollScreenTop();
         replaceRouteState();
@@ -1063,16 +1194,33 @@
       state.historyDetailId = route.historyDetailId || null;
       if (state.view !== "check") state.selectedCategoryId = null;
       if (!["dashboard", "history"].includes(state.view)) state.historyDetailId = null;
+      clearCompletionStateForView(state.view);
       render();
       scrollScreenTop();
     }
 
+    function clearCompletionStateForView() {
+      state.lastUnsafeIssueId = "";
+      state.lastMaterialId = "";
+    }
+
+    let adminModulePromise = null;
+
+    function loadAdminModule() {
+      if (!adminModulePromise) adminModulePromise = import("./admin-v2.js");
+      return adminModulePromise;
+    }
+
     function changeView(view, options = {}) {
       if (navigateToView(view)) return;
+      if (["manage", "pledge", "analytics"].includes(view)) {
+        loadAdminModule().catch((error) => console.warn("Admin module preload failed", error));
+      }
       const changed = state.view !== view || state.selectedCategoryId || state.historyDetailId;
       state.view = view;
       if (view !== "check") state.selectedCategoryId = null;
       if (!["dashboard", "history"].includes(view)) state.historyDetailId = null;
+      clearCompletionStateForView(view);
       render();
       scrollScreenTop();
       if (changed) {
@@ -1101,8 +1249,9 @@
       [["syncBadge", "syncText"], ["mobileSyncBadge", "mobileSyncText"]].forEach(([badgeId, textId]) => {
         const badge = $(badgeId);
         const label = $(textId);
+        const labelText = badgeId === "mobileSyncBadge" && text === "로컬 저장" ? "저장됨" : text;
         if (badge) badge.className = `${badgeId === "mobileSyncBadge" ? "sync-chip" : "sync-badge"} ${mode}`;
-        if (label) label.textContent = text;
+        if (label) label.textContent = labelText;
       });
     }
 
@@ -1185,6 +1334,30 @@
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
+      ensureRenderedAccessibility();
+    }
+
+    function ensureRenderedAccessibility() {
+      const page = $("page");
+      if (page && !page.querySelector("h1")) {
+        const title = $("appbarTitle")?.textContent?.trim() || "조선소 안전 체크리스트";
+        page.insertAdjacentHTML("afterbegin", `<h1 class="sr-only">${esc(title)}</h1>`);
+      }
+      document.querySelectorAll("img").forEach((image) => {
+        if (!image.hasAttribute("alt")) {
+          image.setAttribute("alt", "");
+          image.setAttribute("aria-hidden", "true");
+        }
+      });
+      document.querySelectorAll("input, select, textarea").forEach((control) => {
+        if (control.type === "hidden") return;
+        const id = control.id;
+        const hasLabel = Boolean(id && document.querySelector(`label[for="${cssEscape(id)}"]`));
+        if (hasLabel || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
+        const placeholder = control.getAttribute("placeholder");
+        const fallback = placeholder || control.name || control.id || "입력 필드";
+        control.setAttribute("aria-label", fallback);
+      });
     }
 
     function setupSignaturePad() {
@@ -1350,8 +1523,9 @@
     }
 
     function formatKoreanDate(date) {
-      const days = ["일", "월", "화", "수", "목", "금", "토"];
-      return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())} (${days[date.getDay()]})`;
+      const parts = kstDateParts(date);
+      const weekday = kstWeekdayFormatter.format(date).replace("요일", "");
+      return `${parts.year}.${pad2(parts.month)}.${pad2(parts.day)} (${weekday})`;
     }
 
     function serverNow() {
@@ -1359,26 +1533,9 @@
     }
 
     async function syncServerClock() {
-      if (!isSyncConfigured()) return;
-      try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-          method: "HEAD",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-          cache: "no-store",
-        });
-        const serverDate = response.headers.get("date");
-        if (!serverDate) return;
-        const serverMs = new Date(serverDate).getTime();
-        if (!Number.isFinite(serverMs)) return;
-        state.serverTimeOffsetMs = serverMs - Date.now();
-        state.serverClockSyncedAt = new Date().toISOString();
-        updateHeaderClock();
-      } catch (error) {
-        console.warn("Server clock sync failed", error);
-      }
+      state.serverTimeOffsetMs = 0;
+      state.serverClockSyncedAt = "";
+      updateHeaderClock();
     }
 
     function visibleNavItems() {
@@ -1391,7 +1548,7 @@
     }
 
     function renderNavButtons(items) {
-      const activeView = ["unsafe", "materials", "pledge", "analytics"].includes(state.view) ? "items" : state.view;
+      const activeView = ["unsafe", "materials"].includes(state.view) ? "items" : state.view;
       return items.map((nav) => `
         <button class="nav-btn ${activeView === nav.id ? "active" : ""}" data-view="${nav.id}" type="button">
           <span class="nav-icon">${navIcon(nav.icon)}</span><span>${esc(nav.label)}</span>
@@ -1419,6 +1576,10 @@
       return icons[name] || icons.note;
     }
 
+    function sectionHeading(id, title) {
+      return `<h2 id="${esc(id)}" class="sr-only">${esc(title)}</h2>`;
+    }
+
     function updateMobileAdminShortcut() {
       const shortcut = $("mobileAdminShortcut");
       if (!shortcut) return;
@@ -1444,11 +1605,12 @@
       </button>`;
     }
 
-    function renderDashboard() {
-      const todayRows = state.inspections.filter((row) => row.date === today());
+    function dashboardModel() {
+      const todayRows = state.inspections.filter((row) => inspectionActualDate(row) === today());
       const todayCount = todayRows.length;
       const todayDone = todayRows.filter((row) => row.status === "완료").length;
       const todayPending = Math.max(todayCount - todayDone, 0);
+      const todayCompletion = todayCount ? Math.round(todayDone / todayCount * 100) : 0;
       const doneCount = state.inspections.filter((row) => row.status === "완료").length;
       const unsafeCount = unsafeReceivedCount();
       const completion = state.inspections.length ? Math.round(doneCount / state.inspections.length * 100) : 0;
@@ -1479,18 +1641,63 @@
         info: shipStageInfo(stage),
         count: state.ships.filter((ship) => effectiveShipStage(ship).stage === stage).length,
       }));
+      return {
+        todayCount,
+        todayDone,
+        todayPending,
+        todayCompletion,
+        unsafeCount,
+        completion,
+        latest,
+        deliverySoon,
+        openMaterials,
+        activeShips,
+        riskNg,
+        riskWarn,
+        riskOk,
+        riskTotal,
+        processStages,
+      };
+    }
 
-      return `<section class="ops-hero" aria-labelledby="opsHeroTitle">
+    function renderDashboard() {
+      const {
+        todayCount,
+        todayDone,
+        todayPending,
+        todayCompletion,
+        unsafeCount,
+        completion,
+        latest,
+        deliverySoon,
+        openMaterials,
+        activeShips,
+        riskNg,
+        riskWarn,
+        riskOk,
+        riskTotal,
+        processStages,
+      } = dashboardModel();
+      return `<h1 class="sr-only">조선소 안전 체크리스트</h1>
+      <section class="ops-hero" aria-labelledby="dashboardQuickHeading">
+        ${sectionHeading("dashboardQuickHeading", "현장 빠른 실행")}
         <div class="ops-hero-main">
-          <div class="ops-kicker">오늘 현장</div>
-          <h1 id="opsHeroTitle">작업 전 점검 시작</h1>
-          <p>호선 공정, 불안전요소, 누락 자재를 한 화면에서 확인하고 바로 조치합니다.</p>
-          <div class="ops-hero-actions">
-            <button class="ops-primary-action" data-view="check" type="button">
+          <div class="ops-quick-actions" aria-label="현장 빠른 실행">
+            <button class="ops-quick-action primary" data-view="check" type="button">
               <span>${navIcon("noteCheck")}</span>
-              <strong>새 점검 시작</strong>
+              <strong>작업 전 점검 시작</strong>
+              <small>공기구 확인 후 체크리스트 제출</small>
             </button>
-            <button class="ops-secondary-action" data-view="ships" type="button">공정 보드</button>
+            <button class="ops-quick-action danger" data-view="unsafe" type="button">
+              <span>${navIcon("warning")}</span>
+              <strong>불안전요소 등록</strong>
+              <small>위험 발견 즉시 접수</small>
+            </button>
+            <button class="ops-quick-action violet" data-view="materials" type="button">
+              <span>${navIcon("board")}</span>
+              <strong>자재누락 등록</strong>
+              <small>호선 기준으로 요청</small>
+            </button>
           </div>
         </div>
         <div class="ops-today-panel">
@@ -1498,8 +1705,8 @@
             <span>오늘 점검</span>
             <strong>${todayDone}/${todayCount || 0}</strong>
           </div>
-          <div class="ops-progress" aria-label="오늘 점검 완료율">
-            <span style="width:${todayCount ? Math.round(todayDone / todayCount * 100) : 0}%"></span>
+          <div class="ops-progress" role="progressbar" aria-label="오늘 점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${todayCompletion}">
+            <span style="width:${todayCompletion}%"></span>
           </div>
           <div class="ops-today-grid">
             <div><span>대기</span><strong>${todayPending}</strong></div>
@@ -1508,14 +1715,16 @@
           </div>
         </div>
       </section>
-      <div class="ops-status-grid">
+      <section class="ops-status-grid" aria-labelledby="dashboardStatusHeading">
+        ${sectionHeading("dashboardStatusHeading", "오늘 현장 상태")}
         ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", todayPending ? `${todayPending}건 대기` : "정리됨", "today")}
         ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "접수 없음", "unsafe")}
         ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", openMaterials ? "자재 확인" : "대기 없음", "materials")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
-      </div>
-      <section class="ops-grid">
-        <div class="panel panel-pad home-section ops-process-card">
+      </section>
+      <section class="ops-grid" aria-labelledby="dashboardProcessHeading">
+        ${sectionHeading("dashboardProcessHeading", "공정 현황")}
+        <div class="panel panel-pad home-section ops-process-card ops-process-card-wide">
           <div class="section-title">공정 현황 <button class="btn-light" data-view="ships" type="button">보기</button></div>
           <div class="mini-process">
             ${processStages.map(({ info, count }) => `<div class="mini-stage" style="--dot:${esc(info.color)}">
@@ -1525,37 +1734,12 @@
             </div>`).join("")}
           </div>
         </div>
-        <div class="panel panel-pad ops-risk-card">
-          <div class="section-title">조치 필요 <button class="btn-light" data-view="unsafe" type="button">등록</button></div>
-          <div class="ops-risk-list">
-            <button data-action="view-unsafe-received" type="button">
-              <span class="ops-risk-dot danger"></span>
-              <strong>불안전요소</strong>
-              <em>${unsafeCount}건</em>
-            </button>
-            <button data-view="materials" type="button">
-              <span class="ops-risk-dot violet"></span>
-              <strong>누락 자재</strong>
-              <em>${openMaterials}건</em>
-            </button>
-            <button data-history-scope="delivery" type="button">
-              <span class="ops-risk-dot amber"></span>
-              <strong>인도 예정</strong>
-              <em>${deliverySoon}척</em>
-            </button>
-          </div>
-          <div class="ops-risk-mini" aria-label="최근 7일 위험도 분포">
-            <div class="ops-risk-mini-head"><strong>위험도</strong><span>최근 7일</span></div>
-            <div class="ops-risk-mini-row danger"><span>NG</span><i><b style="width:${analyticsPercent(riskNg, riskTotal)}%"></b></i><strong>${riskNg}건</strong></div>
-            <div class="ops-risk-mini-row warn"><span>Warn</span><i><b style="width:${analyticsPercent(riskWarn, riskTotal)}%"></b></i><strong>${riskWarn}건</strong></div>
-            <div class="ops-risk-mini-row ok"><span>OK</span><i><b style="width:${analyticsPercent(riskOk, riskTotal)}%"></b></i><strong>${riskOk}건</strong></div>
-          </div>
-        </div>
       </section>
-      <div class="panel panel-pad">
+      <section class="panel panel-pad" aria-labelledby="dashboardHistoryHeading">
+        ${sectionHeading("dashboardHistoryHeading", "최근 점검 이력")}
         <div class="section-title">최근 점검 이력 <button class="btn-light" data-history-scope="all" type="button">전체 보기</button></div>
         ${latest.length ? renderHistoryTable(latest) : `<div class="empty">아직 점검 이력이 없습니다.</div>`}
-      </div>`;
+      </section>`;
     }
 
     function metric(label, value, unit, color) {
@@ -1608,7 +1792,7 @@
 
     function statPill(label, value, unit, color, icon = "board", foot = "", scope = "all") {
       const attrs = scope === "unsafe"
-        ? `data-stat-scope="unsafe" data-action="view-unsafe-received"`
+        ? `data-stat-scope="unsafe" data-view="unsafe"`
         : scope === "materials"
           ? `data-stat-scope="materials" data-view="materials"`
         : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
@@ -1632,8 +1816,9 @@
       return icons[name] || icons.board;
     }
 
-    function progress(pct, color) {
-      return `<div class="progress" aria-label="${pct}%"><span style="--pct:${pct}%;--bar:${esc(color)}"></span></div>`;
+    function progress(pct, color, attrs = "") {
+      const value = Math.max(0, Math.min(100, Number(pct) || 0));
+      return `<div class="progress" ${attrs} role="progressbar" aria-label="점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}"><span style="--pct:${value}%;--bar:${esc(color)}"></span></div>`;
     }
 
     function normalizeIconKey(id) {
@@ -1849,6 +2034,7 @@
             <label for="pledgeSignaturePad">서명란</label>
             <button class="btn-light signature-clear-btn" data-action="clear-pledge-signature" type="button">지우기</button>
           </div>
+          <p class="pledge-disclaimer">본 서명은 안전 서약 확인 목적이며 전자서명법상 공인 전자서명과 다릅니다.</p>
           <div class="signature-pad ${drawnSignature ? "has-signature" : ""}" data-signature-pad>
             <canvas id="pledgeSignaturePad" aria-label="손가락 서명 입력"></canvas>
             <span class="signature-pad-placeholder">손가락 또는 마우스로 서명</span>
@@ -1903,16 +2089,75 @@
           disabledWrap.removeAttribute("data-disabled-reason");
           disabledWrap.classList.remove("is-disabled");
           disabledWrap.removeAttribute("aria-disabled");
+          disabledWrap.removeAttribute("aria-label");
           disabledWrap.removeAttribute("role");
           disabledWrap.removeAttribute("tabindex");
         } else {
           disabledWrap.setAttribute("data-disabled-reason", submitState.disabledText);
           disabledWrap.classList.add("is-disabled");
           disabledWrap.setAttribute("aria-disabled", "true");
+          disabledWrap.setAttribute("aria-label", submitState.disabledText);
           disabledWrap.setAttribute("role", "button");
           disabledWrap.setAttribute("tabindex", "0");
         }
       }
+    }
+
+    function currentCheckRenderState() {
+      const cat = categoryById(state.selectedCategoryId);
+      if (!cat) return null;
+      const items = filteredChecklistItems(cat.id);
+      const checked = items.filter((row) => state.draft.checks[row.id]).length;
+      const highMissing = items.filter((row) => row.risk === "high" && !state.draft.checks[row.id]);
+      const pct = items.length ? Math.round(checked / items.length * 100) : 0;
+      return { cat, items, checked, highMissing, pct };
+    }
+
+    function updateCheckItemDom(itemId, checked) {
+      const input = document.querySelector(`[data-check-item="${cssEscape(itemId)}"]`);
+      const row = input?.closest(".check-item");
+      const model = currentCheckRenderState();
+      if (!input || !row || !model) return false;
+      input.checked = Boolean(checked);
+      row.classList.toggle("checked", Boolean(checked));
+
+      document.querySelectorAll("[data-check-progress]").forEach((node) => {
+        const bar = node.querySelector("span");
+        if (bar) bar.style.width = `${model.pct}%`;
+        node.setAttribute("aria-valuenow", String(model.pct));
+      });
+      document.querySelectorAll("[data-check-percent]").forEach((node) => {
+        node.textContent = `${model.pct}%`;
+      });
+      document.querySelectorAll("[data-check-count]").forEach((node) => {
+        node.textContent = `${model.checked}/${model.items.length} 항목 확인됨`;
+      });
+
+      const item = model.items.find((entry) => entry.id === itemId);
+      const sectionId = item?.sectionId || "";
+      if (sectionId) {
+        const sectionItems = model.items.filter((entry) => entry.sectionId === sectionId);
+        const sectionChecked = sectionItems.filter((entry) => state.draft.checks[entry.id]).length;
+        document.querySelectorAll(`[data-check-section-count="${cssEscape(sectionId)}"]`).forEach((node) => {
+          node.textContent = `${sectionChecked}/${sectionItems.length}`;
+        });
+      }
+
+      const riskHtml = badge(model.highMissing.length ? "high" : "low", model.highMissing.length ? `위험 ${model.highMissing.length}건 남음` : "위험 확인 완료");
+      document.querySelectorAll("[data-high-missing-badge]").forEach((node) => {
+        node.innerHTML = riskHtml;
+      });
+      document.querySelectorAll("[data-high-missing-notice]").forEach((node) => {
+        const hasMissing = Boolean(model.highMissing.length);
+        node.classList.toggle("danger", hasMissing);
+        node.classList.toggle("good", !hasMissing);
+        node.textContent = hasMissing
+          ? `미확인 위험 항목 ${model.highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.`
+          : "고위험 항목이 모두 확인되었습니다.";
+      });
+
+      refreshCheckSubmitControls();
+      return true;
     }
 
     function renderCheck() {
@@ -1954,10 +2199,10 @@
         <div>
           <div class="mobile-check-status" aria-label="모바일 점검 작성 상태">
             <div class="mobile-check-progress">
-              ${progress(pct, categoryAccent(cat))}
-              <span class="mobile-check-percent">${pct}%</span>
+              ${progress(pct, categoryAccent(cat), "data-check-progress")}
+              <span class="mobile-check-percent" data-check-percent>${pct}%</span>
             </div>
-            ${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}
+            <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
           </div>
           <div class="pledge-flow-grid">
             ${renderPledgeWorkerSelect()}
@@ -1965,7 +2210,7 @@
             ${renderSafetyPledgeChecklist()}
           </div>
           ${selectableShips.length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
-          ${highMissing.length ? `<div class="notice danger" style="margin-bottom:12px">미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" style="margin-bottom:12px">고위험 항목이 모두 확인되었습니다.</div>`}
+          ${highMissing.length ? `<div class="notice danger" data-high-missing-notice style="margin-bottom:12px">미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice style="margin-bottom:12px">고위험 항목이 모두 확인되었습니다.</div>`}
           ${renderChecklistSections(cat.id)}
           <div class="check-submit-bar">
             ${disabledReasonWrap(`<button class="btn check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit)}
@@ -1973,10 +2218,10 @@
         </div>
         <aside class="panel panel-pad check-status-panel">
           <div class="section-title">작성 상태</div>
-          ${progress(pct, categoryAccent(cat))}
-          <div class="small muted" style="margin-top:8px">${checked}/${items.length} 항목 확인됨</div>
+          ${progress(pct, categoryAccent(cat), "data-check-progress")}
+          <div class="small muted" data-check-count style="margin-top:8px">${checked}/${items.length} 항목 확인됨</div>
           <div class="list" style="margin-top:16px">
-            ${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}
+            <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
             ${badge("medium", state.draft.worker.trim() ? "담당자 입력됨" : "담당자 필요")}
             ${badge("medium", state.draft.shipNo ? "호선 선택됨" : "호선 필요")}
           </div>
@@ -2035,14 +2280,14 @@
       if (!sections.length) return `<div class="empty empty-section-note">등록된 섹션이 없습니다.</div>`;
       return sections.map((section) => {
         const items = visibleItems.filter((row) => row.sectionId === section.id);
-        return `<section class="check-section ${items.length ? "" : "check-section-empty"}">
+        return `<section class="check-section ${items.length ? "" : "check-section-empty"}" data-check-section="${esc(section.id)}">
           <div class="check-section-head">
             <span>${esc(section.title)}</span>
-            <span class="small muted">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
+            <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
           </div>
           ${items.length ? items.map((row) => `
-            <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}">
-              <input type="checkbox" data-check-item="${row.id}" ${state.draft.checks[row.id] ? "checked" : ""} />
+            <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
+              <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
               <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
               ${badge(row.risk)}
             </label>`).join("") : `<div class="notice empty-section-note">이 섹션에는 항목이 없습니다.</div>`}
@@ -2087,11 +2332,33 @@
         ${filterButtons.map(([id, label]) => `<button class="seg-btn ${state.historyFilter === id ? "active" : ""}" data-history-filter="${id}" type="button">${esc(label)}</button>`).join("")}
       </div>`}
       ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 이메일 로그인 후 사용할 수 있습니다.</div>`)}
+      ${isDeliveryScope ? "" : renderHistoryPledgeStatus()}
       <div class="panel panel-pad">
         ${isDeliveryScope
           ? (deliveryRows.length ? renderDeliveryCards(deliveryRows) : `<div class="empty">7일 이내 인도 예정 호선이 없습니다.</div>`)
           : (rows.length ? renderHistoryTable(rows) : `<div class="empty">조건에 맞는 점검 이력이 없습니다.</div>`)}
       </div>`;
+    }
+
+    function renderHistoryPledgeStatus() {
+      const rows = pledgeDashboardRows();
+      const completed = rows.filter((row) => row.done).length;
+      const pending = Math.max(rows.length - completed, 0);
+      const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
+      return `<section class="history-pledge-status" aria-label="오늘 작업자 점검 현황">
+        <div class="history-pledge-head">
+          <div>
+            <strong>오늘 작업자 점검 현황</strong>
+            <span>안전 서약 관리의 오늘 서약 현황 기준</span>
+          </div>
+          <button class="btn-light" data-view="pledge" type="button">상세 보기</button>
+        </div>
+        <div class="history-pledge-kpis">
+          <div><strong>${completed}</strong><span>점검 완료</span></div>
+          <div><strong>${pending}</strong><span>미점검</span></div>
+          <div><strong>${rate}%</strong><span>완료율</span></div>
+        </div>
+      </section>`;
     }
 
     function filteredHistoryRows() {
@@ -2107,7 +2374,7 @@
       const displayRows = state.view === "dashboard" ? rows.slice(0, 4) : rows;
       return `<div class="history-grid">
         ${displayRows.map((row) => {
-          const cat = categoryById(row.categoryId) || { label: "(삭제된 유형)", icon: "?" };
+          const cat = categoryById(row.categoryId) || { label: row.categoryLabel || "(삭제된 유형)", icon: row.categoryIcon || "?", color: row.categoryColor || "#607084" };
           const risk = historyRisk(row);
           const completion = Math.max(0, Math.min(100, Number(row.completion) || 0));
           return `<article class="history-card" style="--accent:${esc(categoryAccent(cat))}" data-history-detail-card="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(cat.label)} 점검 상세내역 보기">
@@ -2120,12 +2387,12 @@
                 </div>
               </div>
               <div class="history-card-title">${firstSpaceBreakHtml(cat.label)}</div>
-              <div class="history-card-summary">${esc(row.worker || "-")} · ${esc(row.shipNo || "-")} · ${esc(shortHistoryDate(row))}</div>
+              <div class="history-card-summary">${esc(row.shipNo || "-")} · ${esc(shortHistoryDate(row))}</div>
               <div class="history-card-risk">
                 <span class="history-completion-pill">완료율 ${esc(completion)}%</span>
                 ${risk.label === "정상" ? "" : badge(risk.tone, risk.label)}
               </div>
-              <div class="history-progress-track" aria-hidden="true"><span style="width:${completion}%"></span></div>
+              <div class="history-progress-track" role="progressbar" aria-label="점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completion}"><span style="width:${completion}%"></span></div>
             </div>
           </article>`;
         }).join("")}
@@ -2179,7 +2446,7 @@
     }
 
     function renderInspectionRecord(row) {
-      const cat = categoryById(row.categoryId) || { id: row.categoryId || "deleted", label: "(삭제된 유형)", icon: "?", color: "#607084" };
+      const cat = categoryById(row.categoryId) || { id: row.categoryId || "deleted", label: row.categoryLabel || "(삭제된 유형)", icon: row.categoryIcon || "?", color: row.categoryColor || "#607084" };
       const items = state.inspectionItems.filter((item) => item.inspectionId === row.id);
       const checkedCount = items.filter((item) => item.checked).length;
       const pct = Number(row.completion || (items.length ? Math.round(checkedCount / items.length * 100) : 0));
@@ -2401,8 +2668,13 @@
           ${renderToolManager()}
         </div>
         <div class="panel panel-pad" style="margin-bottom:14px">
-          <div class="section-title">작업 유형 추가</div>
+          <div class="section-title">
+            작업 유형
+            <button class="btn" data-action="toggle-category-add" ${state.adminMode ? "" : "disabled"} type="button">${state.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
+          </div>
           ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
+          ${state.categoryAddOpen ? `
+          <div class="collapsible-panel">
           <div class="form-row">
             <div class="field">
               <label for="catLabel">작업 유형명</label>
@@ -2418,8 +2690,10 @@
               <input type="hidden" id="catColor" value="${COLORS[0]}" />
             </div>
             <button class="btn" data-action="add-category" ${state.adminMode ? "" : "disabled"} type="button">추가</button>
+            <button class="btn-light" data-action="cancel-category-add" type="button">취소</button>
           </div>
           ${renderPictogramPicker("erection")}
+          </div>` : `<div class="empty compact-empty">작업 유형을 추가하려면 버튼을 누르세요.</div>`}
         </div>
         <div class="category-grid">
           ${state.categories.sort(byOrder).map((cat) => {
@@ -2507,33 +2781,122 @@
     function renderUnsafe() {
       const detail = state.lastUnsafeIssueId ? state.unsafeIssues.find((row) => row.id === state.lastUnsafeIssueId) : null;
       if (detail) return renderUnsafeComplete(detail);
-      return `${pageHead("불안전요소 등록", "현장 위험 요소를 빠르게 등록합니다.")}
-      <section class="panel panel-pad issue-form">
-        ${selectableShips().length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다.</div>`}
-        ${state.workers.length ? "" : `<div class="notice" style="margin-bottom:12px">등록자 목록이 없습니다. 관리자 모드에서 작업자를 추가하세요.</div>`}
-        <div class="form-row">
-          <div class="field">
-            <label for="unsafeShipNo">호선</label>
-            <select class="select" id="unsafeShipNo">${visibleShipOptionsForIssues(state.unsafeDraft.shipNo)}</select>
+      const step = unsafeDraftStep();
+      if (step === 1) return renderUnsafeShipStep();
+      if (step === 2) return renderUnsafeContentStep();
+      return renderUnsafeConfirmStep();
+    }
+
+    function unsafeDraftStep() {
+      return Math.min(Math.max(Number(state.unsafeDraft.step) || 1, 1), 3);
+    }
+
+    function saveUnsafeDraft() {
+      state.unsafeDraft.step = unsafeDraftStep();
+      saveJson("unsafeDraft", state.unsafeDraft);
+    }
+
+    function unsafeStepReady(step = unsafeDraftStep()) {
+      const draft = state.unsafeDraft;
+      if (step === 1) return Boolean(draft.shipNo);
+      if (step === 2) return Boolean(draft.shipNo && String(draft.content || "").trim() && draft.workerId);
+      return Boolean(draft.shipNo && String(draft.content || "").trim() && draft.workerId);
+    }
+
+    function flowRequiredText(missing) {
+      return missing.length ? `${missing.join(", ")}을(를) 입력하세요.` : "";
+    }
+
+    function unsafeMissingFields(step = unsafeDraftStep()) {
+      const draft = state.unsafeDraft;
+      const missing = [];
+      if (step >= 1 && !draft.shipNo) missing.push("호선");
+      if (step >= 2 && !String(draft.content || "").trim()) missing.push("내용");
+      if (step >= 2 && !draft.workerId) missing.push("등록자");
+      return missing;
+    }
+
+    function unsafeFlowShell(step, title, lead, body, footer = "") {
+      const total = 3;
+      const pct = Math.round(step / total * 100);
+      return `<section class="material-flow unsafe-flow">
+        <div class="material-flow-head">
+          <div class="material-flow-kicker">불안전요소 등록 · STEP ${step} / ${total}</div>
+          <div class="material-flow-title">
+            ${step > 1 ? `<button class="material-back" data-unsafe-step-back type="button" aria-label="이전 단계">‹</button>` : ""}
+            <h1>${esc(title)}</h1>
           </div>
-          <div class="field">
-            <label for="unsafeWorkerId">등록자</label>
-            <select class="select" id="unsafeWorkerId">${visibleWorkerOptions(state.unsafeDraft.workerId)}</select>
-          </div>
+          <p>${esc(lead)}</p>
+          <div class="material-flow-progress" role="progressbar" aria-label="등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
         </div>
-        <div class="field" style="margin-top:12px">
-          <label for="unsafeContent">내용</label>
-          <textarea class="textarea" id="unsafeContent" placeholder="불안전요소 내용을 입력하세요">${esc(state.unsafeDraft.content)}</textarea>
-        </div>
-        <div class="field" style="margin-top:12px">
-          <label for="unsafePhotos">사진 권장, 최대 3개</label>
-          <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
-          <div class="small muted">사진 없이도 확인 후 등록할 수 있습니다.</div>
-        </div>
-        <div class="form-actions">
-          <button class="btn" data-action="submit-unsafe" type="button">등록</button>
-        </div>
+        <div class="material-flow-body">${body}</div>
+        ${footer ? `<div class="material-flow-footer">${footer}</div>` : ""}
       </section>`;
+    }
+
+    function renderUnsafeShipStep() {
+      const ships = selectableShips();
+      const selected = ships.find((ship) => ship.no === state.unsafeDraft.shipNo);
+      const selectedMeta = selected ? effectiveShipStage(selected) : null;
+      const body = `${ships.length ? `<div class="field material-flow-field">
+        <label for="unsafeShipNo">호선 선택 *</label>
+        <select class="select" id="unsafeShipNo">
+          ${visibleShipOptionsForIssues(state.unsafeDraft.shipNo)}
+        </select>
+      </div>
+      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력하세요.</div>`}`;
+      const label = selected ? `${selected.no} 선택 → 다음` : "호선 선택 후 다음";
+      return unsafeFlowShell(1, "호선 선택", "불안전요소가 발생한 호선을 선택하세요", body, `<button class="material-flow-primary ${selected ? "" : "is-disabled"}" data-unsafe-next type="button" ${selected ? "" : "disabled"}>${esc(label)}</button>`);
+    }
+
+    function renderUnsafeContentStep() {
+      reconcileUnsafePhotoDraft();
+      const ready = unsafeStepReady(2);
+      const selectedWorker = state.workers.find((worker) => worker.id === state.unsafeDraft.workerId);
+      const photoNames = currentUnsafePhotoNames();
+      const body = `<div class="field material-flow-field">
+        <label for="unsafeContent"><span>불안전요소 내용 *</span><small>${String(state.unsafeDraft.content || "").length}/300</small></label>
+        <textarea class="textarea" id="unsafeContent" maxlength="300" placeholder="예: 3번 탱크 상부 난간 미설치, 작업자 통행 위험">${esc(state.unsafeDraft.content || "")}</textarea>
+      </div>
+      <div class="field material-flow-field">
+        <label for="unsafeWorkerId">등록자 선택 *</label>
+        <select class="select" id="unsafeWorkerId">
+          ${visibleWorkerOptions(state.unsafeDraft.workerId)}
+        </select>
+        ${selectedWorker ? `<div class="small muted material-selected-note">${esc(selectedWorker.name)} 님으로 접수됩니다.</div>` : ""}
+      </div>
+      <div class="field material-flow-field">
+        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 3장</small></label>
+        <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
+        <div class="small muted">${photoNames.length ? `${esc(photoNames.join(", "))}` : "사진 없이도 다음 단계로 진행할 수 있습니다."}</div>
+      </div>`;
+      return unsafeFlowShell(2, "내용 입력", `${state.unsafeDraft.shipNo || "선택한 호선"}에서 발견한 위험 요소를 적어주세요`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-unsafe-next type="button" data-required-message="${esc(flowRequiredText(unsafeMissingFields(2)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
+    }
+
+    function renderUnsafeConfirmStep() {
+      reconcileUnsafePhotoDraft();
+      const ship = state.ships.find((row) => row.no === state.unsafeDraft.shipNo);
+      const worker = state.workers.find((row) => row.id === state.unsafeDraft.workerId);
+      const ready = unsafeStepReady(4);
+      const photoNames = currentUnsafePhotoNames();
+      const body = `<div class="material-field-label">등록 내용 요약</div>
+      <article class="material-confirm-card unsafe-confirm-card">
+        <div class="material-confirm-head">
+          <span class="material-type-icon tone-red">!</span>
+          <span><strong>${esc(shortUnsafeTitle(state.unsafeDraft.content || "불안전요소"))}</strong><em>${esc(state.unsafeDraft.shipNo || "-")} · ${esc(worker ? worker.name : "-")}</em></span>
+          <button class="btn-light" data-unsafe-edit-step="2" type="button">수정</button>
+        </div>
+        <dl class="material-confirm-list">
+          <div><dt>호선</dt><dd><strong>${esc(state.unsafeDraft.shipNo || "-")}</strong><small>${ship ? `${esc(effectiveShipStage(ship).label)} · ${esc(effectiveShipStage(ship).percent)}%` : ""}</small></dd></div>
+          <div><dt>등록자</dt><dd>${esc(worker ? worker.name : "-")}</dd></div>
+          <div><dt>위험 내용</dt><dd>${esc(state.unsafeDraft.content || "-")}</dd></div>
+          <div><dt>사진</dt><dd>${photoNames.length ? esc(`${photoNames.length}장 첨부`) : "없음"}</dd></div>
+        </dl>
+      </article>
+      <div class="notice material-submit-note">제출 후 관리자 처리 화면의 불안전요소 목록에 즉시 접수됩니다.</div>`;
+      const footer = `<button class="btn-light material-flow-secondary" data-unsafe-edit-step="2" type="button">수정하기</button>
+        <button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-action="submit-unsafe" type="button" ${ready ? "" : "disabled"}>${navIcon("warning")} 불안전요소 접수</button>`;
+      return unsafeFlowShell(3, "최종 수정/확인", "등록 내용을 확인하고 필요하면 수정하세요", body, footer);
     }
 
     function renderMaterials() {
@@ -2565,6 +2928,11 @@
       return `${quantity} ${String(row.unit || "EA").trim()}`.trim();
     }
 
+    function isValidMaterialQuantity(value) {
+      const text = String(value || "").trim();
+      return Boolean(text && /^\d+(?:\.\d+)?$/.test(text) && Number(text) > 0);
+    }
+
     function materialDraftContent(draft = state.materialDraft) {
       const lines = [
         materialQuantityText(draft) !== "-" ? `수량: ${materialQuantityText(draft)}` : "",
@@ -2577,9 +2945,20 @@
     function materialStepReady(step = materialDraftStep()) {
       const draft = state.materialDraft;
       if (step === 1) return Boolean(draft.shipNo);
-      if (step === 2) return Boolean(draft.materialType && String(draft.materialName || "").trim());
-      if (step === 3) return Boolean(String(draft.quantity || "").trim() && draft.workerId);
-      return Boolean(draft.shipNo && draft.materialType && String(draft.materialName || "").trim() && String(draft.quantity || "").trim() && draft.workerId);
+      if (step === 2) return Boolean(draft.shipNo && draft.materialType && String(draft.materialName || "").trim());
+      if (step === 3) return Boolean(draft.shipNo && draft.materialType && String(draft.materialName || "").trim() && isValidMaterialQuantity(draft.quantity) && draft.workerId);
+      return Boolean(draft.shipNo && draft.materialType && String(draft.materialName || "").trim() && isValidMaterialQuantity(draft.quantity) && draft.workerId);
+    }
+
+    function materialMissingFields(step = materialDraftStep()) {
+      const draft = state.materialDraft;
+      const missing = [];
+      if (step >= 1 && !draft.shipNo) missing.push("호선");
+      if (step >= 2 && !draft.materialType) missing.push("자재 분류");
+      if (step >= 2 && !String(draft.materialName || "").trim()) missing.push("자재명");
+      if (step >= 3 && !isValidMaterialQuantity(draft.quantity)) missing.push("수량");
+      if (step >= 3 && !draft.workerId) missing.push("등록자");
+      return missing;
     }
 
     function materialFlowShell(step, title, lead, body, footer = "") {
@@ -2592,7 +2971,7 @@
             <h1>${esc(title)}</h1>
           </div>
           <p>${esc(lead)}</p>
-          <div class="material-flow-progress" aria-label="등록 진행률"><span style="width:${pct}%"></span></div>
+          <div class="material-flow-progress" role="progressbar" aria-label="등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
         </div>
         <div class="material-flow-body">${body}</div>
         ${footer ? `<div class="material-flow-footer">${footer}</div>` : ""}
@@ -2602,19 +2981,16 @@
     function renderMaterialShipStep() {
       const ships = selectableShips();
       const selected = ships.find((ship) => ship.no === state.materialDraft.shipNo);
-      const body = `${ships.length ? `<div class="material-ship-stack">
-        ${ships.map((ship) => {
-          const active = ship.no === state.materialDraft.shipNo;
-          const stage = effectiveShipStage(ship);
-          return `<button class="material-ship-option ${active ? "active" : ""}" data-material-select-ship="${esc(ship.no)}" type="button" aria-pressed="${active ? "true" : "false"}">
-            <span class="material-radio">${active ? "●" : ""}</span>
-            <span class="material-ship-main"><strong>${esc(ship.no)} <em>${esc(ship.type || "")}</em></strong><small>${esc(shipDeliveryType(ship))} ${esc(shipDeliveryDate(ship) || "-")} · 공정 ${esc(stage.percent)}%</small></span>
-            <span class="material-stage-chip" style="--stage:${esc(stage.color)};--stage-bg:${esc(stage.bg)}">● ${esc(stage.label)}</span>
-          </button>`;
-        }).join("")}
-      </div>` : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력하세요.</div>`}`;
+      const selectedMeta = selected ? effectiveShipStage(selected) : null;
+      const body = `${ships.length ? `<div class="field material-flow-field">
+        <label for="materialShipNo">호선 선택 *</label>
+        <select class="select" id="materialShipNo">
+          ${visibleShipOptionsForIssues(state.materialDraft.shipNo)}
+        </select>
+      </div>
+      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력하세요.</div>`}`;
       const label = selected ? `${selected.no} 선택 → 다음` : "호선 선택 후 다음";
-      return materialFlowShell(1, "호선 선택", "자재가 없는 호선을 선택하세요", body, `<button class="material-flow-primary ${selected ? "" : "is-disabled"}" data-material-next type="button">${esc(label)}</button>`);
+      return materialFlowShell(1, "호선 선택", "자재가 없는 호선을 선택하세요", body, `<button class="material-flow-primary ${selected ? "" : "is-disabled"}" data-material-next type="button" ${selected ? "" : "disabled"}>${esc(label)}</button>`);
     }
 
     function renderMaterialInfoStep() {
@@ -2639,7 +3015,7 @@
         <label for="materialSpec"><span>규격 / 사양</span><small>${esc(selectedType.label || "선택")}</small></label>
         <input class="input" id="materialSpec" value="${esc(state.materialDraft.spec || "")}" placeholder="예: SUS304, Φ20, 3.2mm, 600×40..." />
       </div>`;
-      return materialFlowShell(2, "자재 정보", "어떤 자재가 없나요?", body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-material-next type="button">다음 → 수량 입력</button>`);
+      return materialFlowShell(2, "자재 정보", "어떤 자재가 없나요?", body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-material-next type="button" data-required-message="${esc(flowRequiredText(materialMissingFields(2)))}" ${ready ? "" : "disabled"}>다음 → 수량 입력</button>`);
     }
 
     function renderMaterialQuantityStep() {
@@ -2654,7 +3030,7 @@
       <div class="material-quantity-grid">
         <div class="field material-flow-field">
           <label for="materialQuantity">수량 *</label>
-          <input class="input material-quantity-input" id="materialQuantity" inputmode="decimal" value="${esc(state.materialDraft.quantity || "")}" placeholder="0" />
+          <input class="input material-quantity-input" id="materialQuantity" inputmode="decimal" pattern="\\d+(\\.\\d+)?" value="${esc(state.materialDraft.quantity || "")}" placeholder="0" />
         </div>
         <div class="field material-flow-field">
           <label for="materialUnit">단위</label>
@@ -2665,19 +3041,14 @@
         <label for="materialDetail"><span>상세 내용</span><small>${String(state.materialDraft.detail || "").length}/150</small></label>
         <textarea class="textarea" id="materialDetail" maxlength="150" placeholder="언제까지 필요한지, 위치나 상황을 적어주세요">${esc(state.materialDraft.detail || "")}</textarea>
       </div>
-      <div class="material-field-label">등록자 *</div>
-      ${state.workers.length ? `<div class="material-worker-list">
-        ${state.workers.map((worker) => {
-          const active = worker.id === state.materialDraft.workerId;
-          return `<button class="material-worker-row ${active ? "active" : ""}" data-material-select-worker="${esc(worker.id)}" type="button" aria-pressed="${active ? "true" : "false"}">
-            <span class="material-worker-avatar">${esc(workerInitial(worker.name))}</span>
-            <span><strong>${esc(worker.name)}</strong><em>${esc(worker.team || "-")}</em></span>
-            ${active ? `<b>✓</b>` : ""}
-          </button>`;
-        }).join("")}
-      </div>` : `<div class="notice">등록자 목록이 없습니다. 관리자 모드에서 작업자를 추가하세요.</div>`}
+      <div class="field material-flow-field">
+        <label for="materialWorkerId">등록자 선택 *</label>
+        <select class="select" id="materialWorkerId">
+          ${visibleWorkerOptions(state.materialDraft.workerId)}
+        </select>
+      </div>
       ${selectedWorker ? `<div class="small muted material-selected-note">${esc(selectedWorker.name)} 님으로 접수됩니다.</div>` : ""}`;
-      return materialFlowShell(3, "수량 및 상세", `${state.materialDraft.materialName || "자재"} · ${state.materialDraft.shipNo || "호선"}`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-material-next type="button">다음 → 최종 확인</button>`);
+      return materialFlowShell(3, "수량 및 상세", `${state.materialDraft.materialName || "자재"} · ${state.materialDraft.shipNo || "호선"}`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-material-next type="button" data-required-message="${esc(flowRequiredText(materialMissingFields(3)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
     }
 
     function renderMaterialConfirmStep() {
@@ -2702,8 +3073,66 @@
       </article>
       <div class="notice material-submit-note">제출 후 관리자에게 자동 알림이 전송됩니다. 처리 결과는 호선자재 누락 탭에서 확인하세요.</div>`;
       const footer = `<button class="btn-light material-flow-secondary" data-material-edit-step="2" type="button">수정하기</button>
-        <button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-action="submit-material" type="button">${navIcon("board")} 누락 자재 등록</button>`;
+        <button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-action="submit-material" type="button" ${ready ? "" : "disabled"}>${navIcon("board")} 누락 자재 등록</button>`;
       return materialFlowShell(4, "최종 확인", "등록 내용을 확인하고 제출하세요", body, footer);
+    }
+
+    function currentUnsafePhotoNames() {
+      const files = Array.isArray(state.unsafePhotoFiles) ? state.unsafePhotoFiles : [];
+      return files.length ? files.map((file) => file.name) : [];
+    }
+
+    function reconcileUnsafePhotoDraft() {
+      const names = currentUnsafePhotoNames();
+      if (!names.length && Array.isArray(state.unsafeDraft.photos) && state.unsafeDraft.photos.length) {
+        state.unsafeDraft.photos = [];
+        saveJson("unsafeDraft", state.unsafeDraft);
+      }
+    }
+
+    function updateFlowNextControls() {
+      syncUnsafeDraftFromDom();
+      syncMaterialDraftFromDom();
+      const unsafeNext = document.querySelector("[data-unsafe-next]");
+      if (unsafeNext) {
+        const ready = unsafeStepReady();
+        unsafeNext.disabled = !ready;
+        unsafeNext.classList.toggle("is-disabled", !ready);
+        unsafeNext.dataset.requiredMessage = flowRequiredText(unsafeMissingFields());
+      }
+      const materialNext = document.querySelector("[data-material-next]");
+      if (materialNext) {
+        const ready = materialStepReady();
+        materialNext.disabled = !ready;
+        materialNext.classList.toggle("is-disabled", !ready);
+        materialNext.dataset.requiredMessage = flowRequiredText(materialMissingFields());
+      }
+    }
+
+    function syncUnsafeDraftFromDom() {
+      const ship = $("unsafeShipNo");
+      const content = $("unsafeContent");
+      const worker = $("unsafeWorkerId");
+      if (ship) state.unsafeDraft.shipNo = ship.value;
+      if (content) state.unsafeDraft.content = content.value;
+      if (worker) state.unsafeDraft.workerId = worker.value;
+    }
+
+    function syncMaterialDraftFromDom() {
+      const ship = $("materialShipNo");
+      const name = $("materialName");
+      const spec = $("materialSpec");
+      const quantity = $("materialQuantity");
+      const unit = $("materialUnit");
+      const detail = $("materialDetail");
+      const worker = $("materialWorkerId");
+      if (ship) state.materialDraft.shipNo = ship.value;
+      if (name) state.materialDraft.materialName = name.value;
+      if (spec) state.materialDraft.spec = spec.value;
+      if (quantity) state.materialDraft.quantity = quantity.value;
+      if (unit) state.materialDraft.unit = unit.value;
+      if (detail) state.materialDraft.detail = detail.value;
+      if (worker) state.materialDraft.workerId = worker.value;
     }
 
     function renderManage() {
@@ -2837,7 +3266,6 @@
             <p>${state.unsafeIssues.length}건 등록 · ${openCount}건 미확인</p>
           </div>
           <div class="admin-board-actions">
-            <input class="admin-search input" data-record-filter="unsafe:shipNo" value="${esc(state.unsafeFilters.shipNo || "")}" placeholder="호선 / 작업자 / 항목 검색..." />
             <button class="btn-light" data-export-records="unsafe" type="button">내보내기</button>
             <button class="btn" data-view="unsafe" type="button">+ 신규</button>
           </div>
@@ -2861,16 +3289,19 @@
     }
 
     function renderUnsafeQueueItem(row, active) {
+      const pendingPhotoCount = pendingPhotoUploadsFor(row.id).length;
       return `<button class="unsafe-list-row ${active ? "active" : ""}" data-unsafe-record-detail="${esc(row.id)}" type="button">
         <span><strong>${esc(row.shipNo || "-")}</strong><em>${esc(relativeRecordTime(row.createdAt))}</em></span>
-        <span><strong>${esc(shortUnsafeTitle(row.content))}</strong><em>${esc(row.workerNameSnapshot || "-")} · ${esc(shipStageForNo(row.shipNo))}</em></span>
+        <span><strong>${esc(shortUnsafeTitle(row.content))}</strong><em>${esc(row.workerNameSnapshot || "-")} · ${esc(shipStageForNo(row.shipNo))}${pendingPhotoCount ? ` · 사진 업로드 대기 ${pendingPhotoCount}장` : ""}</em></span>
         ${statusChip(row.status)}
       </button>`;
     }
 
     function renderUnsafeProcessingDetail(row) {
       const photos = unsafePhotosFor(row.id);
+      const pendingPhotos = pendingPhotoUploadsFor(row.id);
       const token = `unsafe:${row.id}`;
+      const canEdit = state.adminMode || isRedesignPreviewPage();
       return `<div class="unsafe-detail-shell">
         <div class="unsafe-detail-top">
           <div>
@@ -2879,15 +3310,16 @@
             <p>${esc(row.shipNo || "-")} · ${esc(formatDateTime(row.createdAt))} · ${esc(row.workerNameSnapshot || "-")} · ${esc(shipStageForNo(row.shipNo))}</p>
           </div>
           <div class="unsafe-detail-actions">
-            <select class="select" data-record-status="${esc(token)}">
+            <select class="select" data-record-status="${esc(token)}" data-current-status="${esc(row.status || "")}" ${canEdit ? "" : "disabled"}>
               ${ISSUE_MATERIAL_RULES.UNSAFE_STATUSES.map((status) => `<option value="${esc(status)}" ${row.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}
             </select>
-            <button class="btn" data-save-record="${esc(token)}" type="button">완료 처리</button>
+            <button class="btn" data-save-record-status="${esc(token)}" disabled type="button">완료 처리</button>
           </div>
         </div>
         <div class="unsafe-photo-grid">
           ${[0, 1].map((index) => renderUnsafePhotoSlot(photos[index], index)).join("")}
         </div>
+        ${renderPendingPhotoUploadPanel(row.id, pendingPhotos)}
         <div class="unsafe-detail-body">
           <span>내용</span>
           <p>${esc(row.content || "내용 없음")}</p>
@@ -2902,8 +3334,8 @@
           <div class="section-title">처리 이력</div>
           ${renderRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] })}
           <div class="unsafe-memo-row">
-            <textarea class="textarea" data-record-memo="${esc(token)}" placeholder="처리 메모 입력 (예: 난간 보강 완료 - 14:00)">${esc(row.adminMemo || "")}</textarea>
-            <button class="btn" data-save-record="${esc(token)}" type="button">기록 추가</button>
+            <textarea class="textarea" data-record-memo="${esc(token)}" placeholder="처리 메모 입력 (예: 난간 보강 완료 - 14:00)" ${canEdit ? "" : "disabled"}>${esc(row.adminMemo || "")}</textarea>
+            <button class="btn" data-save-record="${esc(token)}" ${canEdit ? "" : "disabled"} type="button">기록 추가</button>
           </div>
         </div>
       </div>`;
@@ -2914,6 +3346,23 @@
       return `<figure class="unsafe-photo-slot ${url ? "" : "no-photo"}">
         ${url ? `<img src="${esc(url)}" alt="현장 사진 ${index + 1}" />` : `<div><strong>사진 없음</strong><span>첨부된 현장 사진이 없습니다</span></div>`}
       </figure>`;
+    }
+
+    function pendingPhotoUploadsFor(issueId) {
+      return state.pendingPhotoUploads.filter((row) => row.issueId === issueId);
+    }
+
+    function renderPendingPhotoUploadPanel(issueId, rows = pendingPhotoUploadsFor(issueId)) {
+      if (!rows.length) return "";
+      const retryable = rows.some((row) => row.dataUrl);
+      return `<div class="photo-retry-panel" role="status" aria-live="polite">
+        <div>
+          <strong>사진 업로드 대기</strong>
+          <span>${rows.length}장 · 네트워크 복구 후 다시 전송할 수 있습니다.</span>
+          ${rows.some((row) => !row.dataUrl) ? `<em>일부 파일은 다시 첨부가 필요합니다.</em>` : ""}
+        </div>
+        <button class="btn-light" data-action="retry-photo-upload" data-retry-photo-upload="${esc(issueId)}" ${retryable ? "" : "disabled"} type="button">재시도</button>
+      </div>`;
     }
 
     function renderUnsafeGroup(group) {
@@ -2942,7 +3391,6 @@
             <p>${state.missingMaterials.length}건 등록 · ${checking}건 확인중 · ${done}건 완료</p>
           </div>
           <div class="admin-board-actions">
-            <input class="admin-search input" data-record-filter="materials:materialName" value="${esc(state.materialFilters.materialName || "")}" placeholder="호선 / 작업자 / 항목 검색..." />
             <button class="btn-light" data-export-records="materials" type="button">내보내기</button>
             <button class="btn" data-view="materials" type="button">+ 신규 등록</button>
           </div>
@@ -2951,7 +3399,7 @@
           ${materialKpi("전체", state.missingMaterials.length, "건", "#0b1d3a", "")}
           ${materialKpi("접수", received, "건", "#dc2626", statuses[0])}
           ${materialKpi("확인중", checking, "건", "#d97706", statuses[1])}
-          ${materialKpi("완료", done, "건", "#15803d", statuses[2])}
+          ${materialKpi("완료", done, "건", "#4F7A5C", statuses[2])}
         </div>
         <div class="material-layout">
           <aside class="material-filter-panel">
@@ -3100,7 +3548,6 @@
             <p>${today().replace(/-/g, ".")} · 오늘 서약 현황 실시간</p>
           </div>
           <div class="admin-board-actions">
-            <input class="admin-search input" value="" placeholder="호선 / 작업자 / 항목 검색..." />
             <button class="btn-light" data-export-records="pledge" type="button">내보내기</button>
             <button class="btn" data-action="edit-pledge-template" type="button">서약 양식 편집</button>
           </div>
@@ -3162,23 +3609,55 @@
       </section>`;
     }
 
+    function completionIcon(name) {
+      const icons = {
+        check: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"></path></svg>`,
+        warning: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 22 20H2z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path></svg>`,
+        box: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"></path><path d="m4 8.5 8 4.5 8-4.5"></path><path d="M12 13v7"></path></svg>`,
+        shield: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v5c0 4.5-2.8 8.4-7 10-4.2-1.6-7-5.5-7-10V6z"></path></svg>`,
+      };
+      return icons[name] || icons.check;
+    }
+
+    function renderCompletionScreen({ type = "", icon = "check", title, message, stats = [], actions = [] }) {
+      return `<section class="mobile-complete-screen ${esc(type)}">
+        <div class="mobile-complete-visual">${completionIcon(icon)}</div>
+        <h1>${esc(title)}</h1>
+        <p>${esc(message)}</p>
+        <div class="mobile-complete-stats">
+          ${stats.map((item) => `<div>
+            <strong class="${esc(item.tone || "")}">${esc(item.value)}</strong>
+            <span>${esc(item.label)}</span>
+          </div>`).join("")}
+        </div>
+        <div class="mobile-complete-actions ${actions.length === 1 ? "single" : ""}">
+          ${actions.map((action) => `<button class="${action.primary ? "btn mobile-complete-primary" : "btn-light"}" ${action.view ? `data-view="${esc(action.view)}"` : ""} ${action.action ? `data-action="${esc(action.action)}"` : ""} type="button">${esc(action.label)}</button>`).join("")}
+        </div>
+      </section>`;
+    }
+
     function renderPledgeComplete() {
       const row = state.inspections.find((item) => item.id === state.lastInspectionId) || state.inspections[0];
       if (!row) return `${pageHead("안전 서약 완료", "제출된 서약 정보가 없습니다.")}<button class="btn" data-view="dashboard" type="button">홈으로</button>`;
       const itemCount = state.inspectionItems.filter((item) => item.inspectionId === row.id).length;
       const checkedCount = state.inspectionItems.filter((item) => item.inspectionId === row.id && item.checked).length;
-      const workerInitialValue = workerInitial(row.worker);
-      return `<section class="pledge-complete-screen">
-        <div class="pledge-complete-icon">${navIcon("shield")}</div>
-        <h2>안전 서약 완료</h2>
-        <p>${esc(row.worker || "-")} 님의 오늘 안전 서약이 정상 접수되었습니다.</p>
-        <div class="pledge-complete-stats">
-          <div><strong>${esc(workerInitialValue)}</strong><span>서약자</span></div>
-          <div><strong>${esc(row.shipNo || "-")}</strong><span>호선</span></div>
-          <div><strong>${checkedCount}/${itemCount || pledgeRules().length}</strong><span>항목</span></div>
-        </div>
-        <button class="btn pledge-complete-home" data-view="dashboard" type="button">홈으로</button>
-      </section>`;
+      const warnings = Number(row.warnings || 0);
+      const pending = Math.max(Number(itemCount || 0) - checkedCount, 0);
+      return renderCompletionScreen({
+        type: "inspection",
+        icon: "check",
+        title: "점검이 제출되었습니다",
+        message: `${row.shipNo || "-"} · ${row.categoryLabel || categoryById(row.categoryId)?.label || "작업"} 점검이 관리자에게 자동 보고됩니다.`,
+        stats: [
+          { value: checkedCount || 0, label: "완료", tone: "green" },
+          { value: warnings, label: "NG", tone: warnings ? "pink" : "green" },
+          { value: pending, label: "대기" },
+        ],
+        actions: [
+          { label: "다른 점검", view: "check" },
+          { label: "홈으로", view: "dashboard", primary: true },
+        ],
+      });
     }
 
     function analyticsPercent(part, total) {
@@ -3264,7 +3743,6 @@
             <p>${formatKoreanDate(serverNow())} · ${esc(state.syncText || "로컬 저장")}</p>
           </div>
           <div class="admin-board-actions">
-            <input class="admin-search input" value="" placeholder="호선 / 작업자 / 항목 검색..." />
             <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
             <button class="btn" data-view="check" type="button">새 점검</button>
           </div>
@@ -3285,7 +3763,7 @@
               ${processRows.map(({ info, count }) => `<div class="analytics-process-row" style="--stage:${info.color}">
                 <span><i></i><strong>${esc(info.label)}</strong><em>${esc(info.stage === "mounting" ? "Mounting" : info.label)}</em></span>
                 <b>${count}척</b>
-                <div class="analytics-progress"><i style="width:${analyticsPercent(count, processTotal)}%"></i></div>
+                <div class="analytics-progress" role="progressbar" aria-label="${esc(info.label)} 공정 비율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${analyticsPercent(count, processTotal)}"><i style="width:${analyticsPercent(count, processTotal)}%"></i></div>
                 <strong>${analyticsPercent(count, processTotal)}%</strong>
               </div>`).join("")}
             </div>
@@ -3393,6 +3871,7 @@
       const photo = unsafePhotosFor(row.id)[0];
       const photoUrl = photo ? publicPhotoUrl(photo) : "";
       const photoCount = unsafePhotosFor(row.id).length;
+      const pendingPhotoCount = pendingPhotoUploadsFor(row.id).length;
       return `<article class="record-card clickable-record" data-unsafe-record-detail="${esc(row.id)}" tabindex="0" role="button" aria-label="${esc(row.shipNo)} 불안전요소 상세 보기">
         <div class="record-card-main">
           <div class="record-card-headline">
@@ -3401,6 +3880,7 @@
               <strong>${esc(row.shipNo)}</strong>
               <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
               ${photoCount > 1 ? `<span class="small muted">사진 ${photoCount}장</span>` : ""}
+              ${pendingPhotoCount ? `<span class="small muted">사진 업로드 대기 ${pendingPhotoCount}장</span>` : ""}
             </div>
           </div>
           <p>${esc(row.content)}</p>
@@ -3413,12 +3893,15 @@
 
     function renderUnsafeDetail(row) {
       const photos = unsafePhotosFor(row.id);
+      const pendingPhotos = pendingPhotoUploadsFor(row.id);
       const photoHtml = photos.length
         ? `<div class="unsafe-detail-photos">${photos.map((photo, index) => {
             const url = publicPhotoUrl(photo);
             return url ? `<figure><img class="unsafe-detail-photo" src="${esc(url)}" alt="불안전요소 사진 ${index + 1}" /><figcaption>사진 ${index + 1}</figcaption></figure>` : "";
           }).join("")}</div>`
-        : `<div class="empty">첨부된 사진이 없습니다.</div>`;
+        : pendingPhotos.length
+          ? renderPendingPhotoUploadPanel(row.id, pendingPhotos)
+          : `<div class="empty">첨부된 사진이 없습니다.</div>`;
       return `<section class="panel panel-pad unsafe-detail">
         <div class="detail-header">
           <button class="btn-light" data-action="back-unsafe-list" type="button">목록</button>
@@ -3438,6 +3921,7 @@
         <div class="field" style="margin-top:12px">
           <span class="field-label">첨부 사진</span>
           ${photoHtml}
+          ${photos.length ? renderPendingPhotoUploadPanel(row.id, pendingPhotos) : ""}
         </div>
         ${row.adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(row.adminMemo)}</div></div>` : ""}
         <div class="field" style="margin-top:12px">
@@ -3471,45 +3955,40 @@
 
     function renderUnsafeComplete(row) {
       const photos = state.issuePhotos.filter((photo) => photo.targetType === "unsafe_issue" && photo.targetId === row.id);
-      const photoHtml = photos.length
-        ? `<div class="photo-strip">${photos.map((photo) => {
-            const url = publicPhotoUrl(photo);
-            return url ? `<img src="${esc(url)}" alt="불안전요소 사진" />` : "";
-          }).join("")}</div>`
-        : "";
-      return `${pageHead("불안전요소 등록 완료", "접수된 내용을 확인하세요.")}
-      <section class="panel panel-pad completion-card">
-        ${badge("medium", row.status)}
-        <div class="detail-grid">
-          <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
-          <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot)}</strong></div>
-          <div><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
-          <div><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}개 첨부` : "없음"}</strong></div>
-        </div>
-        <div class="field" style="margin-top:12px">
-          <span class="field-label">내용</span>
-          <div class="readonly-box">${esc(row.content)}</div>
-        </div>
-        ${photoHtml}
-        ${renderCompletionActions("unsafe")}
-      </section>`;
+      return renderCompletionScreen({
+        type: "unsafe",
+        icon: "warning",
+        title: "신고가 접수되었습니다",
+        message: `${row.shipNo || "-"} 불안전요소가 관리자에게 전달됐습니다. 처리 내역은 불안전요소 탭에서 확인하세요.`,
+        stats: [
+          { value: "위험", label: "위험도", tone: "pink" },
+          { value: row.shipNo || "-", label: "호선" },
+          { value: photos.length || 0, label: "사진" },
+        ],
+        actions: [
+          { label: "목록 보기", action: "view-unsafe-list" },
+          { label: "홈으로", view: "dashboard", primary: true },
+        ],
+      });
     }
 
     function renderMaterialComplete(row) {
-      return `<section class="material-complete-screen">
-        <div class="material-complete-icon">${navIcon("board")}</div>
-        <h1>자재 누락이 등록되었습니다</h1>
-        <p>${esc(row.shipNo)} · ${esc(row.materialName)} 누락 신청이 관리자에게 전달됐습니다.</p>
-        <div class="material-complete-stats">
-          <div><strong>${esc(row.shipNo)}</strong><span>호선</span></div>
-          <div><strong>${esc(materialQuantity(row))}</strong><span>수량</span></div>
-          <div><strong>${esc(row.status)}</strong><span>상태</span></div>
-        </div>
-        <div class="material-complete-actions">
-          <button class="btn-light" data-action="new-material" type="button">추가 등록</button>
-          <button class="btn" data-view="dashboard" type="button">홈으로</button>
-        </div>
-      </section>`;
+      return renderCompletionScreen({
+        type: "material",
+        icon: "box",
+        title: "자재 누락이 등록되었습니다",
+        message: `${row.shipNo || "-"} · ${row.materialName || "-"} 누락 신청이 관리자에게 전달됐습니다.`,
+        stats: [
+          { value: row.shipNo || "-", label: "호선", tone: "orange" },
+          { value: materialQuantity(row), label: "수량" },
+          { value: row.status || "접수", label: "상태", tone: "green" },
+        ],
+        actions: [
+          { label: "추가 등록", action: "new-material" },
+          { label: "목록 보기", action: "view-material-list" },
+          { label: "홈으로", view: "dashboard", primary: true },
+        ],
+      });
     }
 
     function renderSectionManager(cat, section) {
@@ -3762,8 +4241,11 @@
     }
 
     function badge(risk, text = RISKS[risk]?.label || risk) {
-      const cls = RISKS[risk]?.className || "status-draft";
-      return `<span class="badge ${cls}">${esc(text)}</span>`;
+      const safeTone = String(risk || "").replace(/[^a-z0-9_-]/gi, "");
+      const cls = RISKS[risk]?.className || safeTone || "status-draft";
+      const label = String(text || risk || "");
+      const icon = /고위험|주의|위험|확인/.test(label) ? "▲" : /정상|완료/.test(label) ? "✓" : "●";
+      return `<span class="badge ${cls}" aria-label="${esc(`위험 등급: ${label}`)}"><span aria-hidden="true">${icon}</span>${esc(label)}</span>`;
     }
 
     function statusBadge(status) {
@@ -3838,6 +4320,10 @@
 
     function dateOnly(value) {
       return String(value || "").slice(0, 10);
+    }
+
+    function inspectionActualDate(row) {
+      return dateOnly(row?.createdAt || row?.date || "");
     }
 
     function formatDateTime(value) {
@@ -4096,6 +4582,87 @@
       return selected;
     }
 
+    function clearPledgeSignature() {
+      state.draft.pledgeSignature = "";
+      saveJson("draft", state.draft);
+      render();
+    }
+
+    function startNewUnsafeIssue() {
+      state.lastUnsafeIssueId = "";
+      state.unsafeDraft = createUnsafeDraft();
+      state.unsafePhotoFiles = [];
+      persist();
+      render();
+      scrollScreenTop();
+    }
+
+    function startNewMissingMaterial() {
+      state.lastMaterialId = "";
+      state.materialDraft = createMaterialDraft();
+      persist();
+      render();
+      scrollScreenTop();
+    }
+
+    const ADMIN_ACTIONS = new Set([
+      "bulk-material-status",
+      "edit-pledge-template",
+      "save-pledge-template",
+      "cancel-pledge-template",
+      "open-analytics-filters",
+      "open-analytics-detail",
+      "add-ship",
+      "save-ship-order",
+    ]);
+
+    function adminActionApi() {
+      return {
+        bulkUpdateMaterialStatus,
+        editPledgeTemplate,
+        savePledgeTemplate,
+        cancelPledgeTemplate,
+        openAnalyticsFilters,
+        openAnalyticsDetail,
+        addShip,
+        saveCurrentShipOrder,
+      };
+    }
+
+    function dispatchAdminAction(action, event) {
+      loadAdminModule()
+        .then((module) => {
+          if (!module.runAdminAction(adminActionApi(), action, event)) {
+            toast("관리자 작업을 실행할 수 없습니다.");
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          toast("관리자 모듈을 불러오지 못했습니다.");
+        });
+      return true;
+    }
+
+    function dispatchAction(action, event) {
+      if (ADMIN_ACTIONS.has(action)) return dispatchAdminAction(action, event);
+      const actions = {
+        "clear-pledge-signature": clearPledgeSignature,
+        "submit-inspection": submitInspection,
+        "submit-unsafe": submitUnsafeIssue,
+        "submit-material": submitMissingMaterial,
+        "new-unsafe": startNewUnsafeIssue,
+        "new-material": startNewMissingMaterial,
+        "toggle-admin": toggleAdminMode,
+        "reset-history": resetHistory,
+        "delete-selected-history": deleteSelectedHistory,
+        "retry-photo-upload": retryPendingPhotoUpload,
+      };
+      const handler = actions[action];
+      if (!handler) return false;
+      handler(event);
+      return true;
+    }
+
     document.addEventListener("click", (event) => {
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
@@ -4143,6 +4710,42 @@
         render();
         return;
       }
+      if (button.dataset.unsafeSelectShip) {
+        state.unsafeDraft.shipNo = button.dataset.unsafeSelectShip;
+        saveUnsafeDraft();
+        render();
+        return;
+      }
+      if (button.dataset.unsafeSelectWorker) {
+        state.unsafeDraft.workerId = button.dataset.unsafeSelectWorker;
+        saveUnsafeDraft();
+        render();
+        return;
+      }
+      if (button.dataset.unsafeEditStep) {
+        state.unsafeDraft.step = Number(button.dataset.unsafeEditStep) || 1;
+        saveUnsafeDraft();
+        render();
+        scrollScreenTop();
+        return;
+      }
+      if (button.dataset.unsafeStepBack !== undefined) {
+        state.unsafeDraft.step = Math.max(unsafeDraftStep() - 1, 1);
+        saveUnsafeDraft();
+        render();
+        scrollScreenTop();
+        return;
+      }
+      if (button.dataset.unsafeNext !== undefined) {
+        syncUnsafeDraftFromDom();
+        saveUnsafeDraft();
+        if (!unsafeStepReady()) return toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요.");
+        state.unsafeDraft.step = Math.min(unsafeDraftStep() + 1, 3);
+        saveUnsafeDraft();
+        render();
+        scrollScreenTop();
+        return;
+      }
       if (button.dataset.materialSelectShip) {
         state.materialDraft.shipNo = button.dataset.materialSelectShip;
         saveMaterialDraft();
@@ -4176,7 +4779,9 @@
         return;
       }
       if (button.dataset.materialNext !== undefined) {
-        if (!materialStepReady()) return toast("필수 항목을 먼저 입력하세요.");
+        syncMaterialDraftFromDom();
+        saveMaterialDraft();
+        if (!materialStepReady()) return toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요.");
         state.materialDraft.step = Math.min(materialDraftStep() + 1, 4);
         saveMaterialDraft();
         render();
@@ -4190,8 +4795,10 @@
 
       if (button.dataset.view) {
         if (button.dataset.view === "manage") {
-          if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
-          if (state.manageTab === "materials") resetMaterialShipFilter();
+          state.manageTab = "unsafe";
+          state.unsafeDetailId = "";
+          setUnsafeStatusFilter("");
+          saveJson("manageTab", state.manageTab);
           changeView("manage");
         } else {
           changeView(button.dataset.view);
@@ -4222,35 +4829,7 @@
         render();
         scrollScreenTop();
       }
-      if (button.dataset.action === "clear-pledge-signature") {
-        state.draft.pledgeSignature = "";
-        saveJson("draft", state.draft);
-        render();
-        return;
-      }
-      if (button.dataset.action === "submit-inspection") submitInspection();
-      if (button.dataset.action === "submit-unsafe") submitUnsafeIssue();
-      if (button.dataset.action === "submit-material") submitMissingMaterial();
-      if (button.dataset.action === "bulk-material-status") bulkUpdateMaterialStatus();
-      if (button.dataset.action === "edit-pledge-template") editPledgeTemplate();
-      if (button.dataset.action === "save-pledge-template") savePledgeTemplate();
-      if (button.dataset.action === "cancel-pledge-template") cancelPledgeTemplate();
-      if (button.dataset.action === "open-analytics-filters") openAnalyticsFilters();
-      if (button.dataset.action === "open-analytics-detail") openAnalyticsDetail();
-      if (button.dataset.action === "new-unsafe") {
-        state.lastUnsafeIssueId = "";
-        state.unsafeDraft = createUnsafeDraft();
-        persist();
-        render();
-        scrollScreenTop();
-      }
-      if (button.dataset.action === "new-material") {
-        state.lastMaterialId = "";
-        state.materialDraft = createMaterialDraft();
-        persist();
-        render();
-        scrollScreenTop();
-      }
+      if (button.dataset.action && dispatchAction(button.dataset.action, event)) return;
       if (button.dataset.action === "view-unsafe-list") {
         state.manageTab = "unsafe";
         setUnsafeStatusFilter("");
@@ -4307,12 +4886,9 @@
       if (button.dataset.action === "add-worker") addWorker();
       if (button.dataset.editWorker) editWorker(button.dataset.editWorker);
       if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
+      if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
       if (button.dataset.saveRecord) saveAdminRecord(button.dataset.saveRecord);
       if (button.dataset.deleteRecord) deleteAdminRecord(button.dataset.deleteRecord);
-      if (button.dataset.action === "reset-history") resetHistory();
-      if (button.dataset.action === "delete-selected-history") deleteSelectedHistory();
-      if (button.dataset.action === "add-ship") addShip();
-      if (button.dataset.action === "save-ship-order") saveCurrentShipOrder();
       if (button.dataset.action === "focus-ship-add") {
         $("newShipNos")?.scrollIntoView({ behavior: "smooth", block: "center" });
         $("newShipNos")?.focus();
@@ -4320,7 +4896,8 @@
       if (button.dataset.deleteShip) deleteShip(button.dataset.deleteShip);
       if (button.dataset.pickColor) {
         document.querySelectorAll("[data-pick-color]").forEach((node) => node.classList.toggle("active", node === button));
-        $("catColor").value = button.dataset.pickColor;
+        const colorInput = $("catColor");
+        if (colorInput) colorInput.value = button.dataset.pickColor;
       }
       if (button.dataset.pickIcon) {
         const targetId = button.dataset.pickIconTarget || "catIcon";
@@ -4329,6 +4906,16 @@
         if (target) target.value = button.dataset.pickIcon;
       }
       if (button.dataset.action === "save-category-icon") saveCategoryIcon();
+      if (button.dataset.action === "toggle-category-add") {
+        if (!requireAdmin()) return;
+        state.categoryAddOpen = !state.categoryAddOpen;
+        state.editCategoryId = null;
+        render();
+      }
+      if (button.dataset.action === "cancel-category-add") {
+        state.categoryAddOpen = false;
+        render();
+      }
       if (button.dataset.action === "add-category") addCategory();
       if (button.hasAttribute("data-toggle-category-visual")) {
         state.categoryVisualOpen = !state.categoryVisualOpen;
@@ -4360,6 +4947,7 @@
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
         state.editCategoryId = null;
+        state.categoryAddOpen = false;
         state.openAddItemSectionIds = [];
         state.categoryVisualOpen = false;
         render();
@@ -4375,6 +4963,7 @@
         state.manageCategoryId = null;
         state.editSectionId = null;
         state.openAddItemSectionIds = [];
+        state.categoryAddOpen = false;
         state.categoryVisualOpen = false;
         render();
       }
@@ -4432,8 +5021,13 @@
       state.unsafeDetailId = id;
       state.manageTab = "unsafe";
       saveJson("manageTab", state.manageTab);
-      render();
-      scrollScreenTop();
+      if (state.view === "manage") {
+        render();
+        scrollScreenTop();
+        pushRouteState();
+      } else {
+        changeView("manage");
+      }
     }
 
     function openMaterialDetail(id) {
@@ -4476,7 +5070,6 @@
     function openHistoryDetail(id) {
       if (!id) return;
       state.historyDetailId = id;
-      state.historyScope = "all";
       state.selectedHistoryIds = [];
       if (state.view === "history") {
         render();
@@ -4506,10 +5099,12 @@
       if (event.target.id === "unsafeContent") {
         state.unsafeDraft.content = event.target.value;
         saveJson("unsafeDraft", state.unsafeDraft);
+        updateFlowNextControls();
       }
       if (event.target.id === "materialName") {
         state.materialDraft.materialName = event.target.value;
         saveJson("materialDraft", state.materialDraft);
+        updateFlowNextControls();
       }
       if (event.target.id === "materialSpec") {
         state.materialDraft.spec = event.target.value;
@@ -4518,6 +5113,7 @@
       if (event.target.id === "materialQuantity") {
         state.materialDraft.quantity = event.target.value;
         saveJson("materialDraft", state.materialDraft);
+        updateFlowNextControls();
       }
       if (event.target.id === "materialDetail") {
         state.materialDraft.detail = event.target.value;
@@ -4536,8 +5132,10 @@
         applyToolSearchFilter();
       }
       if (event.target.matches("[data-check-item]")) {
-        state.draft.checks[event.target.dataset.checkItem] = event.target.checked;
-        render();
+        const itemId = event.target.dataset.checkItem;
+        state.draft.checks[itemId] = event.target.checked;
+        saveJson("draft", state.draft);
+        if (!updateCheckItemDom(itemId, event.target.checked)) render();
       }
     });
 
@@ -4549,22 +5147,31 @@
       if (event.target.id === "unsafeShipNo") {
         state.unsafeDraft.shipNo = event.target.value;
         saveJson("unsafeDraft", state.unsafeDraft);
+        render();
       }
       if (event.target.id === "unsafeWorkerId") {
         state.unsafeDraft.workerId = event.target.value;
         saveJson("unsafeDraft", state.unsafeDraft);
+        updateFlowNextControls();
       }
       if (event.target.id === "unsafePhotos") {
-        state.unsafeDraft.photos = Array.from(event.target.files || []).map((file) => file.name);
+        state.unsafePhotoFiles = Array.from(event.target.files || []).slice(0, ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS);
+        if ((event.target.files || []).length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) {
+          toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
+        }
+        state.unsafeDraft.photos = state.unsafePhotoFiles.map((file) => file.name);
         saveJson("unsafeDraft", state.unsafeDraft);
+        render();
       }
       if (event.target.id === "materialShipNo") {
         state.materialDraft.shipNo = event.target.value;
         saveJson("materialDraft", state.materialDraft);
+        render();
       }
       if (event.target.id === "materialWorkerId") {
         state.materialDraft.workerId = event.target.value;
         saveJson("materialDraft", state.materialDraft);
+        updateFlowNextControls();
       }
       if (event.target.id === "materialUnit") {
         state.materialDraft.unit = event.target.value;
@@ -4573,6 +5180,14 @@
       }
       if (event.target.matches("[data-record-filter]")) {
         updateRecordFilter(event.target.dataset.recordFilter, event.target.value);
+      }
+      if (event.target.matches("[data-record-status]")) {
+        const token = event.target.dataset.recordStatus;
+        const changed = event.target.value !== (event.target.dataset.currentStatus || "");
+        document.querySelectorAll(`[data-save-record-status="${cssEscape(token)}"]`).forEach((node) => {
+          node.disabled = !changed;
+          node.classList.toggle("is-disabled", !changed);
+        });
       }
       if (event.target.matches("[data-pledge-rule]")) {
         const index = Number(event.target.dataset.pledgeRule);
@@ -4598,6 +5213,7 @@
     });
 
     async function submitInspection() {
+      if (state.inspectionSubmitting) return toast("점검 제출 중입니다. 잠시만 기다려주세요.");
       const cat = categoryById(state.selectedCategoryId);
       if (!cat) return toast("점검 작업 유형을 다시 선택하세요.");
       const items = filteredChecklistItems(cat.id);
@@ -4611,78 +5227,95 @@
       if (!signatureText) return toast("서명을 입력하거나 손가락으로 서명하세요.");
       if (highMissing.length) return toast("위험 항목을 모두 확인해야 제출할 수 있습니다.");
       if (!items.length) return toast("등록된 점검 항목이 없습니다.");
-
-      const now = serverNow();
-      const checkedCount = items.filter((row) => state.draft.checks[row.id]).length;
-      const inspectionId = uid("inspection");
-      const completion = Math.round(checkedCount / items.length * 100);
-      const warnings = items.filter((row) => !state.draft.checks[row.id] && row.risk !== "low").length;
-      const selectedTools = sanitizeToolIds(state.draft.selectedToolIds)
-        .map((id) => toolById(id))
-        .filter((tool) => tool && tool.deleted !== true)
-        .map((tool) => ({ id: tool.id, name: tool.name }));
-      const signatureImage = isSignatureImage(state.draft.pledgeSignature) ? state.draft.pledgeSignature : "";
-      const pledgeText = `${pledgeRules().map((rule) => `[확인] ${rule}`).join("\n")}\n서명: ${signatureText}`;
-      const inspection = {
-        id: inspectionId,
-        categoryId: cat.id,
-        worker: state.draft.worker.trim(),
-        shipNo: state.draft.shipNo,
-        safetyPledge: pledgeText,
-        signatureImage,
-        signatureText: signatureImage ? "" : signatureText,
-        date: localDate(now),
-        time: recordTime(now),
-        status: checkedCount === items.length ? "완료" : "미완료",
-        warnings,
-        completion,
-        tools: selectedTools,
-        createdAt: now.toISOString(),
-      };
-
-      const inspectionItems = items.map((row) => ({
-        id: uid("inspectionItem"),
-        inspectionId,
-        itemId: row.id,
-        checked: Boolean(state.draft.checks[row.id]),
-        risk: row.risk,
-        text: row.text,
-        sectionTitle: sectionsFor(cat.id).find((section) => section.id === row.sectionId)?.title || "",
-      }));
-
-      state.inspections.unshift(inspection);
-      state.inspectionItems.push(...inspectionItems);
-
-      state.lastInspectionId = inspectionId;
-      state.draft = createDraft();
-      state.selectedCategoryId = null;
-      persist();
-      const synced = await syncInspectionHistory(inspection, inspectionItems);
-      if (synced) {
-        if (isRedesignPreviewPage()) {
-          changeView("pledgeComplete");
-          toast("안전 서약이 저장되었습니다.");
-        } else {
-          changeView("history");
-          toast("점검 이력이 저장되었습니다.");
-        }
-        return;
+      state.inspectionSubmitting = true;
+      const submitButton = document.querySelector("[data-action='submit-inspection']");
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "제출 중";
       }
-      state.view = isRedesignPreviewPage() ? "pledgeComplete" : "history";
-      state.historyScope = "all";
-      state.historyFilter = "all";
-      state.historyDetailId = null;
-      render();
-      scrollScreenTop();
-      replaceRouteState();
-      toast("점검 이력은 저장되었지만 서버 동기화에 실패했습니다.");
+
+      try {
+        const now = serverNow();
+        const checkedCount = items.filter((row) => state.draft.checks[row.id]).length;
+        const inspectionId = uid("inspection");
+        const completion = Math.round(checkedCount / items.length * 100);
+        const warnings = items.filter((row) => !state.draft.checks[row.id] && row.risk !== "low").length;
+        const selectedTools = sanitizeToolIds(state.draft.selectedToolIds)
+          .map((id) => toolById(id))
+          .filter((tool) => tool && tool.deleted !== true)
+          .map((tool) => ({ id: tool.id, name: tool.name }));
+        const signatureImage = isSignatureImage(state.draft.pledgeSignature) ? state.draft.pledgeSignature : "";
+        const pledgeText = `${pledgeRules().map((rule) => `[확인] ${rule}`).join("\n")}\n서명: ${signatureText}`;
+        const inspection = {
+          id: inspectionId,
+          categoryId: cat.id,
+          categoryLabel: cat.label || "",
+          categoryIcon: cat.icon || "",
+          categoryColor: cat.color || "",
+          worker: state.draft.worker.trim(),
+          shipNo: state.draft.shipNo,
+          safetyPledge: pledgeText,
+          signatureImage,
+          signatureText: signatureImage ? "" : signatureText,
+          date: localDate(now),
+          time: recordTime(now),
+          status: checkedCount === items.length ? "완료" : "미완료",
+          warnings,
+          completion,
+          tools: selectedTools,
+          createdAtMs: Date.now(),
+          createdAt: now.toISOString(),
+        };
+
+        const inspectionItems = items.map((row) => ({
+          id: uid("inspectionItem"),
+          inspectionId,
+          itemId: row.id,
+          checked: Boolean(state.draft.checks[row.id]),
+          risk: row.risk,
+          text: row.text,
+          sectionTitle: sectionsFor(cat.id).find((section) => section.id === row.sectionId)?.title || "",
+        }));
+
+        state.inspections.unshift(inspection);
+        state.inspectionItems.push(...inspectionItems);
+
+        state.lastInspectionId = inspectionId;
+        state.draft = createDraft();
+        state.selectedCategoryId = null;
+        persist();
+        const synced = await syncInspectionHistory(inspection, inspectionItems);
+        state.inspectionSubmitting = false;
+        if (synced) {
+          changeView("pledgeComplete");
+          toast("점검이 제출되었습니다.");
+          return;
+        }
+        state.view = "pledgeComplete";
+        state.historyScope = "all";
+        state.historyFilter = "all";
+        state.historyDetailId = null;
+        render();
+        scrollScreenTop();
+        replaceRouteState();
+        toast("점검 이력은 저장되었지만 서버 동기화에 실패했습니다.");
+      } catch (error) {
+        state.inspectionSubmitting = false;
+        console.error(error);
+        toast("점검 제출 중 오류가 발생했습니다.");
+        refreshCheckSubmitControls();
+      }
     }
 
     async function submitUnsafeIssue() {
+      syncUnsafeDraftFromDom();
+      saveUnsafeDraft();
+      const missing = unsafeMissingFields(3);
+      if (missing.length) return toast(flowRequiredText(missing));
       const errors = ISSUE_MATERIAL_RULES.validateUnsafeDraft(state.unsafeDraft);
       if (errors.length) return toast(errors[0]);
       const input = $("unsafePhotos");
-      const files = Array.from(input?.files || []);
+      const files = state.unsafePhotoFiles?.length ? state.unsafePhotoFiles : Array.from(input?.files || []);
       if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast("사진은 최대 3개까지 첨부할 수 있습니다.");
       if (!files.length && !confirm("사진 없이 등록하시겠습니까?")) return;
       const now = serverNow().toISOString();
@@ -4703,6 +5336,7 @@
       state.unsafeIssues.unshift(row);
       state.lastUnsafeIssueId = id;
       state.unsafeDraft = createUnsafeDraft();
+      state.unsafePhotoFiles = [];
       persist();
       await syncUnsafeIssue(row, files);
       render();
@@ -4712,7 +5346,11 @@
     }
 
     async function submitMissingMaterial() {
-      if (!materialStepReady(4)) return toast("필수 항목을 모두 입력하세요.");
+      syncMaterialDraftFromDom();
+      saveMaterialDraft();
+      const missing = materialMissingFields(4);
+      if (missing.length) return toast(flowRequiredText(missing));
+      if (!isValidMaterialQuantity(state.materialDraft.quantity)) return toast("수량은 0보다 큰 숫자로 입력하세요.");
       state.materialDraft.content = materialDraftContent();
       const errors = ISSUE_MATERIAL_RULES.validateMaterialDraft(state.materialDraft);
       if (errors.length) return toast(errors[0]);
@@ -4758,9 +5396,17 @@
         state.screenMode = "mobile";
         localStorage.setItem(storeKey("screenMode"), state.screenMode);
       }
+      if (state.adminMode && !wasAdmin) {
+        state.manageTab = "unsafe";
+        state.unsafeDetailId = "";
+        state.unsafeFilters.status = "";
+        saveJson("manageTab", state.manageTab);
+        saveJson("unsafeFilters", state.unsafeFilters);
+      }
       saveAdminMode(state.adminMode);
       if (!enabled) {
         state.toolAddOpen = false;
+        state.categoryAddOpen = false;
         state.editToolId = null;
         state.editCategoryId = null;
         state.editSectionId = null;
@@ -4856,7 +5502,6 @@
     }
 
     function requireAdminWrite() {
-      if (state.adminMode || isRedesignPreviewPage()) return true;
       return requireAdmin();
     }
 
@@ -5038,6 +5683,7 @@
     }
 
     function exportRecords(kind) {
+      if (!requireAdmin()) return;
       const date = today();
       if (kind === "unsafe") {
         const rows = ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, state.unsafeFilters)
@@ -5162,7 +5808,7 @@
       changeView("manage");
     }
 
-    function saveAdminRecord(token) {
+    function saveAdminRecord(token, options = {}) {
       if (!requireAdminWrite()) return;
       const [kind, id] = token.split(":");
       const rows = kind === "unsafe" ? state.unsafeIssues : state.missingMaterials;
@@ -5172,14 +5818,25 @@
       const memo = document.querySelector(`[data-record-memo="${cssEscape(token)}"]`)?.value || "";
       const previousStatus = row.status;
       const previousMemo = row.adminMemo || "";
+      const nextMemo = memo.trim();
+      const statusChanged = status !== previousStatus;
+      const memoChanged = nextMemo !== previousMemo;
+      if (options.requireStatusChange && !statusChanged) {
+        toast("상태를 변경한 뒤 완료 처리할 수 있습니다.");
+        return;
+      }
+      if (!statusChanged && !memoChanged) {
+        toast("변경된 내용이 없습니다.");
+        return;
+      }
       const updatedAt = serverNow().toISOString();
       row.status = status;
-      row.adminMemo = memo.trim();
+      row.adminMemo = nextMemo;
       row.updatedAt = updatedAt;
       const doneStatus = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2] : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2];
-      row.completedAt = status === doneStatus ? (row.completedAt || row.updatedAt) : "";
+      row.completedAt = status === doneStatus ? (statusChanged ? updatedAt : (row.completedAt || updatedAt)) : "";
       const statuses = kind === "unsafe" ? ISSUE_MATERIAL_RULES.UNSAFE_STATUSES : ISSUE_MATERIAL_RULES.MATERIAL_STATUSES;
-      row.statusHistory = status !== previousStatus || row.adminMemo !== previousMemo
+      row.statusHistory = statusChanged || memoChanged
         ? ISSUE_MATERIAL_RULES.appendStatusHistoryEntry(row, {
             status,
             memo: row.adminMemo,
@@ -5350,6 +6007,7 @@
       });
       state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
       persistAndSync();
+      state.categoryAddOpen = false;
       state.manageCategoryId = id;
       render();
     }
@@ -5387,17 +6045,26 @@
       toast("작업 유형명을 수정했습니다.");
     }
 
-    function deleteCategory(id) {
+    async function deleteCategory(id) {
       if (!requireAdmin()) return;
       const cat = categoryById(id);
       if (!cat) return;
       if (!confirm(`${cat.label} 작업 유형을 삭제할까요? 기존 점검 이력은 유지됩니다.`)) return;
+      const sectionIds = state.sections.filter((row) => row.categoryId === id).map((row) => row.id);
+      const itemIds = state.items.filter((row) => row.categoryId === id).map((row) => row.id);
       state.categories = state.categories.filter((row) => row.id !== id);
       state.sections = state.sections.filter((row) => row.categoryId !== id);
-      state.items = state.items.map((row) => row.categoryId === id ? { ...row, active: false } : row);
+      state.items = state.items.filter((row) => row.categoryId !== id);
       if (state.manageCategoryId === id) state.manageCategoryId = null;
-      persistAndSync();
+      persist();
+      if (isSyncConfigured()) {
+        await deleteRemoteRows("items", itemIds);
+        await deleteRemoteRows("sections", sectionIds);
+        await deleteRemoteRows("categories", [id]);
+        await pushRemote();
+      }
       render();
+      toast("작업 유형을 삭제했습니다.");
     }
 
     function addSection() {
@@ -5619,9 +6286,54 @@
       return ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
     }
 
+    function fileToDataUrl(file) {
+      return new Promise((resolve) => {
+        if (!file) return resolve("");
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => resolve("");
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function createPendingPhotoUploads(issueId, files, error) {
+      const now = serverNow().toISOString();
+      const entries = [];
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const dataUrl = file.size <= 900 * 1024 ? await fileToDataUrl(file) : "";
+        entries.push({
+          id: uid("pendingPhoto"),
+          issueId,
+          fileName: file.name || `photo-${index + 1}.${photoExtension(file)}`,
+          fileType: file.type || "image/jpeg",
+          fileSize: file.size || 0,
+          dataUrl,
+          status: "failed",
+          errorMessage: error && error.message ? error.message : "upload failed",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      state.pendingPhotoUploads = [
+        ...state.pendingPhotoUploads.filter((row) => row.issueId !== issueId),
+        ...entries,
+      ];
+      persist();
+      return entries;
+    }
+
+    async function pendingUploadToFile(row) {
+      if (!row.dataUrl) return null;
+      const response = await fetch(row.dataUrl);
+      const blob = await response.blob();
+      return new File([blob], row.fileName || "photo.jpg", { type: row.fileType || blob.type || "image/jpeg" });
+    }
+
     async function uploadUnsafePhotos(issueId, files) {
       const client = supabaseClient();
-      if (!client || !files.length) return [];
+      if (!files.length) return [];
+      if (!client) throw new Error("사진 업로드 서버 연결이 없습니다.");
       const uploaded = [];
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
@@ -5652,16 +6364,31 @@
       try {
         const photos = await uploadUnsafePhotos(row.id, files);
         state.issuePhotos.push(...photos);
+        state.pendingPhotoUploads = state.pendingPhotoUploads.filter((item) => item.issueId !== row.id);
         persist();
         const synced = await persistAndSync();
         if (!synced) toast("기록은 저장되었지만 서버 동기화에 실패했습니다.");
         return true;
       } catch (error) {
         console.error(error);
+        if (files.length) await createPendingPhotoUploads(row.id, files, error);
         setSyncStatus("동기화 오류", "error");
-        toast("사진 업로드에 실패했습니다. 기록은 로컬에 저장되었습니다.");
+        toast("사진 업로드에 실패했습니다. 상세 화면에서 재시도할 수 있습니다.");
         return false;
       }
+    }
+
+    async function retryPendingPhotoUpload(event) {
+      const issueId = event?.currentTarget?.dataset?.retryPhotoUpload || event?.target?.closest("[data-retry-photo-upload]")?.dataset.retryPhotoUpload || "";
+      const pendingRows = pendingPhotoUploadsFor(issueId);
+      if (!issueId || !pendingRows.length) return toast("재시도할 사진이 없습니다.");
+      const files = (await Promise.all(pendingRows.map(pendingUploadToFile))).filter(Boolean);
+      if (!files.length) return toast("사진 파일을 다시 첨부해야 재시도할 수 있습니다.");
+      setSyncStatus("사진 재전송 중", "pending");
+      const row = state.unsafeIssues.find((item) => item.id === issueId);
+      const ok = await syncUnsafeIssue(row || { id: issueId }, files);
+      render();
+      toast(ok ? "사진 업로드를 다시 완료했습니다." : "사진 업로드 재시도에 실패했습니다.");
     }
 
     async function syncMissingMaterial(row) {
@@ -5761,7 +6488,7 @@
       try {
         const results = await Promise.all(REMOTE_TABLES.map((config) => selectTable(client, config)));
         results.forEach(({ key, rows }) => {
-          if (rows.length) state[key] = rows;
+          if (rows.length) state[key] = mergeRecordArrays(state[key], rows);
         });
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
