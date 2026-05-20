@@ -42,8 +42,9 @@
    - 열: 월의 날짜
    - 색상:
      - 녹색: 해당 날짜 점검 완료
-     - 주황: 일부 완료 또는 미완료 기록 있음
+     - 주황: 미완료 기록 있음
      - 빨강: 대상일인데 점검 기록 없음
+     - 파란 회색: 대한민국 국경일 기준 휴무
      - 회색: 미래일 또는 대상 제외일
 
 3. 주의 필요 작업자
@@ -130,19 +131,31 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 
 통계 섹션 안에 `휴무 설정` 버튼을 추가한다.
 
-휴무 설정은 작업자별 날짜 단위로 관리한다.
+휴무 기본값은 대한민국 5대 국경일 기준으로 자동 생성한다.
 
-- 작업자 선택
-- 날짜 선택
-- 휴무 추가
-- 등록된 휴무 삭제
+- 3·1절: 3월 1일
+- 제헌절: 7월 17일
+- 광복절: 8월 15일
+- 개천절: 10월 3일
+- 한글날: 10월 9일
+
+선택 월에 위 날짜가 포함되면 모든 작업자에게 `휴무` 상태로 표시한다. 휴무일은 점검 대상일과 누락일 계산에서 제외한다.
+
+휴무 설정 패널은 국경일 자동 휴무 목록을 보여준다.
+
+- 선택 월의 국경일 휴무 표시
+- 국경일 휴무 적용 여부 ON/OFF
+- 현장 추가 휴무일 추가
+- 현장 추가 휴무일 삭제
+
+현장 추가 휴무일은 작업자별이 아니라 날짜 단위로 관리한다. 조선소 전체 휴무일로 보는 것이 1차 구현 범위다.
 
 저장 구조:
 
 ```js
 {
-  "김준혁": ["2026-05-03", "2026-05-10"],
-  "박성호": ["2026-05-12"]
+  "useKoreanNationalHolidays": true,
+  "customRestDays": ["2026-05-01"]
 }
 ```
 
@@ -150,7 +163,7 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 
 `monthlyWorkerRestDays`
 
-휴무일은 색상으로 별도 표시한다. 기본 색상은 회색 계열 또는 파란 회색 계열로 한다. 빨강 누락과 혼동되지 않아야 한다.
+휴무일은 색상으로 별도 표시한다. 기본 색상은 파란 회색 계열로 한다. 빨강 누락과 혼동되지 않아야 한다.
 
 ## Excel Export
 
@@ -172,8 +185,7 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 - 소속/팀
 - 월간 점검률
 - 완료일 수
-- 일부일 수
-- 누락일 수
+- 미완료일 수
 - 휴무일 수
 - 대상일 수
 - 1일
@@ -184,10 +196,10 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 날짜 컬럼 값:
 
 - `완료`
-- `일부`
-- `누락`
+- `미완료`
 - `휴무`
-- `제외`
+
+미래일 또는 대상 제외일은 날짜 컬럼을 빈 값으로 둔다. 엑셀에서는 `제외`라는 텍스트를 쓰지 않는다.
 
 기존 `exportRecords("analytics")`는 그대로 두고, 월간 전용 내보내기 분기를 추가한다.
 
@@ -255,7 +267,11 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 - `renderMonthlyWorkerAnalytics()`
 - `renderWorkerHeatmapCell(status)`
 - `renderMonthlyRestDaySettings()`
-- `toggleMonthlyRestDay(workerName, date)`
+- `koreanNationalHolidayName(date)`
+- `isMonthlyRestDay(date)`
+- `toggleMonthlyNationalHolidayMode()`
+- `addCustomMonthlyRestDay(date)`
+- `deleteCustomMonthlyRestDay(date)`
 - `exportMonthlyWorkerAnalytics()`
 
 기존 `renderAnalyticsDashboard()`에서 `renderMonthlyWorkerAnalytics()`를 호출한다.
@@ -272,12 +288,14 @@ Supabase 테이블은 현재 동기화된 `safety_workers`, `safety_inspections`
 
 - 작업자가 없을 때 빈 상태
 - 작업자가 있고 점검 이력이 없을 때 0%와 누락 표시
-- 오늘 완료/미완료/누락 상태가 색상으로 구분되는지
+- 오늘 완료/미완료/누락/휴무 상태가 색상으로 구분되는지
 - 미래 날짜가 회색 제외로 표시되는지
 - 이전 달 / 이번 달 / 다음 달 이동이 선택 월을 올바르게 바꾸는지
 - 현재 월에서 다음 달 버튼이 비활성화되는지
-- 휴무 설정 시 대상일과 누락일에서 제외되는지
-- 월간 내보내기 파일에 선택 월과 날짜별 상태가 포함되는지
+- 대한민국 국경일이 휴무로 자동 표시되고 대상일/누락일에서 제외되는지
+- 국경일 휴무 적용 OFF 시 해당 날짜가 일반 대상일로 계산되는지
+- 현장 추가 휴무일이 대상일/누락일에서 제외되는지
+- 월간 내보내기 파일에 선택 월과 날짜별 `완료 / 미완료 / 휴무` 상태가 포함되는지
 
 ## Out of Scope
 
