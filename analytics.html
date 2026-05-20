@@ -2,13 +2,19 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; base-uri 'none'; object-src 'none'" />
-  <title>통계 대시보드 - 조선소 안전 체크리스트</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-x0fQSh1LElpFmubyEqn3nDnMd21xMaP1ea8p+T7HiGE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'" />
+  <meta name="theme-color" content="#07162f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="GS안전" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>조선소 안전 체크리스트</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
   <link rel="stylesheet" href="assets/css/styles-v2.css" />
 </head>
 <body data-initial-view="analytics">
-<div class="desktop-preview-toggle" aria-label="데스크탑 미리보기 전환">
+  <div class="desktop-preview-toggle" aria-label="데스크탑 미리보기 전환">
     <div class="mode-toggle" role="group" aria-label="화면 전환">
       <button data-screen-mode="desktop" type="button">PC</button>
       <button data-screen-mode="mobile" type="button">모바일</button>
@@ -25,9 +31,9 @@
     </aside>
 
     <header class="mobile-header">
-      <div class="phone-status"><span id="phoneTime">09:41</span></div>
+      <div class="phone-status"><span id="phoneTime">--:--</span></div>
       <div class="appbar">
-        <div class="appbar-title" id="appbarTitle">통계</div>
+        <div class="appbar-title" id="appbarTitle">홈</div>
         <button id="mobileAdminShortcut" class="mobile-admin-shortcut" data-view="manage" type="button" aria-label="관리 화면으로 이동" title="관리" hidden></button>
         <div class="mobile-screen-toggle" role="group" aria-label="화면 전환">
           <button data-screen-mode="desktop" type="button">PC</button>
@@ -36,10 +42,10 @@
       </div>
       <div class="home-headline" id="homeHeadline">
         <div>
-          <div class="home-date" id="homeDateLabel">2025.05.21 (수)</div>
+          <div class="home-date" id="homeDateLabel">날짜 확인 중</div>
           <div class="home-sub">안전한 하루 되세요!</div>
         </div>
-        <div id="mobileSyncBadge" class="sync-chip"><span class="sync-dot"></span><span id="mobileSyncText">로컬 저장</span></div>
+        <div id="mobileSyncBadge" class="sync-chip"><span class="sync-dot"></span><span id="mobileSyncText">저장됨</span></div>
       </div>
     </header>
 
@@ -49,10 +55,15 @@
 
     <nav id="mobileNav" class="bottom-nav"></nav>
   </div>
-  <div id="toast" class="toast"></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3" defer></script>
+  <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
+  <script src="assets/js/vendor/supabase-js-2.105.3.min.js" defer></script>
   <script src="assets/js/checklist-rules.js" defer></script>
   <script src="assets/js/issue-material-rules.js" defer></script>
   <script src="assets/js/app-v2.js" defer></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+    }
+  </script>
 </body>
 </html>

@@ -23,6 +23,27 @@ assert.match(html, /assets\/css\/styles-v2\.css/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 
+[
+  "check.html",
+  "history.html",
+  "items.html",
+  "ships.html",
+  "manage.html",
+  "unsafe.html",
+  "materials.html",
+  "pledge.html",
+  "analytics.html",
+].forEach((file) => {
+  const page = read(file);
+  assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
+  assert.match(page, /assets\/css\/styles-v2\.css/, `${file} should use v2 styles`);
+  assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
+  assert.match(page, /assets\/js\/app-v2\.js/, `${file} should use the v2 app runtime`);
+  assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
+  assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
+  assert.doesNotMatch(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, `${file} should not use remote Supabase CDN`);
+});
+
 const app = read("assets/js/app-v2.js");
 assert.match(app, /\{ id: "pledge", label: "서약"/);
 assert.match(app, /\{ id: "analytics", label: "통계"/);
