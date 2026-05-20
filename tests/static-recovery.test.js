@@ -26,13 +26,25 @@ assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 const app = read("assets/js/app-v2.js");
 assert.match(app, /\{ id: "pledge", label: "서약"/);
 assert.match(app, /\{ id: "analytics", label: "통계"/);
+assert.match(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ships", "history", "items"\]\)/);
+assert.match(app, /return NAV\.filter\(\(nav\) => MOBILE_NAV_IDS\.has\(nav\.id\)\)/);
+assert.match(app, /function renderCategoryToolPicker\(\{ groupId, selectedIds \}\)/);
+assert.match(app, /function selectedCategoryToolIds\(groupId\)/);
+assert.match(app, /function categoryAllowedToolIds\(categoryId\)/);
+assert.match(app, /function visibleToolsForCategory\(categoryId\)/);
+assert.match(app, /tool_ids: sanitizeToolIds\(row\.toolIds\)/);
+assert.match(app, /toolIds: sanitizeToolIds\(row\.tool_ids\)/);
+assert.match(app, /toolIds: selectedCategoryToolIds\("add_category"\)/);
+assert.match(app, /toolIds: selectedCategoryToolIds\(`category_\$\{id\}`\)/);
 assert.match(app, /"\/checklist": "check"/);
 assert.match(app, /"\/admin": "manage"/);
 assert.match(app, /createdAtMs: Date\.now\(\)/);
 
 const css = read("assets/css/styles-v2.css");
 assert.match(css, /--safe-area-bottom/);
-assert.match(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
+assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+assert.match(css, /\.category-tool-picker/);
+assert.match(css, /\.category-tool-options/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);

@@ -23,6 +23,7 @@
       { id: "pledge", label: "서약", icon: "noteCheck" },
       { id: "analytics", label: "통계", icon: "board" },
     ];
+    const MOBILE_NAV_IDS = new Set(["dashboard", "check", "ships", "history", "items"]);
     const ADMIN_NAV_ITEM = { id: "manage", label: "관리", icon: "settings" };
     const PREVIEW_NAV_ITEMS = [];
     const PICTOGRAMS = [
@@ -204,6 +205,7 @@
           color: row.color,
           require_tool_check: row.requireToolCheck !== false,
           tool_nature: normalizeToolNature(row.toolNature || defaultToolNatureForCategory(row)),
+          tool_ids: sanitizeToolIds(row.toolIds),
           sort_order: row.order || 0,
         }),
         fromDb: (row) => ({
@@ -213,6 +215,7 @@
           color: row.color,
           requireToolCheck: row.require_tool_check !== false,
           toolNature: normalizeToolNature(row.tool_nature || defaultToolNatureForCategory(row)),
+          toolIds: sanitizeToolIds(row.tool_ids),
           order: row.sort_order || 0,
         }),
       },
@@ -949,6 +952,7 @@
         order: cat.order || index + 1,
         requireToolCheck: cat.requireToolCheck !== false,
         toolNature: normalizeToolNature(cat.toolNature || defaultToolNatureForCategory(cat)),
+        toolIds: sanitizeToolIds(cat.toolIds),
       }));
       state.items = state.items.map((row, index) => ({
         ...row,
@@ -1544,7 +1548,7 @@
     }
 
     function mobileNavItems() {
-      return NAV;
+      return NAV.filter((nav) => MOBILE_NAV_IDS.has(nav.id));
     }
 
     function renderNavButtons(items) {
@@ -2692,6 +2696,7 @@
             <button class="btn" data-action="add-category" ${state.adminMode ? "" : "disabled"} type="button">추가</button>
             <button class="btn-light" data-action="cancel-category-add" type="button">취소</button>
           </div>
+          ${renderCategoryToolPicker({ groupId: "add_category", selectedIds: [] })}
           ${renderPictogramPicker("erection")}
           </div>` : `<div class="empty compact-empty">작업 유형을 추가하려면 버튼을 누르세요.</div>`}
         </div>
@@ -2705,7 +2710,8 @@
                 <div class="field">
                   <label for="editCategoryLabel_${cat.id}">작업 유형명 수정</label>
                   <input class="input" id="editCategoryLabel_${cat.id}" value="${esc(cat.label)}" />
-                </div>` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
+                </div>
+                ${renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds })}` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
               <div class="small muted" style="margin:6px 0 12px">${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</div>
               <div class="item-actions manage-actions">
                 ${editingCategory ? `
@@ -4119,6 +4125,25 @@
       </div>`;
     }
 
+    function renderCategoryToolPicker({ groupId, selectedIds }) {
+      const tools = activeTools();
+      const selected = new Set(sanitizeToolIds(selectedIds));
+      return `<div class="field category-tool-picker">
+        <div class="field-label">이 작업에서 사용할 공기구/준비물</div>
+        ${tools.length ? `<div class="category-tool-options">
+          ${tools.map((tool) => {
+            const inputId = `categoryTool_${groupId}_${tool.id}`;
+            return `<label class="item-tool-option" for="${esc(inputId)}">
+              <input id="${esc(inputId)}" type="checkbox" value="${esc(tool.id)}" data-category-tool-group="${esc(groupId)}" ${selected.has(tool.id) ? "checked" : ""} ${state.adminMode ? "" : "disabled"} />
+              <span>${esc(tool.name)}</span>
+              ${natureBadge(tool.nature)}
+            </label>`;
+          }).join("")}
+        </div>` : `<div class="notice">등록된 공기구/준비물이 없습니다. 공기구/준비물 관리에서 먼저 추가하세요.</div>`}
+        <div class="small muted">선택한 공기구/준비물만 작업자 선택 화면에 표시됩니다. 아무것도 선택하지 않으면 기존처럼 공정 성격에 맞는 전체 공기구가 표시됩니다.</div>
+      </div>`;
+    }
+
     function renderToolManager() {
       const tools = activeTools();
       return `
@@ -4451,10 +4476,18 @@
 
     function visibleToolsForCategory(categoryId) {
       const cat = categoryById(categoryId);
-      return activeTools().filter((tool) => CHECKLIST_RULES.toolMatchesCategoryNature(
+      const allowed = new Set(categoryAllowedToolIds(categoryId));
+      const tools = activeTools().filter((tool) => CHECKLIST_RULES.toolMatchesCategoryNature(
         tool,
         cat?.toolNature || defaultToolNatureForCategory(cat),
       ));
+      if (!allowed.size) return tools;
+      return tools.filter((tool) => allowed.has(tool.id));
+    }
+
+    function categoryAllowedToolIds(categoryId) {
+      const cat = categoryById(categoryId);
+      return sanitizeToolIds(cat?.toolIds);
     }
 
     function sanitizeToolIds(toolIds) {
@@ -4564,6 +4597,12 @@
     function selectedItemToolIds(groupId) {
       return Array.from(document.querySelectorAll("[data-item-tool-group]"))
         .filter((node) => node.dataset.itemToolGroup === groupId && node.checked)
+        .map((node) => node.value);
+    }
+
+    function selectedCategoryToolIds(groupId) {
+      return Array.from(document.querySelectorAll("[data-category-tool-group]"))
+        .filter((node) => node.dataset.categoryToolGroup === groupId && node.checked)
         .map((node) => node.value);
     }
 
@@ -6003,6 +6042,7 @@
         color: selectedColor(),
         requireToolCheck: true,
         toolNature: "선행",
+        toolIds: selectedCategoryToolIds("add_category"),
         order: state.categories.length + 1,
       });
       state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
@@ -6038,7 +6078,11 @@
       if (!label) return toast("작업 유형명을 입력하세요.");
       const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
       if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
-      state.categories = state.categories.map((row) => row.id === id ? { ...row, label } : row);
+      state.categories = state.categories.map((row) => row.id === id ? {
+        ...row,
+        label,
+        toolIds: selectedCategoryToolIds(`category_${id}`),
+      } : row);
       state.editCategoryId = null;
       persistAndSync();
       render();
@@ -6586,6 +6630,11 @@
       if (!targetRows.length) return;
       const payload = targetRows.map(config.toDb);
       let { error } = await client.from(config.table).upsert(payload, { onConflict: "id" });
+      if (error && config.key === "categories" && /tool_ids/i.test(String(error.message || error.details || ""))) {
+        const fallbackPayload = payload.map(({ tool_ids, ...row }) => row);
+        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+        error = retry.error;
+      }
       if (error && config.key === "inspections" && /safety_pledge/i.test(String(error.message || error.details || ""))) {
         const fallbackPayload = payload.map(({ safety_pledge, ...row }) => row);
         const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
