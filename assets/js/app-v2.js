@@ -824,6 +824,7 @@
       editToolId: null,
       toolAddOpen: false,
       categoryAddOpen: false,
+      categoryToolAssignmentOpenIds: [],
       openAddItemSectionIds: [],
       categoryVisualOpen: false,
       draft: loadDraft(),
@@ -4206,7 +4207,9 @@
       if (!categories.length) return `<div class="empty compact-empty">등록된 작업 유형이 없습니다. 먼저 작업 유형을 추가하세요.</div>`;
       return `<div class="category-tool-assignment-list">
         ${categories.map((cat) => {
-          const selectedCount = sanitizeToolIds(cat.toolIds).length;
+          const selectedToolIds = sanitizeToolIds(cat.toolIds);
+          const selectedCount = selectedToolIds.length;
+          const expanded = state.categoryToolAssignmentOpenIds.includes(cat.id);
           return `<article class="category-tool-assignment-row" style="--accent:${esc(categoryAccent(cat))}">
             <div class="category-tool-assignment-head">
               <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
@@ -4216,13 +4219,27 @@
               </div>
               <em>${selectedCount ? `${selectedCount}개 지정` : "전체 표시"}</em>
             </div>
-            ${tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`}
+            ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
             <div class="category-tool-assignment-actions">
-              <button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>
+              <button class="btn-light" data-toggle-category-tools="${esc(cat.id)}" type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "접기" : "펼치기"}</button>
+              ${expanded ? `<button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>` : ""}
               <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
             </div>
           </article>`;
         }).join("")}
+      </div>`;
+    }
+
+    function renderCategoryToolSummary(toolIds) {
+      const tools = sanitizeToolIds(toolIds)
+        .map((id) => toolById(id))
+        .filter((tool) => tool && tool.deleted !== true);
+      if (!tools.length) return `<div class="category-tool-summary empty-summary">공기구를 지정하지 않으면 기존처럼 공정 성격에 맞는 전체 공기구가 표시됩니다.</div>`;
+      const visibleTools = tools.slice(0, 4);
+      const hiddenCount = tools.length - visibleTools.length;
+      return `<div class="category-tool-summary" aria-label="지정된 공기구 요약">
+        ${visibleTools.map((tool) => `<span class="category-tool-chip">${esc(tool.name)}${natureBadge(tool.nature)}</span>`).join("")}
+        ${hiddenCount > 0 ? `<span class="category-tool-chip more">+${hiddenCount}</span>` : ""}
       </div>`;
     }
 
@@ -5076,6 +5093,7 @@
       if (button.dataset.editCategory) editCategory(button.dataset.editCategory);
       if (button.dataset.saveCategory) saveCategory(button.dataset.saveCategory);
       if (button.dataset.saveCategoryTools) saveCategoryTools(button.dataset.saveCategoryTools);
+      if (button.dataset.toggleCategoryTools) toggleCategoryTools(button.dataset.toggleCategoryTools);
       if (button.dataset.action === "cancel-edit-category") {
         state.editCategoryId = null;
         render();
@@ -6182,6 +6200,17 @@
       toast("작업 유형명을 수정했습니다.");
     }
 
+    function toggleCategoryTools(id) {
+      const openIds = new Set(state.categoryToolAssignmentOpenIds);
+      if (openIds.has(id)) {
+        openIds.delete(id);
+      } else {
+        openIds.add(id);
+      }
+      state.categoryToolAssignmentOpenIds = [...openIds];
+      render();
+    }
+
     function saveCategoryTools(id) {
       if (!requireAdmin()) return;
       const cat = categoryById(id);
@@ -6190,6 +6219,7 @@
         ...row,
         toolIds: selectedCategoryToolIds(`category_${id}`),
       } : row);
+      state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
       persistAndSync();
       render();
       toast(`${cat.label} 공기구 지정을 저장했습니다.`);

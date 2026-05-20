@@ -51,13 +51,17 @@ assert.match(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ship
 assert.match(app, /return NAV\.filter\(\(nav\) => MOBILE_NAV_IDS\.has\(nav\.id\)\)/);
 assert.match(app, /function renderCategoryToolPicker\(\{ groupId, selectedIds \}\)/);
 assert.match(app, /function renderCategoryToolAssignments\(\)/);
+assert.match(app, /function renderCategoryToolSummary\(toolIds\)/);
+assert.match(app, /function toggleCategoryTools\(id\)/);
 assert.match(app, /function selectedCategoryToolIds\(groupId\)/);
 assert.match(app, /function categoryAllowedToolIds\(categoryId\)/);
 assert.match(app, /function visibleToolsForCategory\(categoryId\)/);
 assert.match(app, /tool_ids: sanitizeToolIds\(row\.toolIds\)/);
 assert.match(app, /toolIds: sanitizeToolIds\(row\.tool_ids\)/);
 assert.match(app, /data-save-category-tools="\$\{esc\(cat\.id\)\}"/);
+assert.match(app, /data-toggle-category-tools="\$\{esc\(cat\.id\)\}"/);
 assert.match(app, /if \(button\.dataset\.saveCategoryTools\) saveCategoryTools\(button\.dataset\.saveCategoryTools\)/);
+assert.match(app, /if \(button\.dataset\.toggleCategoryTools\) toggleCategoryTools\(button\.dataset\.toggleCategoryTools\)/);
 assert.match(app, /function saveCategoryTools\(id\)/);
 assert.match(app, /toolIds: selectedCategoryToolIds\(`category_\$\{id\}`\)/);
 assert.match(app, /작업 유형별 공기구 지정/);
@@ -81,6 +85,8 @@ assert.match(css, /\.category-tool-picker/);
 assert.match(css, /\.category-tool-options/);
 assert.match(css, /\.category-tool-assignment-panel/);
 assert.match(css, /\.category-tool-assignment-row/);
+assert.match(css, /\.category-tool-summary/);
+assert.match(css, /\.category-tool-chip/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);

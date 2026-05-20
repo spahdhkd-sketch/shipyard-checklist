@@ -5560,6 +5560,46 @@
       margin-top: 12px;
     }
 
+    .category-tool-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 36px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .category-tool-summary.empty-summary {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .category-tool-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 900;
+      max-width: 100%;
+    }
+
+    .category-tool-chip.more {
+      border-color: var(--line);
+      background: var(--surface-soft);
+      color: var(--muted);
+    }
+
     .item-tool-option {
       min-width: 0;
       display: grid;
