@@ -1,5 +1,6 @@
 ﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
+    const APP_VERSION = "0.2-20260520";
     const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
@@ -815,6 +816,13 @@
       missingMaterials: loadJson("missingMaterials", []),
       issuePhotos: loadJson("issuePhotos", []),
       pendingPhotoUploads: loadJson("pendingPhotoUploads", []),
+      monthlyWorkerRestDays: loadJson("monthlyWorkerRestDays", {
+        useKoreanPublicHolidays: true,
+        holidayData: {},
+        customRestDays: [],
+      }),
+      selectedMonthlyWorkerMonth: "",
+      monthlyRestDayPanelOpen: false,
       unsafePhotoFiles: [],
       selectedCategoryId: null,
       manageCategoryId: null,
@@ -1765,6 +1773,9 @@
             <div><span>대기</span><strong>${todayPending}</strong></div>
             <div><span>호선</span><strong>${activeShips}</strong></div>
             <div><span>완료율</span><strong>${completion}%</strong></div>
+          </div>
+          <div class="home-version-strip" aria-label="현재 운영 버전">
+            <span>운영 버전</span><strong>${esc(APP_VERSION)}</strong>
           </div>
         </div>
       </section>
@@ -3735,6 +3746,286 @@
       </div>`;
     }
 
+    function monthKeyForDate(dateValue = today()) {
+      return dateOnly(dateValue).slice(0, 7);
+    }
+
+    function monthKeyOffset(monthKey, offset) {
+      const [year, month] = String(monthKey || monthKeyForDate()).split("-").map(Number);
+      const date = new Date(year, (month || 1) - 1 + offset, 1);
+      return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+    }
+
+    function currentMonthRange(monthKey = state.selectedMonthlyWorkerMonth || monthKeyForDate()) {
+      const currentMonth = monthKeyForDate();
+      const safeMonth = String(monthKey || currentMonth) > currentMonth ? currentMonth : String(monthKey || currentMonth);
+      const [year, month] = safeMonth.split("-").map(Number);
+      const lastDay = new Date(year, month, 0).getDate();
+      const dates = Array.from({ length: lastDay }, (_, index) => `${safeMonth}-${pad2(index + 1)}`);
+      return {
+        monthKey: safeMonth,
+        year,
+        month,
+        start: dates[0],
+        end: dates[dates.length - 1],
+        dates,
+        daysInMonth: lastDay,
+        isCurrentMonth: safeMonth === currentMonth,
+        canGoNext: monthKeyOffset(safeMonth, 1) <= currentMonth,
+      };
+    }
+
+    function monthlyWorkerRestDayState() {
+      const source = state.monthlyWorkerRestDays && typeof state.monthlyWorkerRestDays === "object"
+        ? state.monthlyWorkerRestDays
+        : {};
+      return {
+        useKoreanPublicHolidays: source.useKoreanPublicHolidays !== false,
+        holidayData: source.holidayData && typeof source.holidayData === "object" ? source.holidayData : {},
+        customRestDays: Array.isArray(source.customRestDays) ? source.customRestDays.filter(Boolean) : [],
+      };
+    }
+
+    function saveMonthlyWorkerRestDays(value = state.monthlyWorkerRestDays) {
+      state.monthlyWorkerRestDays = {
+        useKoreanPublicHolidays: value?.useKoreanPublicHolidays !== false,
+        holidayData: value?.holidayData && typeof value.holidayData === "object" ? value.holidayData : {},
+        customRestDays: Array.isArray(value?.customRestDays) ? [...new Set(value.customRestDays.filter(Boolean))].sort() : [],
+      };
+      saveJson("monthlyWorkerRestDays", state.monthlyWorkerRestDays);
+    }
+
+    function selectedMonthlyWorkerMonth() {
+      const currentMonth = monthKeyForDate();
+      if (!state.selectedMonthlyWorkerMonth || state.selectedMonthlyWorkerMonth > currentMonth) {
+        state.selectedMonthlyWorkerMonth = currentMonth;
+      }
+      return state.selectedMonthlyWorkerMonth;
+    }
+
+    function koreanPublicHolidayInfo(date) {
+      const restState = monthlyWorkerRestDayState();
+      if (!restState.useKoreanPublicHolidays) return null;
+      const monthKey = monthKeyForDate(date);
+      const monthData = restState.holidayData?.[monthKey];
+      const [year, month] = monthKey.split("-").map(Number);
+      const previousMonthEnd = localDate(new Date(year, month - 1, 0));
+      if (monthData?.updatedAt && dateOnly(monthData.updatedAt) <= previousMonthEnd && Array.isArray(monthData.days)) {
+        const match = monthData.days.find((day) => day.date === date);
+        if (match) return { date, name: match.name || "공휴일", type: match.type || "공휴일", source: monthData.source || "holidayData" };
+      }
+      const fallback = {
+        "03-01": "3·1절",
+        "07-17": "제헌절",
+        "08-15": "광복절",
+        "10-03": "개천절",
+        "10-09": "한글날",
+      };
+      const name = fallback[String(date).slice(5, 10)];
+      return name ? { date, name, type: "국경일", source: "fallback" } : null;
+    }
+
+    function isMonthlyRestDay(date) {
+      const restState = monthlyWorkerRestDayState();
+      if (restState.customRestDays.includes(date)) return { date, name: "현장 추가 휴무", type: "현장 휴무", source: "custom" };
+      return koreanPublicHolidayInfo(date);
+    }
+
+    function monthlyInspectionDate(row) {
+      if (row?.date) return dateOnly(row.date);
+      const createdAt = row?.createdAt ? new Date(row.createdAt) : null;
+      return createdAt && !Number.isNaN(createdAt.getTime()) ? localDate(createdAt) : "";
+    }
+
+    function monthlyWorkerRows(range = currentMonthRange()) {
+      const byName = new Map();
+      state.workers.forEach((worker) => {
+        const name = String(worker.name || "").trim();
+        if (!name) return;
+        byName.set(normalizedWorkerName(name), { name, team: worker.team || "-", source: "workers" });
+      });
+      state.inspections.forEach((row) => {
+        const actualDate = monthlyInspectionDate(row);
+        if (!actualDate || actualDate < range.start || actualDate > range.end) return;
+        const name = String(row.worker || "").trim();
+        if (!name) return;
+        const key = normalizedWorkerName(name);
+        if (!byName.has(key)) byName.set(key, { name, team: "기록 기반", source: "history" });
+      });
+      return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    }
+
+    function workerDayInspectionStatus(workerName, date) {
+      if (isMonthlyRestDay(date)) return "rest";
+      if (date > today()) return "excluded";
+      const key = normalizedWorkerName(workerName);
+      const rows = state.inspections.filter((row) => normalizedWorkerName(row.worker || "") === key && monthlyInspectionDate(row) === date);
+      if (rows.some((row) => row.status === "완료" && Number(row.completion || 0) >= 100)) return "done";
+      if (rows.length) return "partial";
+      return "missing";
+    }
+
+    function monthlyWorkerInspectionStats() {
+      const range = currentMonthRange(selectedMonthlyWorkerMonth());
+      const workers = monthlyWorkerRows(range).map((worker) => {
+        const counts = { done: 0, partial: 0, missing: 0, rest: 0, excluded: 0, target: 0 };
+        const dayStatuses = range.dates.map((date) => {
+          const status = workerDayInspectionStatus(worker.name, date);
+          counts[status] += 1;
+          if (status !== "rest" && status !== "excluded") counts.target += 1;
+          return { date, day: Number(date.slice(8, 10)), status };
+        });
+        const rate = counts.target ? Math.round(counts.done / counts.target * 100) : 0;
+        return { ...worker, counts, dayStatuses, rate };
+      });
+      const totals = workers.reduce((sum, worker) => {
+        sum.done += worker.counts.done;
+        sum.partial += worker.counts.partial;
+        sum.missing += worker.counts.missing;
+        sum.rest += worker.counts.rest;
+        sum.target += worker.counts.target;
+        return sum;
+      }, { done: 0, partial: 0, missing: 0, rest: 0, target: 0 });
+      const todayValue = today();
+      const todayOrMonthEnd = range.isCurrentMonth ? todayValue : range.end;
+      const dueLabel = range.isCurrentMonth ? "오늘 미점검" : "월말 미점검";
+      const dueMissing = workers.filter((worker) => workerDayInspectionStatus(worker.name, todayOrMonthEnd) === "missing").length;
+      const attentionWorkers = workers
+        .filter((worker) => worker.counts.missing >= 3)
+        .sort((a, b) => b.counts.missing - a.counts.missing || a.rate - b.rate)
+        .slice(0, 5);
+      return {
+        range,
+        workers,
+        totals,
+        rate: totals.target ? Math.round(totals.done / totals.target * 100) : 0,
+        dueLabel,
+        dueMissing,
+        attentionWorkers,
+      };
+    }
+
+    function monthlyStatusLabel(status) {
+      return {
+        done: "완료",
+        partial: "미완료",
+        missing: "누락",
+        rest: "휴무",
+        excluded: "제외",
+      }[status] || status;
+    }
+
+    function monthlyExportStatus(status) {
+      if (status === "done") return "완료";
+      if (status === "partial" || status === "missing") return "미완료";
+      if (status === "rest") return "휴무";
+      return "";
+    }
+
+    function renderWorkerHeatmapCell(status, day = "") {
+      return `<span class="monthly-worker-cell ${esc(status)}" title="${esc(day ? `${day}일 ${monthlyStatusLabel(status)}` : monthlyStatusLabel(status))}" aria-label="${esc(monthlyStatusLabel(status))}">${esc(day)}</span>`;
+    }
+
+    function renderMonthlyRestDaySettings() {
+      const stats = monthlyWorkerInspectionStats();
+      const restState = monthlyWorkerRestDayState();
+      const holidayRows = stats.range.dates.map((date) => koreanPublicHolidayInfo(date)).filter(Boolean);
+      const customRows = restState.customRestDays.filter((date) => monthKeyForDate(date) === stats.range.monthKey);
+      return `<div class="monthly-rest-panel">
+        <div class="monthly-rest-options">
+          <label class="monthly-rest-toggle">
+            <input type="checkbox" data-monthly-public-holiday-mode ${restState.useKoreanPublicHolidays ? "checked" : ""} />
+            <span>대한민국 국경일/공휴일/대체공휴일 자동 휴무 적용</span>
+          </label>
+          <div class="monthly-rest-add">
+            <input class="input" type="date" data-monthly-custom-rest-date min="${esc(stats.range.start)}" max="${esc(stats.range.end)}" value="${esc(stats.range.start)}" />
+            <button class="btn-light" data-action="add-monthly-rest-day" type="button">현장 휴무 추가</button>
+          </div>
+        </div>
+        <div class="monthly-rest-lists">
+          <div>
+            <strong>자동 휴무</strong>
+            ${holidayRows.length ? holidayRows.map((day) => `<span class="monthly-rest-chip">${esc(day.date.slice(5))} · ${esc(day.name)}</span>`).join("") : `<em>선택 월의 자동 휴무가 없습니다.</em>`}
+          </div>
+          <div>
+            <strong>현장 추가 휴무</strong>
+            ${customRows.length ? customRows.map((date) => `<span class="monthly-rest-chip custom">${esc(date.slice(5))}<button data-delete-monthly-rest-day="${esc(date)}" type="button" aria-label="${esc(date)} 휴무 삭제">×</button></span>`).join("") : `<em>추가된 현장 휴무가 없습니다.</em>`}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderMonthlyWorkerAnalytics() {
+      const stats = monthlyWorkerInspectionStats();
+      const monthText = `${stats.range.year}년 ${stats.range.month}월`;
+      const restOpen = state.monthlyRestDayPanelOpen;
+      if (!stats.workers.length) {
+        return `<section class="analytics-panel monthly-worker-analytics">
+          <div class="monthly-worker-head">
+            <div><strong>월간 작업자 점검 현황</strong><span>${monthText} · 작업자별 일일 점검 이행 현황</span></div>
+            <div class="monthly-worker-toolbar">
+              <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
+              <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
+              <button class="btn-light" data-monthly-worker-month="next" ${stats.range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
+              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">휴무 설정</button>
+              <button class="btn" data-export-records="monthly-worker-analytics" type="button">월간 내보내기</button>
+            </div>
+          </div>
+          <div class="empty">등록된 작업자가 없습니다. 관리 메뉴에서 작업자를 먼저 추가하세요.</div>
+          ${restOpen ? renderMonthlyRestDaySettings() : ""}
+        </section>`;
+      }
+      return `<section class="analytics-panel monthly-worker-analytics">
+        <div class="monthly-worker-head">
+          <div><strong>월간 작업자 점검 현황</strong><span>${monthText} · 작업자별 일일 점검 이행 현황</span></div>
+          <div class="monthly-worker-toolbar">
+            <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
+            <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
+            <button class="btn-light" data-monthly-worker-month="next" ${stats.range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
+            <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>
+            <button class="btn" data-export-records="monthly-worker-analytics" type="button">월간 내보내기</button>
+          </div>
+        </div>
+        <div class="monthly-worker-kpis">
+          ${analyticsKpi("월간 점검률", `${stats.rate}%`, `${stats.totals.done}/${stats.totals.target} 대상일 완료`, "done")}
+          ${analyticsKpi(stats.dueLabel, `${stats.dueMissing}명`, `${stats.range.isCurrentMonth ? "오늘" : "월말"} 기준 누락`, "danger")}
+          ${analyticsKpi("3일 이상 누락", `${stats.attentionWorkers.length}명`, "월간 누락일 3일 이상", "warn")}
+          ${analyticsKpi("대상 작업자", `${stats.workers.length}명`, `휴무 ${stats.totals.rest}칸 제외`, "ship")}
+        </div>
+        <div class="monthly-worker-layout">
+          <div class="monthly-worker-heatmap-wrap">
+            <div class="monthly-worker-heatmap" style="--monthly-days:${stats.range.daysInMonth}">
+              <div class="monthly-worker-row monthly-worker-row-head">
+                <div class="monthly-worker-name">작업자</div>
+                <div class="monthly-worker-days">${stats.range.dates.map((date) => `<span>${Number(date.slice(8, 10))}</span>`).join("")}</div>
+                <div class="monthly-worker-rate">점검률</div>
+              </div>
+              ${stats.workers.map((worker) => `<div class="monthly-worker-row">
+                <div class="monthly-worker-name"><strong>${esc(worker.name)}</strong><em>${esc(worker.team || "-")}</em></div>
+                <div class="monthly-worker-days">${worker.dayStatuses.map((day) => renderWorkerHeatmapCell(day.status, day.day)).join("")}</div>
+                <div class="monthly-worker-rate"><strong>${worker.rate}%</strong><span>${worker.counts.done}/${worker.counts.target}</span></div>
+              </div>`).join("")}
+            </div>
+          </div>
+          <aside class="monthly-worker-attention">
+            <strong>주의 필요 작업자</strong>
+            ${stats.attentionWorkers.length ? stats.attentionWorkers.map((worker) => {
+              const recentMissing = worker.dayStatuses.filter((day) => day.status === "missing").slice(-3).map((day) => `${day.day}일`).join(", ");
+              return `<article>
+                <div><strong>${esc(worker.name)}</strong><span>${esc(worker.team || "-")}</span></div>
+                <b>누락 ${worker.counts.missing}일</b>
+                <em>최근 누락: ${esc(recentMissing || "-")}</em>
+              </article>`;
+            }).join("") : `<div class="empty">3일 이상 누락 작업자가 없습니다.</div>`}
+            <div class="monthly-worker-legend">
+              ${["done", "partial", "missing", "rest", "excluded"].map((status) => `<span>${renderWorkerHeatmapCell(status)} ${monthlyStatusLabel(status)}</span>`).join("")}
+            </div>
+          </aside>
+        </div>
+        ${restOpen ? renderMonthlyRestDaySettings() : ""}
+      </section>`;
+    }
+
     function renderAnalyticsDashboard() {
       const now = serverNow();
       const weekStart = new Date(now);
@@ -3801,6 +4092,7 @@
           ${analyticsKpi("자재 누락", materialOpen, materialOpen ? `${materialReceived}건 접수 · ${materialChecking}건 확인중` : "미처리 없음", "warn")}
           ${analyticsKpi("호선 점검중", state.ships.length, `${activeProcessCount}/${SHIP_WORKFLOW_STAGES.length}단계 분포`, "ship")}
         </div>
+        ${renderMonthlyWorkerAnalytics()}
         <div class="analytics-grid">
           <section class="analytics-panel">
             <div class="material-table-head">
@@ -4821,6 +5113,23 @@
       const button = event.target.closest("button");
       if (!button) return;
 
+      if (button.dataset.monthlyWorkerMonth) {
+        setMonthlyWorkerMonth(button.dataset.monthlyWorkerMonth);
+        return;
+      }
+      if (button.dataset.action === "toggle-monthly-rest-settings") {
+        state.monthlyRestDayPanelOpen = !state.monthlyRestDayPanelOpen;
+        render();
+        return;
+      }
+      if (button.dataset.action === "add-monthly-rest-day") {
+        addCustomMonthlyRestDay(document.querySelector("[data-monthly-custom-rest-date]")?.value || "");
+        return;
+      }
+      if (button.dataset.deleteMonthlyRestDay) {
+        deleteCustomMonthlyRestDay(button.dataset.deleteMonthlyRestDay);
+        return;
+      }
       if (button.dataset.unsafeRecordDetail) {
         openUnsafeDetail(button.dataset.unsafeRecordDetail);
         return;
@@ -5346,6 +5655,9 @@
       if (event.target.matches("[data-record-filter]")) {
         updateRecordFilter(event.target.dataset.recordFilter, event.target.value);
       }
+      if (event.target.matches("[data-monthly-public-holiday-mode]")) {
+        toggleMonthlyPublicHolidayMode();
+      }
       if (event.target.matches("[data-record-status]")) {
         const token = event.target.dataset.recordStatus;
         const changed = event.target.value !== (event.target.dataset.currentStatus || "");
@@ -5847,9 +6159,76 @@
       toast("Excel 파일을 만들었습니다.");
     }
 
+    function setMonthlyWorkerMonth(mode) {
+      const currentMonth = monthKeyForDate();
+      const selected = selectedMonthlyWorkerMonth();
+      if (mode === "current") state.selectedMonthlyWorkerMonth = currentMonth;
+      if (mode === "prev") state.selectedMonthlyWorkerMonth = monthKeyOffset(selected, -1);
+      if (mode === "next") state.selectedMonthlyWorkerMonth = monthKeyOffset(selected, 1) <= currentMonth ? monthKeyOffset(selected, 1) : selected;
+      render();
+    }
+
+    function toggleMonthlyPublicHolidayMode() {
+      const restState = monthlyWorkerRestDayState();
+      saveMonthlyWorkerRestDays({ ...restState, useKoreanPublicHolidays: !restState.useKoreanPublicHolidays });
+      render();
+    }
+
+    function addCustomMonthlyRestDay(date) {
+      const value = dateOnly(date);
+      const range = currentMonthRange(selectedMonthlyWorkerMonth());
+      if (!value || value < range.start || value > range.end) return toast("선택 월 안의 날짜를 선택하세요.");
+      const restState = monthlyWorkerRestDayState();
+      saveMonthlyWorkerRestDays({ ...restState, customRestDays: [...restState.customRestDays, value] });
+      render();
+      toast("현장 휴무일을 추가했습니다.");
+    }
+
+    function deleteCustomMonthlyRestDay(date) {
+      const restState = monthlyWorkerRestDayState();
+      saveMonthlyWorkerRestDays({ ...restState, customRestDays: restState.customRestDays.filter((day) => day !== date) });
+      render();
+      toast("현장 휴무일을 삭제했습니다.");
+    }
+
+    function exportMonthlyWorkerAnalytics() {
+      if (!requireAdmin()) return;
+      const stats = monthlyWorkerInspectionStats();
+      const headers = ["작업자", "소속/팀", "월간 점검률", "완료일 수", "미완료일 수", "휴무일 수", "대상일 수"];
+      for (let day = 1; day <= 31; day += 1) headers.push(`${day}일`);
+      const rows = stats.workers.map((worker) => {
+        const row = {
+          "작업자": worker.name,
+          "소속/팀": worker.team || "-",
+          "월간 점검률": `${worker.rate}%`,
+          "완료일 수": worker.counts.done,
+          "미완료일 수": worker.counts.partial + worker.counts.missing,
+          "휴무일 수": worker.counts.rest,
+          "대상일 수": worker.counts.target,
+        };
+        for (let day = 1; day <= 31; day += 1) {
+          const status = worker.dayStatuses.find((entry) => entry.day === day)?.status || "excluded";
+          row[`${day}일`] = monthlyExportStatus(status);
+        }
+        return row;
+      });
+      if (!rows.length) return toast("내보낼 월간 작업자 점검 데이터가 없습니다.");
+      const blob = createXlsxBlob("월간작업자점검", headers, rows);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `monthly-worker-inspections-${stats.range.monthKey}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("월간 작업자 점검 Excel 파일을 만들었습니다.");
+    }
+
     function exportRecords(kind) {
       if (!requireAdmin()) return;
       const date = today();
+      if (kind === "monthly-worker-analytics") return exportMonthlyWorkerAnalytics();
       if (kind === "unsafe") {
         const rows = ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, state.unsafeFilters)
           .map((row) => ({
