@@ -4,6 +4,9 @@
     const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
+    const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
+    const SYNC_RETRY_DELAY_MS = 8 * 1000;
+    const MAX_SYNC_ATTEMPTS = 5;
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -676,6 +679,22 @@
       });
       return Array.from(byId.values()).sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
     }
+
+    function normalizePendingSyncQueue(value) {
+      return (Array.isArray(value) ? value : [])
+        .filter((job) => job && typeof job === "object" && ["rows", "full"].includes(job.type))
+        .map((job) => ({
+          id: job.id || uid("sync"),
+          type: job.type,
+          keys: Array.isArray(job.keys) ? [...new Set(job.keys.map(String))] : [],
+          rowIdsByKey: job.rowIdsByKey && typeof job.rowIdsByKey === "object" ? job.rowIdsByKey : {},
+          attempts: Math.max(0, Number(job.attempts) || 0),
+          createdAt: job.createdAt || new Date().toISOString(),
+          nextRetryAt: job.nextRetryAt || "",
+        }))
+        .filter((job) => job.type === "full" || job.keys.length);
+    }
+
     const loadAdminMode = () => {
       try {
         return sessionStorage.getItem(storeKey("adminMode")) === "true";
@@ -843,6 +862,10 @@
       toastTimer: null,
       syncMode: "offline",
       syncText: "로컬 저장",
+      pendingSyncQueue: normalizePendingSyncQueue(loadJson("pendingSyncQueue", [])),
+      syncRetryTimer: null,
+      syncFlushInFlight: false,
+      lastRemotePullAt: Number(loadJson("lastRemotePullAt", 0)) || 0,
       screenMode: localStorage.getItem(storeKey("screenMode")) || "desktop",
       shipSortMode: normalizeShipSortMode(loadJson("shipSortMode", "stage")),
       shipSearchQuery: "",
@@ -936,12 +959,15 @@
       setupScrollNav();
       setInterval(updateHeaderClock, 1000);
       setInterval(syncServerClock, SERVER_CLOCK_REFRESH_MS);
+      setInterval(flushPendingSyncQueue, SYNC_RETRY_DELAY_MS);
       window.addEventListener("resize", applyScreenMode);
+      window.addEventListener("online", flushPendingSyncQueue);
       window.addEventListener("popstate", restoreRouteState);
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
         syncServerClock();
         pullRemote();
+        flushPendingSyncQueue();
       }
     }
 
@@ -1201,6 +1227,8 @@
       saveJson("missingMaterials", state.missingMaterials);
       saveJson("issuePhotos", state.issuePhotos);
       saveJson("pendingPhotoUploads", state.pendingPhotoUploads);
+      saveJson("pendingSyncQueue", state.pendingSyncQueue);
+      saveJson("lastRemotePullAt", state.lastRemotePullAt || 0);
       saveJson("unsafeDraft", state.unsafeDraft);
       saveJson("materialDraft", state.materialDraft);
       saveJson("unsafeFilters", state.unsafeFilters);
@@ -4942,7 +4970,7 @@
       const ordered = sortedShips().map((ship, index) => ({ ...ship, order: index + 1 }));
       state.ships = ordered;
       state.shipSortMode = "saved";
-      persistAndSync();
+      persistAndSync("ships");
       saveJson("shipSortMode", state.shipSortMode);
       render();
       toast("현재 호선 순서를 저장했습니다.");
@@ -5764,21 +5792,10 @@
         state.draft = createDraft();
         state.selectedCategoryId = null;
         persist();
-        const synced = await syncInspectionHistory(inspection, inspectionItems);
         state.inspectionSubmitting = false;
-        if (synced) {
-          changeView("pledgeComplete");
-          toast("점검이 제출되었습니다.");
-          return;
-        }
-        state.view = "pledgeComplete";
-        state.historyScope = "all";
-        state.historyFilter = "all";
-        state.historyDetailId = null;
-        render();
-        scrollScreenTop();
-        replaceRouteState();
-        toast("점검 이력은 저장되었지만 서버 동기화에 실패했습니다.");
+        changeView("pledgeComplete");
+        toast("점검이 제출되었습니다.");
+        syncInspectionHistory(inspection, inspectionItems);
       } catch (error) {
         state.inspectionSubmitting = false;
         console.error(error);
@@ -5818,11 +5835,11 @@
       state.unsafeDraft = createUnsafeDraft();
       state.unsafePhotoFiles = [];
       persist();
-      await syncUnsafeIssue(row, files);
       render();
       scrollScreenTop();
       replaceRouteState();
       toast("불안전요소가 접수되었습니다.");
+      syncUnsafeIssue(row, files);
     }
 
     async function submitMissingMaterial() {
@@ -5861,11 +5878,11 @@
       state.lastMaterialId = id;
       state.materialDraft = createMaterialDraft();
       persist();
-      await syncMissingMaterial(row);
       render();
       scrollScreenTop();
       replaceRouteState();
       toast("호선자재 누락이 접수되었습니다.");
+      syncMissingMaterial(row);
     }
 
     function setAdminMode(enabled, email = "") {
@@ -5935,7 +5952,7 @@
       if (!name) return toast("작업자 이름을 입력하세요.");
       const now = serverNow().toISOString();
       state.workers.push({ id: uid("worker"), name, team, createdAt: now, updatedAt: now });
-      persistAndSync();
+      persistAndSync("workers");
       render();
       toast("작업자를 추가했습니다.");
     }
@@ -5953,7 +5970,7 @@
       worker.name = cleanName;
       worker.team = team.trim();
       worker.updatedAt = serverNow().toISOString();
-      persistAndSync();
+      persistAndSync("workers");
       render();
       toast("작업자를 수정했습니다.");
     }
@@ -5968,7 +5985,6 @@
       if (state.materialDraft.workerId === id) state.materialDraft.workerId = "";
       persist();
       await deleteRemoteRows("workers", [id]);
-      if (isSyncConfigured()) await pushRemote();
       render();
       toast("작업자를 삭제했습니다.");
     }
@@ -6312,7 +6328,7 @@
           }, { initialStatus: statuses[0] });
         }
       });
-      await persistAndSync();
+      await persistAndSync("missingMaterials");
       render();
       toast(`${rows.length}건의 상태를 변경했습니다.`);
     }
@@ -6391,7 +6407,7 @@
             actor: "관리자",
           }, { initialStatus: statuses[0] })
         : ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: statuses[0] });
-      persistAndSync();
+      persistAndSync(kind === "unsafe" ? "unsafeIssues" : "missingMaterials");
       render();
       toast("기록을 저장했습니다.");
     }
@@ -6411,7 +6427,6 @@
         await deleteRemoteRows("missingMaterials", [id]);
       }
       persist();
-      if (isSyncConfigured()) await pushRemote();
       render();
       toast("기록을 삭제했습니다.");
     }
@@ -6462,7 +6477,7 @@
       state.inspections = state.inspections.filter((row) => !ids.has(row.id));
       state.inspectionItems = state.inspectionItems.filter((row) => !ids.has(row.inspectionId));
       state.selectedHistoryIds = [];
-      persistAndSync();
+      persist();
       if (isSyncConfigured()) deleteRemoteHistory([...ids]);
       render();
       toast("선택한 이력을 삭제했습니다.");
@@ -6503,7 +6518,7 @@
         added += 1;
       });
       if (!added) return toast("추가된 호선이 없습니다. 호선 번호와 선종을 확인하세요.");
-      persistAndSync();
+      persistAndSync("ships");
       render();
       toast(`호선 ${added}척을 추가했습니다.${skipped ? ` ${skipped}건은 중복/오류로 건너뛰었습니다.` : ""}`);
     }
@@ -6518,7 +6533,6 @@
       persist();
       if (isSyncConfigured()) {
         await deleteRemoteShips([id]);
-        pushRemote();
       }
       render();
       toast(`${ship.no} 호선을 삭제했습니다.`);
@@ -6534,7 +6548,7 @@
         return next;
       });
       cleanupDeliveredShips(false);
-      persistAndSync();
+      persistAndSync("ships");
       render();
     }
 
@@ -6554,7 +6568,7 @@
         order: state.categories.length + 1,
       });
       state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
-      persistAndSync();
+      persistAndSync(["categories", "sections"]);
       state.categoryAddOpen = false;
       state.manageCategoryId = id;
       render();
@@ -6567,7 +6581,7 @@
       const icon = $("editCatIcon").value.trim() || cat.label.slice(0, 1).toUpperCase();
       const toolNature = normalizeToolNature($("editCatToolNature")?.value || cat.toolNature);
       state.categories = state.categories.map((row) => row.id === cat.id ? { ...row, icon, toolNature } : row);
-      persistAndSync();
+      persistAndSync("categories");
       render();
       toast("아이콘과 공기구 기준을 저장했습니다.");
     }
@@ -6591,7 +6605,7 @@
         label,
       } : row);
       state.editCategoryId = null;
-      persistAndSync();
+      persistAndSync("categories");
       render();
       toast("작업 유형명을 수정했습니다.");
     }
@@ -6616,7 +6630,7 @@
         toolIds: selectedCategoryToolIds(`category_${id}`),
       } : row);
       state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
-      persistAndSync();
+      persistAndSync("categories");
       render();
       toast(`${cat.label} 공기구 지정을 저장했습니다.`);
     }
@@ -6637,7 +6651,6 @@
         await deleteRemoteRows("items", itemIds);
         await deleteRemoteRows("sections", sectionIds);
         await deleteRemoteRows("categories", [id]);
-        await pushRemote();
       }
       render();
       toast("작업 유형을 삭제했습니다.");
@@ -6654,7 +6667,7 @@
         title,
         order: sectionsFor(state.manageCategoryId).length + 1,
       });
-      persistAndSync();
+      persistAndSync("sections");
       render();
     }
 
@@ -6675,7 +6688,7 @@
       if (duplicate) return toast("같은 이름의 섹션이 이미 있습니다.");
       state.sections = state.sections.map((row) => row.id === id ? { ...row, title } : row);
       state.editSectionId = null;
-      persistAndSync();
+      persistAndSync("sections");
       render();
       toast("섹션명을 수정했습니다.");
     }
@@ -6688,7 +6701,7 @@
       if (!confirm(`${section.title} 섹션과 항목 ${count}개를 삭제할까요?`)) return;
       state.sections = state.sections.filter((row) => row.id !== id);
       state.items = state.items.map((row) => row.sectionId === id ? { ...row, active: false } : row);
-      persistAndSync();
+      persistAndSync(["sections", "items"]);
       render();
     }
 
@@ -6716,7 +6729,7 @@
         visibilityCondition: normalizeVisibilityCondition(visibilityNode?.value),
         order: activeItems(section.categoryId).filter((row) => row.sectionId === sectionId).length + 1,
       });
-      persistAndSync();
+      persistAndSync("items");
       render();
     }
 
@@ -6736,7 +6749,7 @@
         toolIds,
         visibilityCondition,
       } : row);
-      persistAndSync();
+      persistAndSync("items");
       render();
       toast("점검 항목을 수정했습니다.");
     }
@@ -6747,7 +6760,7 @@
       if (!row) return;
       if (!confirm("이 점검 항목을 삭제할까요? 기존 점검 이력은 유지됩니다.")) return;
       state.items = state.items.map((itemRow) => itemRow.id === id ? { ...itemRow, active: false } : itemRow);
-      persistAndSync();
+      persistAndSync("items");
       render();
     }
 
@@ -6767,7 +6780,7 @@
       });
       input.value = "";
       state.toolAddOpen = false;
-      persistAndSync();
+      persistAndSync("tools");
       render();
       toast("공기구/준비물을 추가했습니다.");
     }
@@ -6780,7 +6793,7 @@
       if (!name) return toast("공기구/준비물 이름을 입력하세요.");
       state.tools = state.tools.map((row) => row.id === id ? { ...row, name, nature } : row);
       state.editToolId = null;
-      persistAndSync();
+      persistAndSync("tools");
       render();
       toast("공기구/준비물을 수정했습니다.");
     }
@@ -6794,7 +6807,7 @@
       state.items = state.items.map((row) => ({ ...row, toolIds: sanitizeToolIds(row.toolIds).filter((toolId) => toolId !== id) }));
       state.draft.selectedToolIds = sanitizeToolIds(state.draft.selectedToolIds).filter((toolId) => toolId !== id);
       if (state.editToolId === id) state.editToolId = null;
-      persistAndSync();
+      persistAndSync(["tools", "items"]);
       render();
       toast("공기구/준비물을 삭제했습니다.");
     }
@@ -6802,7 +6815,7 @@
     function toggleRequireToolCheck(categoryId) {
       if (!requireAdmin()) return;
       state.categories = state.categories.map((row) => row.id === categoryId ? { ...row, requireToolCheck: row.requireToolCheck === false } : row);
-      persistAndSync();
+      persistAndSync("categories");
       render();
     }
 
@@ -6824,7 +6837,7 @@
         });
         $("newPictogramLabel").value = "";
         $("newPictogramFile").value = "";
-        persistAndSync();
+        persistAndSync("pictograms");
         render();
         toast("사용자 지정 픽토그램을 추가했습니다.");
       };
@@ -6837,7 +6850,7 @@
       const label = $(`pictogramLabel_${id}`)?.value.trim() || "";
       if (!label) return toast("픽토그램 이름을 입력하세요.");
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, label } : row);
-      persistAndSync();
+      persistAndSync("pictograms");
       render();
       toast("픽토그램 이름을 수정했습니다.");
     }
@@ -6851,7 +6864,7 @@
       const affected = state.categories.some((row) => row.icon === id);
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, deleted: true } : row);
       state.categories = state.categories.map((row) => row.icon === id ? { ...row, icon: fallback } : row);
-      persistAndSync();
+      persistAndSync(["pictograms", "categories"]);
       render();
       toast(affected ? "사용 중인 작업 유형은 기본 픽토그램으로 되돌렸습니다." : "픽토그램을 삭제했습니다.");
     }
@@ -6942,13 +6955,15 @@
         state.issuePhotos.push(...photos);
         state.pendingPhotoUploads = state.pendingPhotoUploads.filter((item) => item.issueId !== row.id);
         persist();
-        const synced = await persistAndSync();
-        if (!synced) toast("기록은 저장되었지만 서버 동기화에 실패했습니다.");
+        enqueueSyncRows("unsafeIssues", [row]);
+        enqueueSyncRows("issuePhotos", photos);
+        flushPendingSyncQueue();
         return true;
       } catch (error) {
         console.error(error);
         if (files.length) await createPendingPhotoUploads(row.id, files, error);
-        setSyncStatus("동기화 오류", "error");
+        enqueueSyncRows("unsafeIssues", [row]);
+        flushPendingSyncQueue();
         toast("사진 업로드에 실패했습니다. 상세 화면에서 재시도할 수 있습니다.");
         return false;
       }
@@ -6968,8 +6983,9 @@
     }
 
     async function syncMissingMaterial(row) {
-      const synced = await persistAndSync();
-      if (!synced) toast("기록은 저장되었지만 서버 동기화에 실패했습니다.");
+      persist();
+      enqueueSyncRows("missingMaterials", [row]);
+      flushPendingSyncQueue();
       return row;
     }
 
@@ -6988,16 +7004,134 @@
       await deleteRemoteRows("issuePhotos", photos.map((photo) => photo.id));
     }
 
-    async function persistAndSync() {
+    async function persistAndSync(keys = null) {
       persist();
-      if (isSyncConfigured()) {
-        return pushRemote();
-      }
+      if (!isSyncConfigured()) return true;
+      enqueueSync(keys);
+      flushPendingSyncQueue();
       return true;
     }
 
     function remoteConfigByKey(key) {
       return REMOTE_TABLES.find((config) => config.key === key);
+    }
+
+    function syncableKeys(keys) {
+      const values = Array.isArray(keys) ? keys : (keys ? [keys] : []);
+      return [...new Set(values.map(String).filter((key) => remoteConfigByKey(key)))];
+    }
+
+    function saveSyncQueue() {
+      saveJson("pendingSyncQueue", state.pendingSyncQueue);
+    }
+
+    function enqueueSync(keys = null) {
+      if (!isSyncConfigured()) return;
+      if (!keys) {
+        state.pendingSyncQueue.push({
+          id: uid("sync"),
+          type: "full",
+          keys: [],
+          rowIdsByKey: {},
+          attempts: 0,
+          createdAt: serverNow().toISOString(),
+          nextRetryAt: "",
+        });
+        prunePendingSyncQueue();
+        setSyncStatus("동기화 대기", "pending");
+        saveSyncQueue();
+        return;
+      }
+      syncableKeys(keys).forEach((key) => {
+        const rows = Array.isArray(state[key]) ? state[key] : [];
+        enqueueSyncRows(key, rows);
+      });
+    }
+
+    function enqueueSyncRows(key, rows) {
+      if (!isSyncConfigured()) return;
+      const cleanRows = (Array.isArray(rows) ? rows : [rows]).filter((row) => row && row.id);
+      if (!remoteConfigByKey(key) || !cleanRows.length) return;
+      const existing = state.pendingSyncQueue.find((job) => job.type === "rows" && job.keys.length === 1 && job.keys[0] === key && !job.nextRetryAt);
+      const nextIds = cleanRows.map((row) => row.id);
+      if (existing) {
+        existing.rowIdsByKey[key] = [...new Set([...(existing.rowIdsByKey[key] || []), ...nextIds])];
+      } else {
+        state.pendingSyncQueue.push({
+          id: uid("sync"),
+          type: "rows",
+          keys: [key],
+          rowIdsByKey: { [key]: nextIds },
+          attempts: 0,
+          createdAt: serverNow().toISOString(),
+          nextRetryAt: "",
+        });
+      }
+      prunePendingSyncQueue();
+      setSyncStatus("동기화 대기", "pending");
+      saveSyncQueue();
+    }
+
+    function prunePendingSyncQueue() {
+      state.pendingSyncQueue = normalizePendingSyncQueue(state.pendingSyncQueue).slice(-80);
+      const fullIndex = state.pendingSyncQueue.findIndex((job) => job.type === "full");
+      if (fullIndex >= 0) {
+        state.pendingSyncQueue = state.pendingSyncQueue.filter((job, index) => job.type === "full" ? index === fullIndex : true);
+      }
+    }
+
+    function scheduleSyncRetry() {
+      if (state.syncRetryTimer) clearTimeout(state.syncRetryTimer);
+      state.syncRetryTimer = setTimeout(() => {
+        state.syncRetryTimer = null;
+        flushPendingSyncQueue();
+      }, SYNC_RETRY_DELAY_MS);
+    }
+
+    async function flushPendingSyncQueue() {
+      const client = supabaseClient();
+      if (!client) {
+        setSyncStatus("로컬 저장", "offline");
+        return false;
+      }
+      if (state.syncFlushInFlight) return false;
+      prunePendingSyncQueue();
+      const now = Date.now();
+      const job = state.pendingSyncQueue.find((item) => !item.nextRetryAt || Date.parse(item.nextRetryAt) <= now);
+      if (!job) {
+        if (state.pendingSyncQueue.length) scheduleSyncRetry();
+        return false;
+      }
+      state.syncFlushInFlight = true;
+      setSyncStatus("동기화 중", "pending");
+      try {
+        if (job.type === "full") {
+          await pushRemote({ preserveQueue: true });
+        } else {
+          for (const key of job.keys) {
+            const config = remoteConfigByKey(key);
+            const ids = new Set(job.rowIdsByKey[key] || []);
+            const rows = (Array.isArray(state[key]) ? state[key] : []).filter((row) => ids.has(row.id));
+            await upsertTable(client, config, rows);
+          }
+        }
+        state.pendingSyncQueue = state.pendingSyncQueue.filter((item) => item.id !== job.id);
+        saveSyncQueue();
+        setSyncStatus(state.pendingSyncQueue.length ? "동기화 대기" : "온라인", state.pendingSyncQueue.length ? "pending" : "online");
+        state.syncFlushInFlight = false;
+        if (state.pendingSyncQueue.length) flushPendingSyncQueue();
+        return true;
+      } catch (error) {
+        console.error(error);
+        job.attempts = Math.min(MAX_SYNC_ATTEMPTS, (job.attempts || 0) + 1);
+        const delay = SYNC_RETRY_DELAY_MS * job.attempts;
+        job.nextRetryAt = new Date(Date.now() + delay).toISOString();
+        saveSyncQueue();
+        setSyncStatus("재시도 대기", "pending");
+        state.syncFlushInFlight = false;
+        scheduleSyncRetry();
+        return false;
+      }
     }
 
     function isSyncConfigured() {
@@ -7012,23 +7146,25 @@
       return cachedSupabaseClient;
     }
 
-    async function pushRemote() {
+    async function pushRemote(options = {}) {
       const client = supabaseClient();
       if (!client) {
         setSyncStatus("로컬 저장", "offline");
         return true;
       }
-      setSyncStatus("동기화 중", "pending");
+      if (!options.preserveQueue) setSyncStatus("동기화 중", "pending");
       try {
         for (const config of REMOTE_TABLES) {
           await upsertTable(client, config, state[config.key]);
         }
-        setSyncStatus("온라인", "online");
+        if (!options.preserveQueue) setSyncStatus("온라인", "online");
         return true;
       } catch (error) {
         console.error(error);
-        setSyncStatus("동기화 오류", "error");
-        toast("동기화에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+        if (!options.preserveQueue) {
+          setSyncStatus("동기화 오류", "error");
+          toast("동기화에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+        }
         return false;
       }
     }
@@ -7042,24 +7178,20 @@
 
       const inspectionConfig = remoteConfigByKey("inspections");
       const itemConfig = remoteConfigByKey("inspectionItems");
-      setSyncStatus("동기화 중", "pending");
-
-      try {
-        await upsertTable(client, inspectionConfig, [inspection]);
-        await upsertTable(client, itemConfig, inspectionItems);
-        setSyncStatus("온라인", "online");
-        return true;
-      } catch (error) {
-        console.error(error);
-        setSyncStatus("동기화 오류", "error");
-        toast("동기화에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
-        return false;
-      }
+      if (!inspectionConfig || !itemConfig) return false;
+      enqueueSyncRows(inspectionConfig.key, [inspection]);
+      enqueueSyncRows(itemConfig.key, inspectionItems);
+      flushPendingSyncQueue();
+      return true;
     }
 
-    async function pullRemote() {
+    async function pullRemote(options = {}) {
       const client = supabaseClient();
       if (!client) return setSyncStatus("로컬 저장", "offline");
+      if (!options.force && state.lastRemotePullAt && Date.now() - state.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS) {
+        flushPendingSyncQueue();
+        return;
+      }
       setSyncStatus("서버 확인 중", "pending");
       try {
         const results = await Promise.all(REMOTE_TABLES.map((config) => selectTable(client, config)));
@@ -7070,9 +7202,11 @@
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
         cleanupDeliveredShips(true);
+        state.lastRemotePullAt = Date.now();
         persist();
         setSyncStatus("온라인", "online");
         render();
+        flushPendingSyncQueue();
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");

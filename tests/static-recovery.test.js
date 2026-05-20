@@ -47,8 +47,16 @@ assert.match(html, /id="homeVersionLabel"/);
 
 const app = read("assets/js/app-v2.js");
 assert.match(app, /const APP_VERSION = "0\.2-20260520"/);
+assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 60 \* 1000/);
+assert.match(app, /const SYNC_RETRY_DELAY_MS = 8 \* 1000/);
 assert.match(app, /function appVersionLabel\(\)/);
 assert.match(app, /version \$\{String\(APP_VERSION\)\.split\("-"\)\[0\]\}/);
+assert.match(app, /pendingSyncQueue: normalizePendingSyncQueue\(loadJson\("pendingSyncQueue", \[\]\)\)/);
+assert.match(app, /function enqueueSyncRows\(key, rows\)/);
+assert.match(app, /async function flushPendingSyncQueue\(\)/);
+assert.match(app, /async function persistAndSync\(keys = null\)/);
+assert.match(app, /syncInspectionHistory\(inspection, inspectionItems\);/);
+assert.match(app, /Date\.now\(\) - state\.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS/);
 assert.match(app, /\{ id: "pledge", label: "서약"/);
 assert.match(app, /\{ id: "analytics", label: "통계"/);
 assert.match(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ships", "history", "items"\]\)/);
