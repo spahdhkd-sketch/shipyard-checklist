@@ -41,6 +41,8 @@ assert.match(html, /id="homeVersionLabel"/);
   assert.match(page, /assets\/css\/styles-v2\.css\?v=20260521-cache-fix/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
   assert.match(page, /assets\/js\/app-v2\.js\?v=20260521-cache-fix/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
+  assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
   assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
   assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
   assert.doesNotMatch(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, `${file} should not use remote Supabase CDN`);
