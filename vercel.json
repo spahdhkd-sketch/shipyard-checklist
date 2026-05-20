@@ -5,11 +5,35 @@
       "destination": "/index.html"
     },
     {
+      "source": "/check",
+      "destination": "/index.html"
+    },
+    {
       "source": "/history",
       "destination": "/index.html"
     },
     {
       "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/manage",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ships",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/items",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/unsafe",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/materials",
       "destination": "/index.html"
     },
     {

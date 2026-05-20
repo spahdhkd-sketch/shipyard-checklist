@@ -147,7 +147,7 @@ assert.match(sw, /fetch\(event\.request\)[\s\S]+cache\.put\(event\.request, copy
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);
-["/checklist", "/history", "/admin", "/pledge", "/analytics"].forEach((route) => {
+["/checklist", "/check", "/history", "/admin", "/manage", "/ships", "/items", "/unsafe", "/materials", "/pledge", "/analytics"].forEach((route) => {
   assert.ok(rewrites.includes(route), `${route} rewrite should exist`);
 });
 const headerSources = vercel.headers.map((row) => row.source);
