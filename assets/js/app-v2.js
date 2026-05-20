@@ -4210,7 +4210,7 @@
           const selectedToolIds = sanitizeToolIds(cat.toolIds);
           const selectedCount = selectedToolIds.length;
           const expanded = state.categoryToolAssignmentOpenIds.includes(cat.id);
-          return `<article class="category-tool-assignment-row" style="--accent:${esc(categoryAccent(cat))}">
+          return `<article class="category-tool-assignment-row" data-toggle-category-tools="${esc(cat.id)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" style="--accent:${esc(categoryAccent(cat))}">
             <div class="category-tool-assignment-head">
               <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
               <div>
@@ -4218,10 +4218,10 @@
                 <span>${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</span>
               </div>
               <em>${selectedCount ? `${selectedCount}개 지정` : "전체 표시"}</em>
+              <span class="category-tool-toggle-mark" aria-hidden="true">${expanded ? "⌃" : "⌄"}</span>
             </div>
             ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
             <div class="category-tool-assignment-actions">
-              <button class="btn-light" data-toggle-category-tools="${esc(cat.id)}" type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "접기" : "펼치기"}</button>
               ${expanded ? `<button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>` : ""}
               <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
             </div>
@@ -4823,6 +4823,12 @@
         return;
       }
 
+      const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
+      if (categoryToolRow && !event.target.closest("button,input,label,select,textarea")) {
+        toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
+        return;
+      }
+
       const button = event.target.closest("button");
       if (!button) return;
 
@@ -5093,7 +5099,6 @@
       if (button.dataset.editCategory) editCategory(button.dataset.editCategory);
       if (button.dataset.saveCategory) saveCategory(button.dataset.saveCategory);
       if (button.dataset.saveCategoryTools) saveCategoryTools(button.dataset.saveCategoryTools);
-      if (button.dataset.toggleCategoryTools) toggleCategoryTools(button.dataset.toggleCategoryTools);
       if (button.dataset.action === "cancel-edit-category") {
         state.editCategoryId = null;
         render();
@@ -5153,6 +5158,12 @@
       if (unsafeCard && !event.target.closest("button,input,label,select,textarea")) {
         event.preventDefault();
         openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
+        return;
+      }
+      const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
+      if (categoryToolRow && event.target === categoryToolRow) {
+        event.preventDefault();
+        toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
       }
     });
 
