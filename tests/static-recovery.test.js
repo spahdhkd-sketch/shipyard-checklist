@@ -44,6 +44,10 @@ assert.match(app, /function signatureCacheDateKey\(\)/);
 assert.match(app, /function cachedPledgeSignatureForWorker\(workerName\)/);
 assert.match(app, /function savePledgeSignatureForWorker\(workerName, signature\)/);
 assert.match(app, /function preloadCachedPledgeSignature\(\)/);
+assert.match(app, /preloadCachedPledgeSignature\(\);[\s\S]*const submitState = buildCheckSubmitState/);
+assert.match(app, /const previousWorker = state\.draft\.worker;/);
+assert.match(app, /if \(normalizedWorkerName\(previousWorker\) !== normalizedWorkerName\(state\.draft\.worker\)\) state\.draft\.pledgeSignature = "";/);
+assert.match(app, /savePledgeSignatureForWorker\(state\.draft\.worker, state\.draft\.pledgeSignature\)/);
 
 const css = read("assets/css/styles-v2.css");
 assert.match(css, /--safe-area-bottom/);

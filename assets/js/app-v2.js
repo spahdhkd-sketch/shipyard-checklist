@@ -1459,6 +1459,7 @@
 
       const saveDrawnSignature = () => {
         state.draft.pledgeSignature = canvas.toDataURL("image/png");
+        savePledgeSignatureForWorker(state.draft.worker, state.draft.pledgeSignature);
         if (textInput) textInput.value = "";
         pad?.classList.add("has-signature");
         saveJson("draft", state.draft);
@@ -2240,6 +2241,7 @@
       const highMissing = items.filter((row) => row.risk === "high" && !state.draft.checks[row.id]);
       const pct = items.length ? Math.round(checked / items.length * 100) : 0;
       const selectableShips = visibleWorkerShips();
+      preloadCachedPledgeSignature();
       const submitState = buildCheckSubmitState(cat, items, highMissing);
       const canSubmit = submitState.canSubmit;
       const submitDisabledText = submitState.disabledText;
@@ -5138,7 +5140,10 @@
     function selectPledgeWorker(id) {
       const worker = state.workers.find((row) => row.id === id);
       if (!worker) return;
+      const previousWorker = state.draft.worker;
       state.draft.worker = worker.name;
+      if (normalizedWorkerName(previousWorker) !== normalizedWorkerName(state.draft.worker)) state.draft.pledgeSignature = "";
+      preloadCachedPledgeSignature();
       saveJson("draft", state.draft);
       render();
     }
@@ -5167,7 +5172,14 @@
     }
 
     document.addEventListener("input", (event) => {
-      if (event.target.id === "worker") state.draft.worker = event.target.value;
+      if (event.target.id === "worker") {
+        const previousWorker = state.draft.worker;
+        state.draft.worker = event.target.value;
+        if (normalizedWorkerName(previousWorker) !== normalizedWorkerName(state.draft.worker)) state.draft.pledgeSignature = "";
+        preloadCachedPledgeSignature();
+        saveJson("draft", state.draft);
+        refreshCheckSubmitControls();
+      }
       if (event.target.id === "safetyPledge") state.draft.safetyPledge = event.target.value;
       if (event.target.id === "pledgeSignature") {
         state.draft.pledgeSignature = event.target.value;
@@ -5175,6 +5187,7 @@
       }
       if (event.target.id === "pledgeSignatureText") {
         state.draft.pledgeSignature = event.target.value;
+        savePledgeSignatureForWorker(state.draft.worker, state.draft.pledgeSignature);
         document.querySelector("[data-signature-pad]")?.classList.remove("has-signature");
         const canvas = document.getElementById("pledgeSignaturePad");
         const ctx = canvas?.getContext("2d");
