@@ -514,20 +514,23 @@ function assertCheck(name, condition) {
     await click(client, '[data-action="continue-tool-prep"]');
     const checklistState = await evaluate(client, `(() => {
       const text = document.body.innerText;
-      const pledge = document.querySelector("#safetyPledge");
+      const pledgeCard = Array.from(document.querySelectorAll(".pledge-flow-card"))
+        .find((node) => node.textContent.includes("작업 전 안전 서약서"));
       return {
         hasWireItem: text.includes("탑재용 와이어 / 샤클 안전핀 상태"),
         hasSlingItem: text.includes("슬링벨트 손상 상태"),
         hasCommonHousekeeping: text.includes("탑재 위치 정리정돈"),
         hasCommonUnderLoad: text.includes("권상물 하부 출입금지"),
-        pledgePlaceholder: pledge ? pledge.getAttribute("placeholder") : "",
+        hasInlinePledge: Boolean(pledgeCard),
+        pledgeRuleCount: pledgeCard ? pledgeCard.querySelectorAll("[data-pledge-rule]").length : 0,
       };
     })()`);
     assertCheck("wire-specific item appears", checklistState.hasWireItem);
     assertCheck("unselected sling item is hidden", !checklistState.hasSlingItem);
     assertCheck("common housekeeping item appears", checklistState.hasCommonHousekeeping);
     assertCheck("common under-load item appears", checklistState.hasCommonUnderLoad);
-    assertCheck("safety pledge placeholder", checklistState.pledgePlaceholder === "오늘 하루의 안전다짐 작성을 해주세요");
+    assertCheck("inline safety pledge appears", checklistState.hasInlinePledge);
+    assertCheck("inline safety pledge has rules", checklistState.pledgeRuleCount > 0);
     const checklistShot = await screenshot(client, "02-checklist-wire-desktop.png");
 
     await setViewport(client, 420, 844, true);
