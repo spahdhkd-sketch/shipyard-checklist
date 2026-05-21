@@ -160,6 +160,7 @@
     const ISSUE_MATERIAL_RULES = window.IssueMaterialRules;
     const ISSUE_PHOTO_BUCKET = "issue-photos";
     const ITEM_VISIBILITY_CONDITIONS = ["항상 표시", ...TOOL_NATURES];
+    const CATEGORY_TOOL_META_PREFIX = "__category_tools__";
     const DEFAULT_CATEGORY_NATURES = {
       mounting: "선행",
       pre_install: "선행",
@@ -1073,6 +1074,7 @@
         toolIds: sanitizeToolIds(row.toolIds),
         visibilityCondition: normalizeVisibilityCondition(row.visibilityCondition || inferVisibilityFromToolIds(row)),
       }));
+      applyCategoryToolMetaItems();
       dedupeChecklistItems();
       state.tools = (Array.isArray(state.tools) ? state.tools : []).map((tool, index) => ({
         ...tool,
@@ -4895,6 +4897,67 @@
       return state.items.filter((row) => row.categoryId === categoryId && row.active !== false).sort(byOrder);
     }
 
+    function categoryToolMetaItemId(categoryId) {
+      return `${CATEGORY_TOOL_META_PREFIX}${categoryId}`;
+    }
+
+    function isCategoryToolMetaItem(row) {
+      return String(row?.id || "").startsWith(CATEGORY_TOOL_META_PREFIX);
+    }
+
+    function categoryToolMetaLabel(categoryId) {
+      return `${CATEGORY_TOOL_META_PREFIX}${categoryId}`;
+    }
+
+    function syncCategoryToolMetaItem(categoryId, toolIds) {
+      const cat = categoryById(categoryId);
+      const section = sectionsFor(categoryId)[0];
+      if (!cat || !section) return;
+      const id = categoryToolMetaItemId(categoryId);
+      const cleanToolIds = sanitizeToolIds(toolIds);
+      const existing = state.items.find((row) => row.id === id);
+      const row = {
+        ...(existing || {}),
+        id,
+        categoryId,
+        sectionId: section.id,
+        text: categoryToolMetaLabel(categoryId),
+        risk: "low",
+        required: false,
+        active: false,
+        visibilityCondition: "항상 표시",
+        toolIds: cleanToolIds,
+        order: existing?.order || 9999,
+      };
+      if (existing) {
+        state.items = state.items.map((item) => item.id === id ? row : item);
+      } else if (cleanToolIds.length) {
+        state.items.push(row);
+      }
+      state.categories = state.categories.map((item) => item.id === categoryId ? { ...item, toolIds: cleanToolIds } : item);
+    }
+
+    function applyCategoryToolMetaItems() {
+      const metaToolIds = new Map();
+      state.items.forEach((row) => {
+        if (isCategoryToolMetaItem(row) && row.categoryId) {
+          metaToolIds.set(row.categoryId, sanitizeToolIds(row.toolIds));
+        }
+      });
+      state.categories = state.categories.map((cat) => {
+        const metaIds = metaToolIds.get(cat.id);
+        return {
+          ...cat,
+          toolIds: metaToolIds.has(cat.id) ? metaIds : sanitizeToolIds(cat.toolIds),
+        };
+      });
+      state.categories.forEach((cat) => {
+        if (sanitizeToolIds(cat.toolIds).length || metaToolIds.has(cat.id)) {
+          syncCategoryToolMetaItem(cat.id, cat.toolIds);
+        }
+      });
+    }
+
     function normalizeToolNature(value) {
       const text = String(value || "").trim().replace("선/후행", "선행/후행");
       return TOOL_NATURES.includes(text) ? text : "선행";
@@ -6759,8 +6822,9 @@
         ...row,
         toolIds: selectedCategoryToolIds(`category_${id}`),
       } : row);
+      syncCategoryToolMetaItem(id, categoryById(id)?.toolIds || []);
       state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
-      persistAndSync("categories");
+      persistAndSync(["categories", "items"]);
       render();
       toast(`${cat.label} 공기구 지정을 저장했습니다.`);
     }
@@ -6935,9 +6999,10 @@
       if (!confirm(`${tool.name} 공기구/준비물을 삭제할까요?`)) return;
       state.tools = state.tools.map((row) => row.id === id ? { ...row, deleted: true } : row);
       state.items = state.items.map((row) => ({ ...row, toolIds: sanitizeToolIds(row.toolIds).filter((toolId) => toolId !== id) }));
+      state.categories = state.categories.map((row) => ({ ...row, toolIds: sanitizeToolIds(row.toolIds).filter((toolId) => toolId !== id) }));
       state.draft.selectedToolIds = sanitizeToolIds(state.draft.selectedToolIds).filter((toolId) => toolId !== id);
       if (state.editToolId === id) state.editToolId = null;
-      persistAndSync(["tools", "items"]);
+      persistAndSync(["tools", "items", "categories"]);
       render();
       toast("공기구/준비물을 삭제했습니다.");
     }

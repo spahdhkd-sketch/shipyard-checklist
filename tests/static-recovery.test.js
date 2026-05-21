@@ -104,6 +104,11 @@ assert.match(app, /if \(button\.dataset\.saveCategoryTools\) saveCategoryTools\(
 assert.match(app, /const categoryToolRow = event\.target\.closest\("\.category-tool-assignment-row\[data-toggle-category-tools\]"\)/);
 assert.match(app, /function saveCategoryTools\(id\)/);
 assert.match(app, /toolIds: selectedCategoryToolIds\(`category_\$\{id\}`\)/);
+assert.match(app, /const CATEGORY_TOOL_META_PREFIX = "__category_tools__"/);
+assert.match(app, /function categoryToolMetaItemId\(categoryId\)/);
+assert.match(app, /function syncCategoryToolMetaItem\(categoryId, toolIds\)/);
+assert.match(app, /function applyCategoryToolMetaItems\(\)/);
+assert.match(app, /persistAndSync\(\["categories", "items"\]\)/);
 assert.doesNotMatch(app, /category-tool-toggle-mark/);
 assert.doesNotMatch(app, /⌃|⌄/);
 assert.match(app, /작업 유형 관리/);

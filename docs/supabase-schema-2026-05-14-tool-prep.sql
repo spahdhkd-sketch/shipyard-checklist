@@ -11,6 +11,9 @@ begin;
 alter table if exists public.safety_categories
   add column if not exists require_tool_check boolean not null default true;
 
+alter table if exists public.safety_categories
+  add column if not exists tool_ids text[] not null default '{}'::text[];
+
 alter table if exists public.safety_items
   add column if not exists tool_ids text[] not null default '{}'::text[];
 
