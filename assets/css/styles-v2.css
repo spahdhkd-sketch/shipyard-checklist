@@ -302,6 +302,10 @@
     .sync-chip.online .sync-dot { background: #4ade80; }
     .sync-chip.pending .sync-dot { background: #fbbf24; }
     .sync-chip.error .sync-dot { background: #fb7185; }
+    .home-version-badge.online .sync-dot { background: #4ade80; }
+    .home-version-badge.pending .sync-dot { background: #fbbf24; }
+    .home-version-badge.error .sync-dot { background: #fb7185; }
+    .home-version-badge.offline .sync-dot { background: var(--soft); }
 
     .nav {
       display: flex;
