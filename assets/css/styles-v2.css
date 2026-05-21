@@ -5952,15 +5952,14 @@
 
     .category-tool-assignment-list {
       display: grid;
-      gap: 10px;
+      gap: 12px;
     }
 
     .category-tool-assignment-row {
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-left: 5px solid var(--accent, var(--blue));
-      border-radius: var(--radius);
-      background: var(--surface-soft);
+      padding: 10px 10px 12px;
+      border: 2px solid var(--accent, var(--blue));
+      border-radius: 8px;
+      background: #fff;
       cursor: pointer;
       transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
     }
@@ -5978,27 +5977,37 @@
 
     .category-tool-assignment-head {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      grid-template-areas:
+        "icon copy count"
+        "icon copy toggle";
       align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
+      column-gap: 10px;
+      row-gap: 2px;
+      margin-bottom: 8px;
     }
 
     .category-tool-assignment-icon {
-      width: 50px;
-      height: 50px;
+      grid-area: icon;
+      width: 40px;
+      height: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border-radius: 10px;
-      background: var(--accent, var(--blue));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent, var(--blue)) 10%, #fff);
       color: #fff;
       overflow: hidden;
     }
 
     .category-tool-assignment-icon svg {
-      width: 38px;
-      height: 38px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .category-tool-assignment-copy {
+      grid-area: copy;
+      min-width: 0;
     }
 
     .category-tool-assignment-head strong {
@@ -6010,20 +6019,19 @@
       overflow-wrap: anywhere;
     }
 
-    .category-tool-assignment-head span {
+    .category-tool-assignment-copy span {
       display: block;
-      margin-top: 4px;
+      margin-top: 3px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 700;
     }
 
     .category-tool-assignment-head em {
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: #fff;
-      border: 1px solid var(--line);
-      color: var(--muted);
+      grid-area: count;
+      justify-self: end;
+      align-self: end;
+      color: var(--accent, var(--blue));
       font-size: 12px;
       font-style: normal;
       font-weight: 900;
@@ -6031,8 +6039,11 @@
     }
 
     .category-tool-toggle-image {
-      width: 34px;
-      height: 34px;
+      grid-area: toggle;
+      justify-self: end;
+      align-self: start;
+      width: 28px;
+      height: 28px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -6045,8 +6056,8 @@
     }
 
     .category-tool-toggle-image svg {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       display: block;
     }
 
@@ -6084,22 +6095,41 @@
 
     .category-tool-assignment-actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 8px;
-      justify-content: flex-end;
-      margin-top: 12px;
+      justify-content: stretch;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .category-tool-assignment-actions .btn,
+    .category-tool-assignment-actions .btn-light,
+    .category-tool-assignment-actions .btn-danger {
+      min-height: 38px;
+      flex: 1 1 0;
+      padding: 7px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .category-tool-assignment-actions .btn-light[data-manage-category] {
+      flex: 1.25 1 0;
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
     }
 
     .category-tool-summary {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      min-height: 36px;
+      min-height: 0;
       align-items: center;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
+      padding: 0 0 2px 48px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
       pointer-events: none;
     }
 
@@ -6114,13 +6144,13 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      min-height: 28px;
-      padding: 5px 8px;
+      min-height: 27px;
+      padding: 4px 8px;
       border-radius: 999px;
       border: 1px solid #bfdbfe;
       background: #eff6ff;
       color: #1d4ed8;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       max-width: 100%;
     }
@@ -7713,18 +7743,16 @@
       }
 
       .category-tool-assignment-head {
-        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-columns: 46px minmax(0, 1fr) auto;
       }
 
       .category-tool-assignment-head em {
-        grid-column: 1 / -1;
-        grid-row: 2;
-        justify-self: start;
+        grid-area: count;
+        justify-self: end;
       }
 
       .category-tool-toggle-image {
-        grid-column: 3;
-        grid-row: 1;
+        grid-area: toggle;
       }
 
       .category-tool-assignment-actions {
@@ -7732,8 +7760,10 @@
       }
 
       .category-tool-assignment-actions .btn,
-      .category-tool-assignment-actions .btn-light {
-        flex: 1 1 100%;
+      .category-tool-assignment-actions .btn-light,
+      .category-tool-assignment-actions .btn-danger {
+        flex: 1 1 0;
+        font-size: 12px;
       }
     }
 

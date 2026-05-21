@@ -4534,7 +4534,7 @@
           return `<article class="category-tool-assignment-row" data-toggle-category-tools="${esc(cat.id)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" style="--accent:${esc(categoryAccent(cat))}">
             <div class="category-tool-assignment-head">
               <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
-              <div>
+              <div class="category-tool-assignment-copy">
                 <strong>${esc(cat.label)}</strong>
                 <span>${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</span>
               </div>
@@ -4610,7 +4610,7 @@
       const tools = sanitizeToolIds(toolIds)
         .map((id) => toolById(id))
         .filter((tool) => tool && tool.deleted !== true);
-      if (!tools.length) return `<div class="category-tool-summary empty-summary">공기구를 지정하지 않으면 기존처럼 공정 성격에 맞는 전체 공기구가 표시됩니다.</div>`;
+      if (!tools.length) return `<div class="category-tool-summary empty-summary">공기구 미지정 시 전체 표시</div>`;
       const visibleTools = tools.slice(0, 4);
       const hiddenCount = tools.length - visibleTools.length;
       return `<div class="category-tool-summary" aria-label="지정된 공기구 요약">
