@@ -879,6 +879,7 @@
       editItemId: null,
       editToolId: null,
       toolAddOpen: false,
+      toolManagerOpen: false,
       categoryAddOpen: false,
       categoryToolAssignmentOpenIds: [],
       openAddItemSectionIds: [],
@@ -2834,16 +2835,22 @@
       if (!state.manageCategoryId) {
         return `${pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton())}
         <div class="panel panel-pad" style="margin-bottom:14px">
-          <div class="section-title">공기구/준비물 관리</div>
-          ${renderToolManager()}
+          ${renderToolManagerShell()}
+        </div>
+        <div class="panel panel-pad" style="margin-bottom:14px">
+          <div class="section-title">
+            섹션/점검 항목 관리
+          </div>
+          <p class="section-help">점검 항목 추가/수정/삭제는 작업 유형을 선택해서 관리합니다.</p>
+          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
         </div>
         <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
           <div class="section-title">
-            작업 유형별 공기구 지정
+            작업 유형 관리
             <button class="btn" data-action="toggle-category-add" ${state.adminMode ? "" : "disabled"} type="button">${state.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
           </div>
-          <p class="section-help">작업자가 점검 메뉴에서 작업 유형을 선택했을 때 보일 공기구/준비물을 여기서 지정합니다.</p>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">수정 모드를 켜면 작업 유형별 공기구를 지정할 수 있습니다.</div>`}
+          <p class="section-help">작업 유형 카드 안에서 공기구 지정과 섹션/항목 관리를 함께 처리합니다. 카드를 누르면 공기구 지정 영역이 펼쳐집니다.</p>
+          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">수정 모드를 켜면 작업 유형과 공기구 지정을 바꿀 수 있습니다.</div>`}
           ${state.categoryAddOpen ? `
           <div class="collapsible-panel category-add-panel">
           <div class="form-row">
@@ -2866,36 +2873,6 @@
           ${renderPictogramPicker("erection")}
           </div>` : ""}
           ${renderCategoryToolAssignments()}
-        </div>
-        <div class="panel panel-pad" style="margin-bottom:14px">
-          <div class="section-title">
-            섹션/점검 항목 관리
-          </div>
-          <p class="section-help">점검 항목 추가/수정/삭제는 작업 유형을 선택해서 관리합니다.</p>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
-        </div>
-        <div class="category-grid">
-          ${state.categories.sort(byOrder).map((cat) => {
-            const editingCategory = state.editCategoryId === cat.id;
-            return `
-            <div class="category-card" style="--accent:${esc(categoryAccent(cat))}">
-              <span class="category-icon">${categoryVisual(cat)}</span>
-              ${editingCategory ? `
-                <div class="field">
-                  <label for="editCategoryLabel_${cat.id}">작업 유형명 수정</label>
-                  <input class="input" id="editCategoryLabel_${cat.id}" value="${esc(cat.label)}" />
-                </div>` : `<div class="item-name" style="font-weight:800" title="${esc(cat.label)}">${esc(cat.label)}</div>`}
-              <div class="small muted" style="margin:6px 0 12px">${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</div>
-              <div class="item-actions manage-actions">
-                ${editingCategory ? `
-                  <button class="btn" data-save-category="${cat.id}" type="button">저장</button>
-                  <button class="btn-light" data-action="cancel-edit-category" type="button">취소</button>` : `
-                  <button class="btn-light" data-manage-category="${cat.id}" type="button">섹션/항목 관리</button>
-                  <button class="btn-light" data-edit-category="${cat.id}" ${state.adminMode ? "" : "disabled"} type="button">수정</button>
-                  <button class="btn-danger" data-delete-category="${cat.id}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>`}
-              </div>
-            </div>`;
-          }).join("")}
         </div>`;
       }
 
@@ -2904,53 +2881,16 @@
         state.manageCategoryId = null;
         return renderItems();
       }
-      const visualOpen = state.categoryVisualOpen === true;
       return `${pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>${adminToggleButton()}`)}
-      <div class="split">
-        <div class="panel panel-pad">
-          <div class="section-title">섹션 추가</div>
-          <div class="form-row">
-            <div class="field">
-              <label for="newSectionTitle">섹션명</label>
-              <input class="input" id="newSectionTitle" placeholder="예) 작업 전 준비" />
-            </div>
-            <button class="btn" data-action="add-section" ${state.adminMode ? "" : "disabled"} type="button">섹션 추가</button>
+      <div class="panel panel-pad">
+        <div class="section-title">섹션 추가</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="newSectionTitle">섹션명</label>
+            <input class="input" id="newSectionTitle" placeholder="예) 작업 전 준비" />
           </div>
+          <button class="btn" data-action="add-section" ${state.adminMode ? "" : "disabled"} type="button">섹션 추가</button>
         </div>
-        <aside class="panel panel-pad">
-          <div class="section-title">아이콘/픽토그램 수정</div>
-          <div class="pictogram-current" style="--accent:${esc(categoryAccent(cat))}">
-            <span class="category-icon">${categoryVisual(cat)}</span>
-            <div>
-              <div style="font-weight:900">${esc(cat.label)}</div>
-              <div class="small muted">현재 값: ${esc(cat.icon || "-")}</div>
-            </div>
-          </div>
-          ${moreToggle("data-toggle-category-visual", visualOpen)}
-          ${visualOpen ? `<div class="collapsible-panel">
-            <div class="field" style="margin-bottom:10px">
-              <label for="editCatIcon">아이콘 값</label>
-              <input class="input" id="editCatIcon" value="${esc(cat.icon || "")}" placeholder="예) erection 또는 P" ${state.adminMode ? "" : "disabled"} />
-            </div>
-            <div class="field" style="margin-bottom:10px">
-              <label for="editCatToolNature">공기구 기준 성격</label>
-              <select class="select" id="editCatToolNature" ${state.adminMode ? "" : "disabled"}>
-                ${toolNatureOptions(cat.toolNature)}
-              </select>
-            </div>
-            <button class="toggle ${cat.requireToolCheck !== false ? "active" : ""}" data-toggle-tool-check="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-pressed="${cat.requireToolCheck !== false ? "true" : "false"}" style="width:100%;margin-bottom:10px">
-              <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
-            </button>
-            ${renderPictogramPicker(cat.icon || "", "editCatIcon")}
-            <button class="btn" data-action="save-category-icon" ${state.adminMode ? "" : "disabled"} type="button" style="width:100%;margin-top:10px">기준 저장</button>
-            <div class="tool-admin-stack">
-              <div>
-                <div class="section-title" style="margin-top:16px">픽토그램 라이브러리 관리</div>
-                ${renderPictogramLibraryManager()}
-              </div>
-            </div>
-          </div>` : ""}
-        </aside>
       </div>
       <div class="list" style="margin-top:14px">
         ${sectionsFor(cat.id).map((section) => renderSectionManager(cat, section)).join("") || `<div class="empty">섹션이 없습니다. 먼저 섹션을 추가하세요.</div>`}
@@ -4590,6 +4530,7 @@
           const selectedToolIds = sanitizeToolIds(cat.toolIds);
           const selectedCount = selectedToolIds.length;
           const expanded = state.categoryToolAssignmentOpenIds.includes(cat.id);
+          const editingCategory = state.editCategoryId === cat.id;
           return `<article class="category-tool-assignment-row" data-toggle-category-tools="${esc(cat.id)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" style="--accent:${esc(categoryAccent(cat))}">
             <div class="category-tool-assignment-head">
               <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
@@ -4598,15 +4539,70 @@
                 <span>${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</span>
               </div>
               <em>${selectedCount ? `${selectedCount}개 지정` : "전체 표시"}</em>
-              <span class="category-tool-toggle-mark" aria-hidden="true">${expanded ? "⌃" : "⌄"}</span>
+              ${renderCategoryToggleImage(expanded, cat)}
             </div>
+            ${editingCategory ? renderCategoryEditPanel(cat) : ""}
             ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
             <div class="category-tool-assignment-actions">
               ${expanded ? `<button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>` : ""}
-              <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
+              ${editingCategory ? `
+                <button class="btn" data-save-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">수정 저장</button>
+                <button class="btn-light" data-action="cancel-edit-category" type="button">취소</button>` : `
+                <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
+                <button class="btn-light" data-edit-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">수정</button>
+                <button class="btn-danger" data-delete-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>`}
             </div>
           </article>`;
         }).join("")}
+      </div>`;
+    }
+
+    function renderCategoryToggleImage(expanded, cat) {
+      const label = expanded ? "공기구 지정 접힘 상태로 전환" : "공기구 지정 펼침 상태로 전환";
+      const path = expanded
+        ? "M7.5 13.2 12 8.8l4.5 4.4"
+        : "M7.5 10.8 12 15.2l4.5-4.4";
+      return `<span class="category-tool-toggle-image ${expanded ? "expanded" : "collapsed"}" aria-label="${label}" role="img" style="--accent:${esc(categoryAccent(cat))}">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="10.2"></circle>
+          <path d="${path}"></path>
+        </svg>
+      </span>`;
+    }
+
+    function renderCategoryEditPanel(cat) {
+      const selectedColor = cat.color || categoryAccent(cat) || COLORS[0];
+      return `<div class="category-edit-panel">
+        <div class="tool-admin-edit-grid">
+          <div class="field">
+            <label for="editCategoryLabel_${esc(cat.id)}">작업 유형명</label>
+            <input class="input" id="editCategoryLabel_${esc(cat.id)}" value="${esc(cat.label)}" ${state.adminMode ? "" : "disabled"} />
+          </div>
+          <div class="field">
+            <label for="editCategoryIcon_${esc(cat.id)}">아이콘/픽토그램</label>
+            <input class="input" id="editCategoryIcon_${esc(cat.id)}" value="${esc(cat.icon || "")}" placeholder="예) erection 또는 P" ${state.adminMode ? "" : "disabled"} />
+          </div>
+          <div class="field">
+            <label for="editCategoryNature_${esc(cat.id)}">공기구 기준 성격</label>
+            <select class="select" id="editCategoryNature_${esc(cat.id)}" ${state.adminMode ? "" : "disabled"}>
+              ${toolNatureOptions(cat.toolNature)}
+            </select>
+          </div>
+          <div class="field">
+            <span class="field-label">색상</span>
+            <div class="color-row">${COLORS.map((color) => `<button class="color-dot ${color === selectedColor ? "active" : ""}" style="--dot:${color}" data-edit-category-color-id="${esc(cat.id)}" data-edit-category-color="${color}" ${state.adminMode ? "" : "disabled"} type="button" aria-label="색상 선택"></button>`).join("")}</div>
+          </div>
+        </div>
+        <button class="toggle ${cat.requireToolCheck !== false ? "active" : ""}" data-toggle-tool-check="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-pressed="${cat.requireToolCheck !== false ? "true" : "false"}">
+          <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
+        </button>
+        ${renderPictogramPicker(cat.icon || "", `editCategoryIcon_${cat.id}`)}
+        <div class="tool-admin-stack category-edit-library">
+          <div>
+            <div class="section-title">픽토그램 라이브러리 관리</div>
+            ${renderPictogramLibraryManager()}
+          </div>
+        </div>
       </div>`;
     }
 
@@ -4620,6 +4616,27 @@
       return `<div class="category-tool-summary" aria-label="지정된 공기구 요약">
         ${visibleTools.map((tool) => `<span class="category-tool-chip">${esc(tool.name)}${natureBadge(tool.nature)}</span>`).join("")}
         ${hiddenCount > 0 ? `<span class="category-tool-chip more">+${hiddenCount}</span>` : ""}
+      </div>`;
+    }
+
+    function renderToolManagerShell() {
+      const tools = activeTools();
+      const expanded = state.toolManagerOpen === true;
+      const editingTool = state.editToolId ? toolById(state.editToolId) : null;
+      const statusText = editingTool
+        ? `${editingTool.name} 수정 중`
+        : state.toolAddOpen
+          ? "새 공기구 추가 작성 중"
+          : `${tools.length}개 등록`;
+      return `<div class="tool-manager-shell ${expanded ? "expanded" : "collapsed"}">
+        <div class="tool-manager-summary">
+          <div class="tool-manager-summary-copy">
+            <div class="section-title">공기구/준비물 관리</div>
+            <span class="small muted">${esc(statusText)}</span>
+          </div>
+          <button class="btn-light tool-manager-toggle" data-action="toggle-tool-manager" type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "접기" : "더보기"}</button>
+        </div>
+        ${expanded ? `<div class="tool-manager-body">${renderToolManager()}</div>` : ""}
       </div>`;
     }
 
@@ -5089,6 +5106,12 @@
       return $("catColor")?.value || COLORS[0];
     }
 
+    function selectedEditCategoryColor(id, fallback) {
+      const active = Array.from(document.querySelectorAll("[data-edit-category-color-id]"))
+        .find((node) => node.dataset.editCategoryColorId === id && node.classList.contains("active"));
+      return active?.dataset.editCategoryColor || fallback || COLORS[0];
+    }
+
     function cssEscape(value) {
       if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(value);
       return String(value).replace(/["\\]/g, "\\$&");
@@ -5210,7 +5233,7 @@
       }
 
       const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
-      if (categoryToolRow && !event.target.closest("button,input,label,select,textarea")) {
+      if (categoryToolRow && !event.target.closest("button,input,label,select,textarea,.category-edit-panel,.category-tool-picker")) {
         toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
         return;
       }
@@ -5453,6 +5476,12 @@
         const colorInput = $("catColor");
         if (colorInput) colorInput.value = button.dataset.pickColor;
       }
+      if (button.dataset.editCategoryColor) {
+        const categoryId = button.dataset.editCategoryColorId || "";
+        document.querySelectorAll("[data-edit-category-color-id]").forEach((node) => {
+          node.classList.toggle("active", node.dataset.editCategoryColorId === categoryId && node === button);
+        });
+      }
       if (button.dataset.pickIcon) {
         const targetId = button.dataset.pickIconTarget || "catIcon";
         document.querySelectorAll(`[data-pick-icon-target="${targetId}"]`).forEach((node) => node.classList.toggle("active", node === button));
@@ -5477,6 +5506,7 @@
       }
       if (button.dataset.action === "toggle-tool-add") {
         if (!requireAdmin()) return;
+        state.toolManagerOpen = true;
         state.toolAddOpen = !state.toolAddOpen;
         state.editToolId = null;
         render();
@@ -5484,8 +5514,13 @@
       if (button.dataset.action === "add-tool") addTool();
       if (button.dataset.editTool) {
         if (!requireAdmin()) return;
+        state.toolManagerOpen = true;
         state.editToolId = button.dataset.editTool;
         state.toolAddOpen = false;
+        render();
+      }
+      if (button.dataset.action === "toggle-tool-manager") {
+        state.toolManagerOpen = !state.toolManagerOpen;
         render();
       }
       if (button.dataset.action === "cancel-edit-tool") {
@@ -6674,6 +6709,10 @@
     function editCategory(id) {
       if (!requireAdmin()) return;
       state.editCategoryId = id;
+      state.categoryAddOpen = false;
+      if (!state.categoryToolAssignmentOpenIds.includes(id)) {
+        state.categoryToolAssignmentOpenIds = [...state.categoryToolAssignmentOpenIds, id];
+      }
       render();
     }
 
@@ -6682,17 +6721,23 @@
       const cat = categoryById(id);
       if (!cat) return;
       const label = $(`editCategoryLabel_${id}`).value.trim();
+      const icon = $(`editCategoryIcon_${id}`)?.value.trim() || label.slice(0, 1).toUpperCase();
+      const color = selectedEditCategoryColor(id, cat.color);
+      const toolNature = normalizeToolNature($(`editCategoryNature_${id}`)?.value || cat.toolNature);
       if (!label) return toast("작업 유형명을 입력하세요.");
       const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
       if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
       state.categories = state.categories.map((row) => row.id === id ? {
         ...row,
         label,
+        icon,
+        color,
+        toolNature,
       } : row);
       state.editCategoryId = null;
       persistAndSync("categories");
       render();
-      toast("작업 유형명을 수정했습니다.");
+      toast("작업 유형 설정을 수정했습니다.");
     }
 
     function toggleCategoryTools(id) {

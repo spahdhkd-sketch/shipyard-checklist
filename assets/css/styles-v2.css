@@ -5671,6 +5671,39 @@
       flex: 0 1 auto;
     }
 
+    .tool-manager-shell {
+      display: grid;
+      gap: 10px;
+    }
+
+    .tool-manager-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .tool-manager-summary-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .tool-manager-summary-copy .section-title {
+      margin-bottom: 0;
+    }
+
+    .tool-manager-toggle {
+      flex: 0 0 auto;
+      min-height: 40px;
+      white-space: nowrap;
+    }
+
+    .tool-manager-body {
+      min-width: 0;
+    }
+
     .tool-admin-stack {
       display: grid;
       gap: 10px;
@@ -5997,18 +6030,56 @@
       white-space: nowrap;
     }
 
-    .category-tool-toggle-mark {
-      width: 30px;
-      height: 30px;
+    .category-tool-toggle-image {
+      width: 34px;
+      height: 34px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       border-radius: 999px;
-      border: 1px solid var(--line);
-      background: #fff;
-      color: var(--ink);
-      font-size: 17px;
-      font-weight: 900;
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255, 255, 255, .5), transparent 34%),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent, var(--blue)) 78%, #fff), var(--accent, var(--blue)));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), 0 10px 20px color-mix(in srgb, var(--accent, var(--blue)) 26%, transparent);
+      color: #fff;
+    }
+
+    .category-tool-toggle-image svg {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+
+    .category-tool-toggle-image circle {
+      fill: none;
+      stroke: rgba(255, 255, 255, .2);
+      stroke-width: 1.2;
+    }
+
+    .category-tool-toggle-image path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .category-edit-panel {
+      margin: 12px 0;
+      padding: 12px;
+      border: 1px dashed color-mix(in srgb, var(--accent, var(--blue)) 55%, var(--line));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent, var(--blue)) 8%, #fff);
+      cursor: default;
+    }
+
+    .category-edit-panel .toggle {
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    .category-edit-library {
+      margin-top: 12px;
     }
 
     .category-tool-assignment-actions {
@@ -7651,7 +7722,7 @@
         justify-self: start;
       }
 
-      .category-tool-toggle-mark {
+      .category-tool-toggle-image {
         grid-column: 3;
         grid-row: 1;
       }
