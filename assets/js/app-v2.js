@@ -1,6 +1,6 @@
 ﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
-    const APP_VERSION = "0.2-20260520";
+    const APP_VERSION = "0.3-20260521";
     const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
@@ -883,6 +883,7 @@
       categoryToolAssignmentOpenIds: [],
       openAddItemSectionIds: [],
       categoryVisualOpen: false,
+      workerFallbackOpen: false,
       draft: loadDraft(),
       historyScope: "all",
       historyFilter: "all",
@@ -2091,7 +2092,49 @@
       return String(name || "?").trim().slice(0, 1) || "?";
     }
 
-    function renderPledgeWorkerSelect() {
+    function workerMatchesCategoryNature(worker, categoryNature) {
+      const nature = normalizeToolNature(categoryNature);
+      if (nature === "선행/후행") return true;
+      const text = `${worker?.name || ""} ${worker?.team || ""}`;
+      const hasPre = text.includes("선행");
+      const hasPost = text.includes("후행");
+      if (!hasPre && !hasPost) return true;
+      return nature === "선행" ? hasPre : hasPost;
+    }
+
+    function checkWorkerGroups(category) {
+      const categoryNature = category?.toolNature || defaultToolNatureForCategory(category);
+      const groups = { primary: [], other: [], categoryNature: normalizeToolNature(categoryNature) };
+      state.workers.forEach((worker) => {
+        if (workerMatchesCategoryNature(worker, groups.categoryNature)) {
+          groups.primary.push(worker);
+        } else {
+          groups.other.push(worker);
+        }
+      });
+      return groups;
+    }
+
+    function renderWorkerButton(worker) {
+      const selected = state.draft.worker === worker.name;
+      return `<button class="pledge-worker-row ${selected ? "active" : ""}" data-select-pledge-worker="${esc(worker.id)}" type="button" aria-pressed="${selected ? "true" : "false"}">
+        <span class="pledge-avatar">${esc(workerInitial(worker.name))}</span>
+        <span><strong>${esc(worker.name)}</strong><em>${esc(worker.team || "소속 미지정")}</em></span>
+      </button>`;
+    }
+
+    function renderOtherWorkerSelect(otherWorkers) {
+      const selectedWorker = otherWorkers.find((worker) => worker.name === state.draft.worker);
+      return `<div class="pledge-other-worker-panel">
+        <label for="otherWorkerSelect">타 작업자 목록</label>
+        <select class="select" id="otherWorkerSelect">
+          <option value="">타 작업자 선택</option>
+          ${otherWorkers.map((worker) => `<option value="${esc(worker.id)}" ${selectedWorker?.id === worker.id ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` / ${esc(worker.team)}` : ""}</option>`).join("")}
+        </select>
+      </div>`;
+    }
+
+    function renderPledgeWorkerSelect(category = null) {
       const workers = state.workers;
       if (!workers.length) {
         return `<section class="pledge-flow-card">
@@ -2102,17 +2145,19 @@
           </label>
         </section>`;
       }
+      const groups = checkWorkerGroups(category);
+      const selectedInOther = groups.other.some((worker) => worker.name === state.draft.worker);
+      const fallbackOpen = state.workerFallbackOpen || selectedInOther;
       return `<section class="pledge-flow-card">
-        <div class="pledge-flow-title">작업자 선택</div>
-        <div class="pledge-worker-list">
-          ${workers.map((worker) => {
-            const selected = state.draft.worker === worker.name;
-            return `<button class="pledge-worker-row ${selected ? "active" : ""}" data-select-pledge-worker="${esc(worker.id)}" type="button" aria-pressed="${selected ? "true" : "false"}">
-              <span class="pledge-avatar">${esc(workerInitial(worker.name))}</span>
-              <span><strong>${esc(worker.name)}</strong><em>${esc(worker.team || "소속 미지정")}</em></span>
-            </button>`;
-          }).join("")}
+        <div class="pledge-flow-title pledge-worker-title">
+          <span>담당 작업자</span>
+          <em>${esc(groups.categoryNature)} 기준</em>
         </div>
+        <div class="pledge-worker-list">
+          ${groups.primary.length ? groups.primary.map(renderWorkerButton).join("") : `<div class="empty pledge-worker-empty">해당 기준의 담당 작업자가 없습니다.</div>`}
+        </div>
+        ${groups.other.length ? `<div class="pledge-worker-helper">작업자 목록에 없나요? <button class="worker-fallback-link" data-action="toggle-other-workers" type="button">여기</button>를 눌러보세요</div>` : ""}
+        ${groups.other.length && fallbackOpen ? renderOtherWorkerSelect(groups.other) : ""}
       </section>`;
     }
 
@@ -2330,7 +2375,7 @@
             <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
           </div>
           <div class="pledge-flow-grid">
-            ${renderPledgeWorkerSelect()}
+            ${renderPledgeWorkerSelect(cat)}
             ${renderPledgeShipSelect(selectableShips)}
             ${renderSafetyPledgeChecklist()}
           </div>
@@ -5206,6 +5251,11 @@
         selectPledgeWorker(button.dataset.selectPledgeWorker);
         return;
       }
+      if (button.dataset.action === "toggle-other-workers") {
+        state.workerFallbackOpen = !state.workerFallbackOpen;
+        render();
+        return;
+      }
       if (button.dataset.selectPledgeShip) {
         state.draft.shipNo = button.dataset.selectPledgeShip;
         saveJson("draft", state.draft);
@@ -5314,6 +5364,7 @@
       }
       if (button.dataset.selectCategory) {
         state.selectedCategoryId = button.dataset.selectCategory;
+        state.workerFallbackOpen = false;
         resetToolPrepDraft();
         render();
         scrollScreenTop();
@@ -5321,6 +5372,7 @@
       }
       if (button.dataset.action === "back-check-types") {
         state.selectedCategoryId = null;
+        state.workerFallbackOpen = false;
         resetToolPrepDraft();
         render();
         scrollScreenTop();
@@ -5674,6 +5726,10 @@
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.id === "otherWorkerSelect") {
+        selectPledgeWorker(event.target.value);
+        return;
+      }
       if (event.target.id === "shipNo") {
         state.draft.shipNo = event.target.value;
         render();
