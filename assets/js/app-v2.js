@@ -1,12 +1,16 @@
 ﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
     const APP_VERSION = "0.3-20260521";
-    const SUPABASE_URL = "https://psatbyktzladtymdygwh.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzYXRieWt0emxhZHR5bWR5Z3doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODM1NjEsImV4cCI6MjA5NDA1OTU2MX0.tGbJ0Eg8lprH2UaCwlfHYfnrfaDDKvv3fjo4NhvgclQ";
+    const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
     const MAX_SYNC_ATTEMPTS = 5;
+    const STORAGE_WARNING_KB = 4600;
+    const STORAGE_COMPACT_KB = 3800;
+    const PENDING_PHOTO_RETRY_MAX_BYTES = 240 * 1024;
+    const PENDING_PHOTO_DATA_URL_MAX_CHARS = 360 * 1024;
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -656,7 +660,26 @@
     }
 
     function shouldWarnStorage() {
-      return estimateLocalStorageKb() >= 4096;
+      return estimateLocalStorageKb() >= STORAGE_WARNING_KB;
+    }
+
+    function pendingPhotoDataUrlForStorage(value) {
+      const dataUrl = String(value || "");
+      return dataUrl.length <= PENDING_PHOTO_DATA_URL_MAX_CHARS ? dataUrl : "";
+    }
+
+    function compactStoragePayloadsIfNeeded() {
+      if (estimateLocalStorageKb() < STORAGE_COMPACT_KB) return false;
+      let changed = false;
+      if (Array.isArray(state.pendingPhotoUploads) && state.pendingPhotoUploads.some((row) => row.dataUrl)) {
+        state.pendingPhotoUploads = state.pendingPhotoUploads.map((row) => row.dataUrl ? { ...row, dataUrl: "" } : row);
+        changed = true;
+      }
+      if (Array.isArray(state.pictograms) && state.pictograms.some((row) => row.deleted === true && row.src)) {
+        state.pictograms = state.pictograms.map((row) => row.deleted === true && row.src ? { ...row, src: "" } : row);
+        changed = true;
+      }
+      return changed;
     }
 
     function recordTimestamp(row) {
@@ -741,6 +764,25 @@
         }
       } catch {}
     };
+    const loadWorkerSession = () => {
+      try {
+        const value = sessionStorage.getItem(storeKey("workerSession"));
+        return value ? JSON.parse(value) : null;
+      } catch {
+        return null;
+      }
+    };
+    const saveWorkerSession = (session) => {
+      try {
+        sessionStorage.setItem(storeKey("workerSession"), JSON.stringify(session));
+      } catch {}
+    };
+    const clearWorkerSession = () => {
+      try {
+        sessionStorage.removeItem(storeKey("workerSession"));
+      } catch {}
+    };
+    const normalizeEmployeeNo = (value) => String(value || "").trim();
 
     function createDraft(overrides = {}) {
       return {
@@ -872,6 +914,7 @@
       }),
       selectedMonthlyWorkerMonth: "",
       monthlyRestDayPanelOpen: false,
+      photoViewer: null,
       unsafePhotoFiles: [],
       selectedCategoryId: null,
       manageCategoryId: null,
@@ -886,6 +929,8 @@
       openAddItemSectionIds: [],
       categoryVisualOpen: false,
       workerFallbackOpen: false,
+      pledgeWorkerCollapsed: false,
+      pledgeShipCollapsed: false,
       draft: loadDraft(),
       historyScope: "all",
       historyFilter: "all",
@@ -908,6 +953,8 @@
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
+      workerSession: loadWorkerSession(),
+      loginSubmitting: false,
       unsafeDraft: createUnsafeDraft(loadJson("unsafeDraft", {})),
       materialDraft: createMaterialDraft(loadJson("materialDraft", {})),
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
@@ -1144,7 +1191,7 @@
           fileName: String(row.fileName || `photo-${index + 1}.jpg`),
           fileType: String(row.fileType || "image/jpeg"),
           fileSize: Number(row.fileSize || 0),
-          dataUrl: String(row.dataUrl || ""),
+          dataUrl: pendingPhotoDataUrlForStorage(row.dataUrl),
           status: row.status === "uploading" ? "failed" : String(row.status || "failed"),
           errorMessage: String(row.errorMessage || ""),
           createdAt: row.createdAt || serverNow().toISOString(),
@@ -1246,6 +1293,7 @@
     }
 
     function persist() {
+      compactStoragePayloadsIfNeeded();
       saveJson("categories", state.categories);
       saveJson("sections", state.sections);
       saveJson("items", state.items);
@@ -1267,6 +1315,10 @@
       saveJson("unsafeFilters", state.unsafeFilters);
       saveJson("materialFilters", state.materialFilters);
       saveJson("manageTab", state.manageTab);
+      if (compactStoragePayloadsIfNeeded()) {
+        saveJson("pendingPhotoUploads", state.pendingPhotoUploads);
+        saveJson("pictograms", state.pictograms.filter((row) => row.source !== "builtIn"));
+      }
       if (shouldWarnStorage() && !state.storageWarningShown) {
         state.storageWarningShown = true;
         toast("저장 공간이 부족합니다. 오래된 이력과 사진을 정리해주세요.");
@@ -1439,6 +1491,15 @@
       renderNav();
       renderAppHeader();
       const page = $("page");
+      const loggedIn = isWorkerLoggedIn();
+      document.body.classList.toggle("login-required", !loggedIn);
+      if (!loggedIn) {
+        page.innerHTML = renderLogin();
+        setSyncStatus(state.syncText, state.syncMode);
+        ensureRenderedAccessibility();
+        return;
+      }
+      applyLoggedInWorkerToDrafts();
       page.innerHTML = {
         dashboard: renderDashboard,
         check: renderCheck,
@@ -1452,10 +1513,20 @@
         analytics: renderAnalyticsDashboard,
         pledgeComplete: renderPledgeComplete,
       }[state.view]();
+      page.insertAdjacentHTML("beforeend", renderPhotoViewer());
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
       ensureRenderedAccessibility();
+    }
+
+    function renderPreservingScroll() {
+      const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      render();
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+        state.lastScrollY = y;
+      });
     }
 
     function ensureRenderedAccessibility() {
@@ -1627,12 +1698,17 @@
       const title = $("appbarTitle");
       const headline = $("homeHeadline");
       const date = $("homeDateLabel");
-      if (title) title.textContent = titles[state.view] || "홈";
+      const loggedIn = isWorkerLoggedIn();
+      const greeting = $("homeGreetingLabel");
+      const mobileLogout = $("mobileLogoutButton");
+      if (title) title.textContent = loggedIn ? (titles[state.view] || "홈") : "로그인";
+      if (mobileLogout) mobileLogout.hidden = !loggedIn;
       if (headline) {
-        const showHomeHeadline = state.view === "dashboard";
+        const showHomeHeadline = loggedIn && state.view === "dashboard";
         headline.style.display = showHomeHeadline ? "flex" : "none";
         headline.setAttribute("aria-hidden", showHomeHeadline ? "false" : "true");
       }
+      if (greeting) greeting.textContent = homeGreetingText();
       if (date) date.textContent = formatKoreanDate(serverNow());
       updateHeaderClock();
     }
@@ -1643,7 +1719,27 @@
       const version = $("homeVersionLabel");
       if (time) time.textContent = localTime(serverNow());
       if (date) date.textContent = formatKoreanDate(serverNow());
-      if (version) version.textContent = appVersionLabel();
+      if (version) version.innerHTML = `<span class="sync-dot" aria-hidden="true"></span><span>${esc(appVersionLabel())}</span>`;
+      syncMobileHeaderState();
+    }
+
+    function syncMobileHeaderState() {
+      const loggedIn = isWorkerLoggedIn();
+      const headline = $("homeHeadline");
+      const greeting = $("homeGreetingLabel");
+      const mobileLogout = $("mobileLogoutButton");
+      const version = $("homeVersionLabel");
+      if (headline) {
+        const showHomeHeadline = loggedIn && state.view === "dashboard";
+        headline.style.display = showHomeHeadline ? "flex" : "none";
+        headline.setAttribute("aria-hidden", showHomeHeadline ? "false" : "true");
+      }
+      if (greeting) greeting.textContent = homeGreetingText();
+      if (mobileLogout) mobileLogout.hidden = !loggedIn;
+      if (version) {
+        version.classList.remove("online", "pending", "error", "offline");
+        version.classList.add(state.syncMode || "offline");
+      }
     }
 
     function appVersionLabel() {
@@ -1684,8 +1780,9 @@
     }
 
     function renderNav() {
-      $("desktopNav").innerHTML = renderNavButtons(visibleNavItems());
-      $("mobileNav").innerHTML = renderNavButtons(mobileNavItems());
+      const loggedIn = isWorkerLoggedIn();
+      $("desktopNav").innerHTML = loggedIn ? renderNavButtons(visibleNavItems()) : "";
+      $("mobileNav").innerHTML = loggedIn ? renderNavButtons(mobileNavItems()) : "";
       updateMobileAdminShortcut();
     }
 
@@ -1725,6 +1822,98 @@
         </div>
         <div class="toolbar">${actions}</div>
       </div>`;
+    }
+
+    function isWorkerLoggedIn() {
+      return Boolean(state.workerSession?.workerId);
+    }
+
+    function currentWorkerSessionLabel() {
+      const worker = state.workers.find((row) => row.id === state.workerSession?.workerId);
+      return worker?.name || state.workerSession?.workerName || "작업자";
+    }
+
+    function currentWorkerSessionWorker() {
+      const workerId = state.workerSession?.workerId || "";
+      const worker = state.workers.find((row) => row.id === workerId);
+      if (worker) return worker;
+      if (!workerId) return null;
+      return { id: workerId, name: state.workerSession?.workerName || "작업자", team: "" };
+    }
+
+    function applyLoggedInWorkerToDrafts() {
+      const worker = currentWorkerSessionWorker();
+      if (!worker?.id) return;
+      let draftChanged = false;
+      let unsafeChanged = false;
+      let materialChanged = false;
+      const workerName = worker.name || currentWorkerSessionLabel();
+      if (workerName && normalizedWorkerName(state.draft.worker) !== normalizedWorkerName(workerName)) {
+        state.draft.worker = workerName;
+        state.draft.pledgeSignature = "";
+        draftChanged = true;
+      }
+      if (state.unsafeDraft.workerId !== worker.id) {
+        state.unsafeDraft.workerId = worker.id;
+        unsafeChanged = true;
+      }
+      if (state.materialDraft.workerId !== worker.id) {
+        state.materialDraft.workerId = worker.id;
+        materialChanged = true;
+      }
+      if (draftChanged) {
+        preloadCachedPledgeSignature();
+        saveJson("draft", state.draft);
+      }
+      if (unsafeChanged) saveJson("unsafeDraft", state.unsafeDraft);
+      if (materialChanged) saveJson("materialDraft", state.materialDraft);
+    }
+
+    function homeGreetingText() {
+      return isWorkerLoggedIn()
+        ? `${currentWorkerSessionLabel()}님 안전한 하루 되세요!`
+        : "안전한 하루 되세요!";
+    }
+
+    function renderLogin() {
+      const workers = [...state.workers].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      const disabled = !workers.length || state.loginSubmitting;
+      return `<section class="login-screen" aria-labelledby="loginTitle">
+        <div class="login-hero">
+          <div class="login-brand">
+            <span>GS</span>
+            <div>
+              <strong>Safety Checklist</strong>
+              <em>Shipyard field login</em>
+            </div>
+          </div>
+          <div class="login-copy">
+            <p>현장 작업자 확인</p>
+            <h1 id="loginTitle">작업자 로그인</h1>
+            <span>등록된 작업자를 선택하고 사번을 입력하세요.</span>
+          </div>
+        </div>
+        <form class="login-card" data-login-form>
+          <div class="field">
+            <label for="loginWorkerId">아이디</label>
+            <select class="select" id="loginWorkerId" ${disabled ? "disabled" : ""} required>
+              <option value="">작업자 선택</option>
+              ${workers.map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="loginEmployeeNo">비밀번호</label>
+            <input class="input" id="loginEmployeeNo" type="password" inputmode="numeric" autocomplete="current-password" placeholder="사번 입력" ${disabled ? "disabled" : ""} required />
+          </div>
+          <button class="btn login-submit" type="submit" ${disabled ? "disabled" : ""}>${state.loginSubmitting ? "확인 중" : "로그인"}</button>
+          <button class="btn-light login-refresh" data-action="refresh-workers" type="button" ${state.loginSubmitting ? "disabled" : ""}>작업자 목록 새로고침</button>
+          <div class="login-help">${workers.length ? "사번이 등록되지 않은 작업자는 관리자에게 사번 등록을 요청하세요." : "작업자 목록을 불러오는 중입니다."}</div>
+        </form>
+      </section>`;
+    }
+
+    function logoutButton() {
+      return `<button class="btn-light" data-action="worker-logout" type="button">로그아웃</button>`;
     }
 
     function adminToggleButton() {
@@ -1776,7 +1965,6 @@
         todayCompletion,
         unsafeCount,
         completion,
-        latest,
         deliverySoon,
         openMaterials,
         activeShips,
@@ -1818,12 +2006,10 @@
             <button class="ops-quick-action danger" data-view="unsafe" type="button">
               <span>${navIcon("warning")}</span>
               <strong>불안전요소 등록</strong>
-              <small>위험 발견 즉시 접수</small>
             </button>
             <button class="ops-quick-action violet" data-view="materials" type="button">
               <span>${navIcon("board")}</span>
               <strong>자재누락 등록</strong>
-              <small>호선 기준으로 요청</small>
             </button>
           </div>
         </div>
@@ -1861,11 +2047,6 @@
             </div>`).join("")}
           </div>
         </div>
-      </section>
-      <section class="panel panel-pad" aria-labelledby="dashboardHistoryHeading">
-        ${sectionHeading("dashboardHistoryHeading", "최근 점검 이력")}
-        <div class="section-title">최근 점검 이력 <button class="btn-light" data-history-scope="all" type="button">전체 보기</button></div>
-        ${latest.length ? renderHistoryTable(latest) : `<div class="empty">아직 점검 이력이 없습니다.</div>`}
       </section>`;
     }
 
@@ -1929,7 +2110,7 @@
         <span class="stat-icon">${statIcon(icon)}</span>
         <div class="stat-label small muted">${esc(label)}</div>
         <div class="stat-value" style="color:${color}">${esc(value)}<span class="stat-unit">${esc(unit)}</span></div>
-        ${foot ? `<div class="stat-foot">${esc(foot)}</div>` : ""}
+        <div class="stat-foot ${foot ? "" : "is-empty"}">${foot ? esc(foot) : "&nbsp;"}</div>
       </button>`;
     }
 
@@ -2137,6 +2318,20 @@
       </div>`;
     }
 
+    function renderPledgeFlowSummary({ label, title, meta = "", action, stage = null }) {
+      return `<section class="pledge-flow-card pledge-flow-card-collapsed">
+        <button class="pledge-flow-summary ${stage ? "ship" : ""}" data-action="${esc(action)}" type="button" aria-label="${esc(label)} 변경">
+          <span class="pledge-summary-main">
+            <span class="pledge-summary-label">${esc(label)}</span>
+            <strong>${esc(title)}</strong>
+            ${meta ? `<em>${esc(meta)}</em>` : ""}
+          </span>
+          ${stage ? `<span class="pledge-summary-stage" style="--stage:${esc(stage.color)}">${esc(stage.label)}</span>` : ""}
+          <span class="pledge-summary-action">변경</span>
+        </button>
+      </section>`;
+    }
+
     function renderPledgeWorkerSelect(category = null) {
       const workers = state.workers;
       if (!workers.length) {
@@ -2148,23 +2343,28 @@
           </label>
         </section>`;
       }
-      const groups = checkWorkerGroups(category);
-      const selectedInOther = groups.other.some((worker) => worker.name === state.draft.worker);
-      const fallbackOpen = state.workerFallbackOpen || selectedInOther;
-      return `<section class="pledge-flow-card">
-        <div class="pledge-flow-title pledge-worker-title">
-          <span>담당 작업자</span>
-          <em>${esc(groups.categoryNature)} 기준</em>
-        </div>
-        <div class="pledge-worker-list">
-          ${groups.primary.length ? groups.primary.map(renderWorkerButton).join("") : `<div class="empty pledge-worker-empty">해당 기준의 담당 작업자가 없습니다.</div>`}
-        </div>
-        ${groups.other.length ? `<div class="pledge-worker-helper">작업자 목록에 없나요? <button class="worker-fallback-link" data-action="toggle-other-workers" type="button">여기</button>를 눌러보세요</div>` : ""}
-        ${groups.other.length && fallbackOpen ? renderOtherWorkerSelect(groups.other) : ""}
-      </section>`;
+      const worker = currentWorkerSessionWorker();
+      const nature = normalizeToolNature(category?.toolNature || defaultToolNatureForCategory(category));
+      return renderPledgeFlowSummary({
+        label: "담당 작업자",
+        title: worker?.name || currentWorkerSessionLabel(),
+        meta: `${worker?.team || "로그인 작업자"} · ${nature} 기준`,
+        action: "expand-pledge-worker",
+      });
     }
 
     function renderPledgeShipSelect(ships) {
+      const selectedShip = ships.find((ship) => ship.no === state.draft.shipNo);
+      if (state.pledgeShipCollapsed && selectedShip) {
+        const stage = effectiveShipStage(selectedShip);
+        return renderPledgeFlowSummary({
+          label: "오늘 작업 호선",
+          title: selectedShip.no,
+          meta: `${selectedShip.type || "선종 미지정"} · D/L ${shipDeliveryDate(selectedShip) || "-"}`,
+          action: "expand-pledge-ship",
+          stage,
+        });
+      }
       return `<section class="pledge-flow-card">
         <div class="pledge-flow-title">오늘 작업 호선</div>
         <div class="pledge-ship-list">
@@ -2334,20 +2534,15 @@
     function renderCheck() {
       if (!state.selectedCategoryId) {
         const categories = state.categories.sort(byOrder);
-        return `<section class="write-intro">
-          <h1>어떤 작업을 점검할까요?</h1>
-          <p>작업 유형을 선택하면 점검을 시작합니다.</p>
-        </section>
-        ${checkFlowSteps(1)}
-        <div class="work-grid">
+        const body = `<div class="work-grid check-flow-work-grid">
           ${categories.length ? categories.map((cat) => {
             return `<button class="work-card" style="--accent:${esc(categoryAccent(cat))}" data-select-category="${cat.id}" type="button">
               <span class="work-icon">${categoryVisual(cat)}</span>
               <div class="work-title">${esc(workLabel(cat))}</div>
-              <span class="work-arrow">›</span>
             </button>`;
           }).join("") : `<div class="empty">등록된 작업 유형이 없습니다. 관리자 메뉴에서 작업 유형을 추가하세요.</div>`}
         </div>`;
+        return checkFlowShell(1, "작업 선택", "어떤 작업을 점검할까요?", body);
       }
 
       const cat = categoryById(state.selectedCategoryId);
@@ -2366,40 +2561,25 @@
       const canSubmit = submitState.canSubmit;
       const submitDisabledText = submitState.disabledText;
 
-      return `${pageHead(cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", `<button class="btn-light" data-action="back-check-types" type="button">뒤로</button>`)}
-      ${checkFlowSteps(3)}
-      <div class="split">
-        <div>
-          <div class="mobile-check-status" aria-label="모바일 점검 작성 상태">
-            <div class="mobile-check-progress">
-              ${progress(pct, categoryAccent(cat), "data-check-progress")}
-              <span class="mobile-check-percent" data-check-percent>${pct}%</span>
-            </div>
-            <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
-          </div>
-          <div class="pledge-flow-grid">
-            ${renderPledgeWorkerSelect(cat)}
-            ${renderPledgeShipSelect(selectableShips)}
-            ${renderSafetyPledgeChecklist()}
-          </div>
-          ${selectableShips.length ? "" : `<div class="notice danger" style="margin-bottom:12px">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
-          ${highMissing.length ? `<div class="notice danger" data-high-missing-notice style="margin-bottom:12px">미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice style="margin-bottom:12px">고위험 항목이 모두 확인되었습니다.</div>`}
-          ${renderChecklistSections(cat.id)}
-          <div class="check-submit-bar">
-            ${disabledReasonWrap(`<button class="btn check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit)}
-          </div>
+      const body = `<div class="check-flow-status-card" aria-label="점검 작성 상태">
+        <div class="section-title">작성 상태 <span class="small muted" data-check-count>${checked}/${items.length} 항목 확인됨</span></div>
+        ${progress(pct, categoryAccent(cat), "data-check-progress")}
+        <div class="check-flow-status-badges">
+          <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
+          ${badge("medium", state.draft.worker.trim() ? "담당자 입력됨" : "담당자 필요")}
+          ${badge("medium", state.draft.shipNo ? "호선 선택됨" : "호선 필요")}
         </div>
-        <aside class="panel panel-pad check-status-panel">
-          <div class="section-title">작성 상태</div>
-          ${progress(pct, categoryAccent(cat), "data-check-progress")}
-          <div class="small muted" data-check-count style="margin-top:8px">${checked}/${items.length} 항목 확인됨</div>
-          <div class="list" style="margin-top:16px">
-            <span data-high-missing-badge>${badge(highMissing.length ? "high" : "low", highMissing.length ? `위험 ${highMissing.length}건 남음` : "위험 확인 완료")}</span>
-            ${badge("medium", state.draft.worker.trim() ? "담당자 입력됨" : "담당자 필요")}
-            ${badge("medium", state.draft.shipNo ? "호선 선택됨" : "호선 필요")}
-          </div>
-        </aside>
-      </div>`;
+      </div>
+      <div class="pledge-flow-grid">
+        ${renderPledgeWorkerSelect(cat)}
+        ${renderPledgeShipSelect(selectableShips)}
+        ${renderSafetyPledgeChecklist()}
+      </div>
+      ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
+      ${highMissing.length ? `<div class="notice danger" data-high-missing-notice>미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice>고위험 항목이 모두 확인되었습니다.</div>`}
+      ${renderChecklistSections(cat.id)}`;
+      const footer = disabledReasonWrap(`<button class="material-flow-primary check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit);
+      return checkFlowShell(3, cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", body, footer);
     }
 
     function renderToolPrep(cat) {
@@ -2409,9 +2589,10 @@
       const requireSelection = cat.requireToolCheck !== false;
       const continueDisabled = requireSelection && !selectedCount;
       const continueDisabledText = continueDisabled ? "다음 점검표로 이동할 수 없음: 공기구/준비물 선택 필요" : "다음 점검표로";
-      return `${pageHead("사용 공기구와 준비물", "사용할 공기구와 준비물을 체크한 뒤 다음 점검표로 이동하세요.", `<button class="btn-light" data-action="back-check-types" type="button">뒤로</button>`)}
-      ${checkFlowSteps(2)}
-      <div class="panel panel-pad tool-prep-panel">
+      const body = `<div class="pledge-flow-grid">
+        ${renderPledgeWorkerSelect(cat)}
+      </div>
+      <div class="tool-prep-panel">
         <div class="section-title">
           <span>${esc(cat.label)}</span>
           <span class="small muted">${esc(normalizeToolNature(cat.toolNature))} 기준 · 선택 ${selectedCount}개</span>
@@ -2426,12 +2607,29 @@
             </button>`;
           }).join("")}
         </div>
-        ${requireSelection && !selectedCount ? `<div class="notice danger" style="margin-top:12px">최소 1개의 공기구/준비물을 선택해야 다음 점검표로 이동할 수 있습니다.</div>` : `<div class="notice good" style="margin-top:12px">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`}
-        <div class="tool-prep-actions">
-          <button class="btn-light" data-action="back-check-types" type="button">작업 유형 다시 선택</button>
-          ${disabledReasonWrap(`<button class="btn" data-action="continue-tool-prep" ${continueDisabled ? "disabled" : ""} title="${esc(continueDisabledText)}" aria-label="${esc(continueDisabledText)}" type="button">다음 점검표로</button>`, continueDisabledText, continueDisabled)}
-        </div>
+        ${requireSelection && !selectedCount ? `<div class="notice danger">최소 1개의 공기구/준비물을 선택해야 다음 점검표로 이동할 수 있습니다.</div>` : `<div class="notice good">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`}
       </div>`;
+      const footer = `<button class="btn-light material-flow-secondary" data-action="back-check-types" type="button">작업 유형</button>
+        ${disabledReasonWrap(`<button class="material-flow-primary" data-action="continue-tool-prep" ${continueDisabled ? "disabled" : ""} title="${esc(continueDisabledText)}" aria-label="${esc(continueDisabledText)}" type="button">다음 점검표로</button>`, continueDisabledText, continueDisabled)}`;
+      return checkFlowShell(2, "공기구 확인", "사용할 공기구와 준비물을 선택하세요", body, footer);
+    }
+
+    function checkFlowShell(step, title, lead, body, footer = "") {
+      const total = 3;
+      const pct = Math.round(step / total * 100);
+      return `<section class="material-flow check-flow">
+        <div class="material-flow-head">
+          <div class="material-flow-kicker">작업 전 점검 · STEP ${step} / ${total}</div>
+          <div class="material-flow-title">
+            ${step > 1 ? `<button class="material-back" data-action="back-check-types" type="button" aria-label="작업 유형 선택으로 돌아가기">‹</button>` : ""}
+            <h1>${esc(title)}</h1>
+          </div>
+          <p>${esc(lead)}</p>
+          <div class="material-flow-progress" role="progressbar" aria-label="점검 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
+        </div>
+        <div class="material-flow-body">${body}</div>
+        ${footer ? `<div class="material-flow-footer">${footer}</div>` : ""}
+      </section>`;
     }
 
     function checkFlowSteps(activeStep) {
@@ -2836,6 +3034,13 @@
     function renderItems() {
       if (!state.manageCategoryId) {
         return `${pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton())}
+        <div class="panel panel-pad login-session-panel" style="margin-bottom:14px">
+          <div>
+            <strong>${esc(currentWorkerSessionLabel())}</strong>
+            <span>로그인 중</span>
+          </div>
+          ${logoutButton()}
+        </div>
         <div class="panel panel-pad" style="margin-bottom:14px">
           ${renderToolManagerShell()}
         </div>
@@ -2973,18 +3178,16 @@
     function renderUnsafeContentStep() {
       reconcileUnsafePhotoDraft();
       const ready = unsafeStepReady(2);
-      const selectedWorker = state.workers.find((worker) => worker.id === state.unsafeDraft.workerId);
+      const selectedWorker = currentWorkerSessionWorker();
       const photoNames = currentUnsafePhotoNames();
       const body = `<div class="field material-flow-field">
         <label for="unsafeContent"><span>불안전요소 내용 *</span><small>${String(state.unsafeDraft.content || "").length}/300</small></label>
         <textarea class="textarea" id="unsafeContent" maxlength="300" placeholder="예: 3번 탱크 상부 난간 미설치, 작업자 통행 위험">${esc(state.unsafeDraft.content || "")}</textarea>
       </div>
       <div class="field material-flow-field">
-        <label for="unsafeWorkerId">등록자 선택 *</label>
-        <select class="select" id="unsafeWorkerId">
-          ${visibleWorkerOptions(state.unsafeDraft.workerId)}
-        </select>
-        ${selectedWorker ? `<div class="small muted material-selected-note">${esc(selectedWorker.name)} 님으로 접수됩니다.</div>` : ""}
+        <label>등록자</label>
+        <div class="readonly-box"><strong>${esc(selectedWorker?.name || currentWorkerSessionLabel())}</strong>${selectedWorker?.team ? `<small>${esc(selectedWorker.team)}</small>` : ""}</div>
+        <div class="small muted material-selected-note">로그인한 작업자로 자동 접수됩니다.</div>
       </div>
       <div class="field material-flow-field">
         <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 3장</small></label>
@@ -3141,7 +3344,7 @@
 
     function renderMaterialQuantityStep() {
       const type = materialTypeMeta();
-      const selectedWorker = state.workers.find((worker) => worker.id === state.materialDraft.workerId);
+      const selectedWorker = currentWorkerSessionWorker();
       const ready = materialStepReady(3);
       const body = `<div class="material-summary-pill">
         <span class="material-type-icon tone-${esc(type.tone)}">${esc(type.icon)}</span>
@@ -3163,12 +3366,10 @@
         <textarea class="textarea" id="materialDetail" maxlength="150" placeholder="언제까지 필요한지, 위치나 상황을 적어주세요">${esc(state.materialDraft.detail || "")}</textarea>
       </div>
       <div class="field material-flow-field">
-        <label for="materialWorkerId">등록자 선택 *</label>
-        <select class="select" id="materialWorkerId">
-          ${visibleWorkerOptions(state.materialDraft.workerId)}
-        </select>
+        <label>등록자</label>
+        <div class="readonly-box"><strong>${esc(selectedWorker?.name || currentWorkerSessionLabel())}</strong>${selectedWorker?.team ? `<small>${esc(selectedWorker.team)}</small>` : ""}</div>
       </div>
-      ${selectedWorker ? `<div class="small muted material-selected-note">${esc(selectedWorker.name)} 님으로 접수됩니다.</div>` : ""}`;
+      <div class="small muted material-selected-note">로그인한 작업자로 자동 접수됩니다.</div>`;
       return materialFlowShell(3, "수량 및 상세", `${state.materialDraft.materialName || "자재"} · ${state.materialDraft.shipNo || "호선"}`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-material-next type="button" data-required-message="${esc(flowRequiredText(materialMissingFields(3)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
     }
 
@@ -3263,13 +3464,14 @@
         ["materials", "자재누락"],
       ];
       const previewAdmin = isRedesignPreviewPage();
-      if (!state.adminMode && !previewAdmin && state.manageTab !== "unsafe") state.manageTab = "unsafe";
-      const unsafeReadOnly = !state.adminMode && state.manageTab === "unsafe";
-      if (!state.adminMode && !previewAdmin && !unsafeReadOnly) {
+      const readOnlyTabs = new Set(["unsafe", "materials"]);
+      if (!state.adminMode && !previewAdmin && !readOnlyTabs.has(state.manageTab)) state.manageTab = "unsafe";
+      const readOnlyList = !state.adminMode && readOnlyTabs.has(state.manageTab);
+      if (!state.adminMode && !previewAdmin && !readOnlyList) {
         return pageHead("관리", "관리자 모드에서 사용할 수 있습니다.", adminToggleButton())
           + `<div class="notice danger">관리자 모드가 필요합니다.</div>`;
       }
-      const visibleTabs = state.adminMode || previewAdmin ? tabs : [["unsafe", "불안전요소"]];
+      const visibleTabs = state.adminMode || previewAdmin ? tabs : tabs.filter(([id]) => readOnlyTabs.has(id));
       const unsafeOpen = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
       const materialOpen = state.missingMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
       const tabCounts = {
@@ -3277,7 +3479,7 @@
         unsafe: unsafeOpen,
         materials: materialOpen,
       };
-      const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "불안전요소 접수 현황을 확인합니다.";
+      const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "접수 현황을 확인합니다.";
       return `${pageHead("관리", lead, adminToggleButton())}
       ${state.adminMode || previewAdmin ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`}
       <div class="manage-tabs" role="tablist" aria-label="관리 탭">
@@ -3374,12 +3576,10 @@
     }
 
     function renderUnsafeManager() {
-      const detail = state.unsafeDetailId ? state.unsafeIssues.find((row) => row.id === state.unsafeDetailId) : null;
-      if (state.unsafeDetailId) state.unsafeDetailId = "";
       const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, state.unsafeFilters);
       const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.unsafeFilters.sort, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
       const openCount = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
-      const selected = detail || sorted[0] || state.unsafeIssues[0] || null;
+      const activeId = sorted.some((row) => row.id === state.unsafeDetailId) ? state.unsafeDetailId : "";
       return `<section class="admin-board unsafe-board">
         <div class="admin-board-top">
           <div>
@@ -3391,7 +3591,7 @@
             <button class="btn" data-view="unsafe" type="button">+ 신규</button>
           </div>
         </div>
-        <div class="unsafe-split">
+        <div class="unsafe-split unsafe-split-inline">
           <aside class="unsafe-list-panel">
             <div class="unsafe-list-head">
               <div><strong>전체 목록</strong><span>상태별</span></div>
@@ -3399,12 +3599,12 @@
             </div>
             <div class="unsafe-list-table">
               <div class="unsafe-list-row unsafe-list-row-head"><span>호선</span><span>제목</span><span>상태</span></div>
-              ${sorted.length ? sorted.map((row) => renderUnsafeQueueItem(row, selected && selected.id === row.id)).join("") : `<div class="empty">표시할 불안전요소가 없습니다.</div>`}
+              ${sorted.length ? sorted.map((row) => {
+                const active = row.id === activeId;
+                return `${renderUnsafeQueueItem(row, active)}${active ? renderUnsafeInlineDetail(row) : ""}`;
+              }).join("") : `<div class="empty">표시할 불안전요소가 없습니다.</div>`}
             </div>
           </aside>
-          <article class="unsafe-detail-card">
-            ${selected ? renderUnsafeProcessingDetail(selected) : `<div class="empty">처리할 항목이 없습니다.</div>`}
-          </article>
         </div>
       </section>`;
     }
@@ -3416,6 +3616,12 @@
         <span><strong>${esc(shortUnsafeTitle(row.content))}</strong><em>${esc(row.workerNameSnapshot || "-")} · ${esc(shipStageForNo(row.shipNo))}${pendingPhotoCount ? ` · 사진 업로드 대기 ${pendingPhotoCount}장` : ""}</em></span>
         ${statusChip(row.status)}
       </button>`;
+    }
+
+    function renderUnsafeInlineDetail(row) {
+      return `<article class="unsafe-inline-detail" aria-label="${esc(row.shipNo || "")} 불안전요소 상세">
+        ${renderUnsafeProcessingDetail(row)}
+      </article>`;
     }
 
     function renderUnsafeProcessingDetail(row) {
@@ -3464,9 +3670,25 @@
 
     function renderUnsafePhotoSlot(photo, index) {
       const url = photo ? publicPhotoUrl(photo) : "";
-      return `<figure class="unsafe-photo-slot ${url ? "" : "no-photo"}">
+      const label = `사진${index + 1}`;
+      return `<figure class="unsafe-photo-slot ${url ? "has-photo" : "no-photo"}" ${url ? `data-photo-viewer-src="${esc(url)}" data-photo-viewer-label="${esc(label)}" role="button" tabindex="0" aria-label="${esc(label)} 확대 보기"` : ""}>
+        <span class="unsafe-photo-label">${esc(label)}</span>
         ${url ? `<img src="${esc(url)}" alt="현장 사진 ${index + 1}" />` : `<div><strong>사진 없음</strong><span>첨부된 현장 사진이 없습니다</span></div>`}
       </figure>`;
+    }
+
+    function renderPhotoViewer() {
+      const viewer = state.photoViewer;
+      if (!viewer || !viewer.src) return "";
+      const label = viewer.label || "현장 사진";
+      return `<div class="photo-viewer-overlay" role="dialog" aria-modal="true" aria-label="${esc(label)} 확대 보기">
+        <button class="photo-viewer-backdrop" data-photo-viewer-close type="button" aria-label="사진 닫기"></button>
+        <figure class="photo-viewer-frame">
+          <button class="photo-viewer-close" data-photo-viewer-close type="button" aria-label="사진 닫기">닫기</button>
+          <img src="${esc(viewer.src)}" alt="${esc(label)} 원본" />
+          <figcaption>${esc(label)}</figcaption>
+        </figure>
+      </div>`;
     }
 
     function pendingPhotoUploadsFor(issueId) {
@@ -3498,9 +3720,11 @@
     }
 
     function renderMaterialManager() {
+      const canEdit = state.adminMode || isRedesignPreviewPage();
       const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, state.materialFilters);
       const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.materialFilters.sort, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES);
-      const groups = ISSUE_MATERIAL_RULES.groupMaterialsByShip(sorted);
+      const filterPanelRows = ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, { ...state.materialFilters, shipNo: "" });
+      const filterGroups = ISSUE_MATERIAL_RULES.groupMaterialsByShip(ISSUE_MATERIAL_RULES.sortRecords(filterPanelRows, "shipNo", ISSUE_MATERIAL_RULES.MATERIAL_STATUSES));
       const statuses = ISSUE_MATERIAL_RULES.MATERIAL_STATUSES;
       const received = state.missingMaterials.filter((row) => row.status === statuses[0]).length;
       const checking = state.missingMaterials.filter((row) => row.status === statuses[1]).length;
@@ -3526,9 +3750,9 @@
           <aside class="material-filter-panel">
             <div class="section-title">호선별 필터</div>
             <button class="material-ship-filter ${state.materialFilters.shipNo ? "" : "active"}" data-record-filter="materials:shipNo" value="" type="button">
-              <span>전체 호선</span><strong>${state.missingMaterials.length}</strong>
+              <span>전체 호선</span><strong>${filterPanelRows.length}</strong>
             </button>
-            ${groups.map((group) => `<button class="material-ship-filter ${state.materialFilters.shipNo === group.shipNo ? "active" : ""}" data-record-filter="materials:shipNo" value="${esc(group.shipNo)}" type="button">
+            ${filterGroups.map((group) => `<button class="material-ship-filter ${state.materialFilters.shipNo === group.shipNo ? "active" : ""}" data-record-filter="materials:shipNo" value="${esc(group.shipNo)}" type="button">
               <span><strong>${esc(group.shipNo)}</strong><em>${esc(shipStageForNo(group.shipNo))} · ${materialProgressForGroup(group)}%</em></span><strong>${group.records.length}</strong>
             </button>`).join("")}
           </aside>
@@ -3537,7 +3761,7 @@
               <div><strong>자재 누락 목록</strong><span>${filtered.length}건 표시 중</span></div>
               <div class="material-table-actions">
                 <button class="btn-light" data-record-filter="materials:sort" value="${state.materialFilters.sort === "latest" ? "status" : "latest"}" type="button">정렬: ${state.materialFilters.sort === "latest" ? "상태순" : "최신순"}</button>
-                <button class="btn-light" data-action="bulk-material-status" type="button">상태 일괄 변경</button>
+                <button class="btn-light" data-action="bulk-material-status" ${canEdit ? "" : "disabled"} type="button">상태 일괄 변경</button>
               </div>
             </div>
             <div class="material-table">
@@ -3566,17 +3790,18 @@
 
     function renderMaterialTableRow(row) {
       const token = `materials:${row.id}`;
+      const canEdit = state.adminMode || isRedesignPreviewPage();
       return `<div class="material-row">
-        <span><input type="checkbox" aria-label="자재 기록 선택" /></span>
+        <span><input type="checkbox" aria-label="자재 기록 선택" ${canEdit ? "" : "disabled"} /></span>
         <span><strong>${esc(row.shipNo || "-")}</strong><em>${esc(shipStageForNo(row.shipNo))}</em></span>
         <span><strong>${esc(row.materialName || "-")}</strong><em>${esc(row.content || "내용 없음")}</em></span>
         <span><strong>${esc(materialQuantity(row))}</strong></span>
         <span>${esc(row.workerNameSnapshot || "-")}</span>
         <span>${esc(shortRecordTime(row.createdAt))}</span>
-        <span><select class="select" data-record-status="${esc(token)}">${ISSUE_MATERIAL_RULES.MATERIAL_STATUSES.map((status) => `<option value="${esc(status)}" ${row.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}</select></span>
+        <span><select class="select" data-record-status="${esc(token)}" ${canEdit ? "" : "disabled"}>${ISSUE_MATERIAL_RULES.MATERIAL_STATUSES.map((status) => `<option value="${esc(status)}" ${row.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}</select></span>
         <span class="material-row-actions">
           <textarea data-record-memo="${esc(token)}" hidden>${esc(row.adminMemo || "")}</textarea>
-          <button class="btn-light" data-save-record="${esc(token)}" type="button">저장</button>
+          <button class="btn-light" data-save-record="${esc(token)}" ${canEdit ? "" : "disabled"} type="button">저장</button>
           <button class="btn" data-material-record-detail="${esc(row.id)}" type="button">상세 →</button>
         </span>
       </div>`;
@@ -5250,6 +5475,9 @@
     function dispatchAction(action, event) {
       if (ADMIN_ACTIONS.has(action)) return dispatchAdminAction(action, event);
       const actions = {
+        "worker-login": submitWorkerLogin,
+        "worker-logout": logoutWorker,
+        "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
         "submit-inspection": submitInspection,
         "submit-unsafe": submitUnsafeIssue,
@@ -5267,6 +5495,13 @@
       return true;
     }
 
+    document.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-login-form]");
+      if (!form) return;
+      event.preventDefault();
+      submitWorkerLogin();
+    });
+
     document.addEventListener("click", (event) => {
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
@@ -5280,6 +5515,18 @@
       const historyCard = event.target.closest("[data-history-detail-card]");
       if (historyCard && !event.target.closest("button,input,label,select,textarea")) {
         openHistoryDetail(historyCard.dataset.historyDetailCard);
+        return;
+      }
+
+      const photoViewerClose = event.target.closest("[data-photo-viewer-close]");
+      if (photoViewerClose) {
+        closePhotoViewer();
+        return;
+      }
+
+      const photoViewerTarget = event.target.closest("[data-photo-viewer-src]");
+      if (photoViewerTarget) {
+        openPhotoViewer(photoViewerTarget.dataset.photoViewerSrc, photoViewerTarget.dataset.photoViewerLabel);
         return;
       }
 
@@ -5337,6 +5584,16 @@
         selectPledgeWorker(button.dataset.selectPledgeWorker);
         return;
       }
+      if (button.dataset.action === "expand-pledge-worker") {
+        state.pledgeWorkerCollapsed = false;
+        renderPreservingScroll();
+        return;
+      }
+      if (button.dataset.action === "expand-pledge-ship") {
+        state.pledgeShipCollapsed = false;
+        renderPreservingScroll();
+        return;
+      }
       if (button.dataset.action === "toggle-other-workers") {
         state.workerFallbackOpen = !state.workerFallbackOpen;
         render();
@@ -5345,7 +5602,8 @@
       if (button.dataset.selectPledgeShip) {
         state.draft.shipNo = button.dataset.selectPledgeShip;
         saveJson("draft", state.draft);
-        render();
+        state.pledgeShipCollapsed = true;
+        renderPreservingScroll();
         return;
       }
       if (button.dataset.unsafeSelectShip) {
@@ -5451,6 +5709,8 @@
       if (button.dataset.selectCategory) {
         state.selectedCategoryId = button.dataset.selectCategory;
         state.workerFallbackOpen = false;
+        state.pledgeWorkerCollapsed = false;
+        state.pledgeShipCollapsed = false;
         resetToolPrepDraft();
         render();
         scrollScreenTop();
@@ -5459,6 +5719,8 @@
       if (button.dataset.action === "back-check-types") {
         state.selectedCategoryId = null;
         state.workerFallbackOpen = false;
+        state.pledgeWorkerCollapsed = false;
+        state.pledgeShipCollapsed = false;
         resetToolPrepDraft();
         render();
         scrollScreenTop();
@@ -5466,6 +5728,8 @@
       }
       if (button.dataset.action === "continue-tool-prep") {
         state.draft.toolPrepComplete = true;
+        state.pledgeWorkerCollapsed = false;
+        state.pledgeShipCollapsed = false;
         render();
         scrollScreenTop();
       }
@@ -5648,6 +5912,11 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.photoViewer) {
+        event.preventDefault();
+        closePhotoViewer();
+        return;
+      }
       if (event.key !== "Enter" && event.key !== " ") return;
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
@@ -5657,8 +5926,14 @@
       }
 
       const historyCard = event.target.closest("[data-history-detail-card]");
+      const photoViewerTarget = event.target.closest("[data-photo-viewer-src]");
       const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
       const analyticsRow = event.target.closest("[data-analytics-record-id]");
+      if (photoViewerTarget) {
+        event.preventDefault();
+        openPhotoViewer(photoViewerTarget.dataset.photoViewerSrc, photoViewerTarget.dataset.photoViewerLabel);
+        return;
+      }
       if (historyCard && !event.target.closest("button,input,label,select,textarea")) {
         event.preventDefault();
         openHistoryDetail(historyCard.dataset.historyDetailCard);
@@ -5691,16 +5966,27 @@
 
     function openUnsafeDetail(id) {
       if (!id) return;
-      state.unsafeDetailId = id;
       state.manageTab = "unsafe";
       saveJson("manageTab", state.manageTab);
       if (state.view === "manage") {
-        render();
-        scrollScreenTop();
+        state.unsafeDetailId = state.unsafeDetailId === id ? "" : id;
+        renderPreservingScroll();
         pushRouteState();
       } else {
+        state.unsafeDetailId = id;
         changeView("manage");
       }
+    }
+
+    function openPhotoViewer(src, label) {
+      if (!src) return;
+      state.photoViewer = { src, label: label || "현장 사진" };
+      renderPreservingScroll();
+    }
+
+    function closePhotoViewer() {
+      state.photoViewer = null;
+      renderPreservingScroll();
     }
 
     function openMaterialDetail(id) {
@@ -5730,7 +6016,8 @@
       if (normalizedWorkerName(previousWorker) !== normalizedWorkerName(state.draft.worker)) state.draft.pledgeSignature = "";
       preloadCachedPledgeSignature();
       saveJson("draft", state.draft);
-      render();
+      state.pledgeWorkerCollapsed = true;
+      renderPreservingScroll();
     }
 
     function openUnsafeReceivedList() {
@@ -6066,6 +6353,71 @@
       replaceRouteState();
       toast("호선자재 누락이 접수되었습니다.");
       syncMissingMaterial(row);
+    }
+
+    async function verifyWorkerLogin(workerId, employeeNo) {
+      const client = supabaseClient();
+      if (client) {
+        try {
+          const { data, error } = await client.rpc("verify_worker_login", {
+            p_worker_id: workerId,
+            p_employee_no: employeeNo,
+          });
+          if (!error) return Boolean(data);
+          console.warn("worker login rpc unavailable", error);
+        } catch (error) {
+          console.warn("worker login rpc failed", error);
+        }
+      }
+      return false;
+    }
+
+    async function submitWorkerLogin() {
+      if (state.loginSubmitting) return;
+      const workerId = $("loginWorkerId")?.value || "";
+      const employeeNo = normalizeEmployeeNo($("loginEmployeeNo")?.value || "");
+      const worker = state.workers.find((row) => row.id === workerId);
+      if (!worker) return toast("작업자를 선택하세요.");
+      if (!employeeNo) return toast("사번을 입력하세요.");
+
+      state.loginSubmitting = true;
+      render();
+      const ok = await verifyWorkerLogin(workerId, employeeNo);
+      state.loginSubmitting = false;
+      if (!ok) {
+        render();
+        toast("작업자 또는 사번을 확인하세요.");
+        return;
+      }
+
+      state.workerSession = {
+        workerId: worker.id,
+        workerName: worker.name,
+        loggedInAt: serverNow().toISOString(),
+      };
+      saveWorkerSession(state.workerSession);
+      toast(`${worker.name}님 로그인되었습니다.`);
+      render();
+      scrollScreenTop();
+    }
+
+    async function refreshWorkerList() {
+      setSyncStatus("서버 확인 중", "pending");
+      await pullRemote({ force: true });
+      toast("작업자 목록을 새로 불러왔습니다.");
+    }
+
+    function logoutWorker() {
+      state.workerSession = null;
+      state.view = "dashboard";
+      state.selectedCategoryId = null;
+      state.historyDetailId = null;
+      clearCompletionStateForView("dashboard");
+      clearWorkerSession();
+      toast("로그아웃되었습니다.");
+      render();
+      scrollScreenTop();
+      history.replaceState(routeState(), "", "/");
     }
 
     function setAdminMode(enabled, email = "") {
@@ -7085,7 +7437,7 @@
       const entries = [];
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
-        const dataUrl = file.size <= 900 * 1024 ? await fileToDataUrl(file) : "";
+        const dataUrl = file.size <= PENDING_PHOTO_RETRY_MAX_BYTES ? await fileToDataUrl(file) : "";
         entries.push({
           id: uid("pendingPhoto"),
           issueId,
