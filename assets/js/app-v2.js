@@ -809,8 +809,8 @@
     }
 
     const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache";
-    const HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS = new Set(["worker_001", "worker_007", "worker_013"]);
-    const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "김준혁", "김경제"]);
+    const HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS = new Set(["worker_001", "worker_002", "worker_007", "worker_013"]);
+    const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "허지원", "김준혁", "김경제"]);
 
     function signatureCacheDateKey() {
       return today();
