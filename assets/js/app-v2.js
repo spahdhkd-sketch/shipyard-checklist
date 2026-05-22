@@ -800,6 +800,19 @@
       };
     }
 
+    function createWorkPrepDraft(overrides = {}) {
+      return {
+        workDate: localDate(new Date()),
+        team: "",
+        shipNo: "",
+        categoryId: "",
+        leaderWorkerId: "",
+        workerIds: [],
+        toolIds: [],
+        ...overrides,
+      };
+    }
+
     function isSignatureImage(value) {
       return String(value || "").startsWith("data:image/png;base64,");
     }
@@ -832,6 +845,29 @@
 
     function isLeaderWorker(worker) {
       return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
+    }
+
+    function canOpenWorkPrepRegister() {
+      const worker = currentWorkerSessionWorker();
+      const team = String(worker?.team || "").trim();
+      return Boolean(state.adminMode || isLeaderWorker(worker) || team === "관리" || team === "총무");
+    }
+
+    function saveWorkPrepDraft() {
+      saveJson("workPrepDraft", state.workPrepDraft);
+    }
+
+    function normalizeWorkPrepWorkerIds(draft) {
+      const leaderId = String(draft.leaderWorkerId || "");
+      const ids = new Set(Array.isArray(draft.workerIds) ? draft.workerIds : []);
+      if (leaderId) ids.add(leaderId);
+      return [...ids].filter((id) => state.workers.some((worker) => worker.id === id));
+    }
+
+    function normalizeWorkPrepToolIds(draft) {
+      const category = categoryById(draft.categoryId);
+      const availableIds = new Set(category ? visibleToolsForCategory(category.id).map((tool) => tool.id) : []);
+      return sanitizeToolIds(draft.toolIds).filter((id) => availableIds.has(id));
     }
 
     function isHiddenPledgeAnalyticsWorker(worker) {
@@ -972,6 +1008,8 @@
       workerFallbackOpen: false,
       pledgeWorkerCollapsed: false,
       pledgeShipCollapsed: false,
+      workPrepRegisterOpen: false,
+      workPrepDraft: createWorkPrepDraft(loadJson("workPrepDraft", {})),
       draft: loadDraft(),
       historyScope: "all",
       historyFilter: "all",
@@ -1187,6 +1225,7 @@
           })),
       ];
       state.draft = createDraft(state.draft);
+      state.workPrepDraft = createWorkPrepDraft(state.workPrepDraft);
       state.workers = (Array.isArray(state.workers) ? state.workers : []).map((worker) => ({
         id: worker.id || uid("worker"),
         name: String(worker.name || "").trim(),
@@ -1374,6 +1413,7 @@
       return {
         app: "shipyardSafety",
         view: state.view,
+        workPrepRegisterOpen: state.view === "check" && state.workPrepRegisterOpen,
         selectedCategoryId: state.selectedCategoryId,
         historyScope: state.historyScope,
         historyFilter: state.historyFilter,
@@ -1397,6 +1437,7 @@
       const route = event.state;
       if (!route || route.app !== "shipyardSafety") {
         state.view = "dashboard";
+        state.workPrepRegisterOpen = false;
         state.selectedCategoryId = null;
         state.historyDetailId = null;
         clearCompletionStateForView("dashboard");
@@ -1406,11 +1447,15 @@
         return;
       }
       state.view = routeViews().some((nav) => nav.id === route.view) ? route.view : "dashboard";
+      state.workPrepRegisterOpen = state.view === "check" && Boolean(route.workPrepRegisterOpen);
       state.selectedCategoryId = route.selectedCategoryId || null;
       state.historyScope = normalizeHistoryScope(route.historyScope || "all");
       state.historyFilter = route.historyFilter || "all";
       state.historyDetailId = route.historyDetailId || null;
-      if (state.view !== "check") state.selectedCategoryId = null;
+      if (state.view !== "check") {
+        state.selectedCategoryId = null;
+        state.workPrepRegisterOpen = false;
+      }
       if (!["dashboard", "history"].includes(state.view)) state.historyDetailId = null;
       clearCompletionStateForView(state.view);
       render();
@@ -1436,7 +1481,10 @@
       }
       const changed = state.view !== view || state.selectedCategoryId || state.historyDetailId;
       state.view = view;
-      if (view !== "check") state.selectedCategoryId = null;
+      if (view !== "check") {
+        state.selectedCategoryId = null;
+        state.workPrepRegisterOpen = false;
+      }
       if (!["dashboard", "history"].includes(view)) state.historyDetailId = null;
       clearCompletionStateForView(view);
       render();
@@ -2599,10 +2647,214 @@
       return true;
     }
 
+    function uniqueWorkerTeams() {
+      return [...new Set(state.workers.map((worker) => String(worker.team || "").trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "ko"));
+    }
+
+    function workPrepDraftWithDefaults() {
+      const worker = currentWorkerSessionWorker();
+      const teams = uniqueWorkerTeams();
+      const categories = state.categories.sort(byOrder);
+      const ships = visibleWorkerShips();
+      const leaders = state.workers.filter(isLeaderWorker).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      const team = state.workPrepDraft.team || worker?.team || teams[0] || "";
+      const leader = state.workPrepDraft.leaderWorkerId
+        ? state.workers.find((row) => row.id === state.workPrepDraft.leaderWorkerId)
+        : (isLeaderWorker(worker) ? worker : leaders.find((row) => row.team === team) || leaders[0]);
+      const workerIds = new Set(Array.isArray(state.workPrepDraft.workerIds) ? state.workPrepDraft.workerIds : []);
+      if (leader?.id) workerIds.add(leader.id);
+      const draft = createWorkPrepDraft({
+        ...state.workPrepDraft,
+        workDate: state.workPrepDraft.workDate || today(),
+        team,
+        shipNo: state.workPrepDraft.shipNo || ships[0]?.no || "",
+        categoryId: state.workPrepDraft.categoryId || categories[0]?.id || "",
+        leaderWorkerId: leader?.id || "",
+        workerIds: [...workerIds],
+      });
+      draft.workerIds = normalizeWorkPrepWorkerIds(draft);
+      draft.toolIds = normalizeWorkPrepToolIds(draft);
+      return draft;
+    }
+
+    function openWorkPrepRegister() {
+      if (!canOpenWorkPrepRegister()) return toast("작업 준비 등록은 관리/총무/조장만 사용할 수 있습니다.");
+      state.workPrepRegisterOpen = true;
+      state.selectedCategoryId = null;
+      state.workPrepDraft = workPrepDraftWithDefaults();
+      saveWorkPrepDraft();
+      render();
+      scrollScreenTop();
+      pushRouteState();
+    }
+
+    function closeWorkPrepRegister() {
+      state.workPrepRegisterOpen = false;
+      state.workPrepDraft = workPrepDraftWithDefaults();
+      saveWorkPrepDraft();
+      render();
+      scrollScreenTop();
+      pushRouteState();
+    }
+
+    function updateWorkPrepDraftField(field, value) {
+      const draft = workPrepDraftWithDefaults();
+      draft[field] = value;
+      if (field === "team") {
+        const teamLeader = state.workers.find((worker) => isLeaderWorker(worker) && worker.team === value);
+        if (teamLeader) draft.leaderWorkerId = teamLeader.id;
+      }
+      if (field === "categoryId") draft.toolIds = [];
+      if (field === "leaderWorkerId" && value) draft.workerIds = [...new Set([value, ...draft.workerIds])];
+      draft.workerIds = normalizeWorkPrepWorkerIds(draft);
+      draft.toolIds = normalizeWorkPrepToolIds(draft);
+      state.workPrepDraft = draft;
+      saveWorkPrepDraft();
+      renderPreservingScroll();
+    }
+
+    function toggleWorkPrepWorker(workerId, checked) {
+      const draft = workPrepDraftWithDefaults();
+      if (workerId === draft.leaderWorkerId) return;
+      const workerIds = new Set(draft.workerIds);
+      checked ? workerIds.add(workerId) : workerIds.delete(workerId);
+      draft.workerIds = normalizeWorkPrepWorkerIds({ ...draft, workerIds: [...workerIds] });
+      state.workPrepDraft = draft;
+      saveWorkPrepDraft();
+      renderPreservingScroll();
+    }
+
+    function toggleWorkPrepTool(toolId, checked) {
+      const draft = workPrepDraftWithDefaults();
+      const toolIds = new Set(draft.toolIds);
+      checked ? toolIds.add(toolId) : toolIds.delete(toolId);
+      draft.toolIds = normalizeWorkPrepToolIds({ ...draft, toolIds: [...toolIds] });
+      state.workPrepDraft = draft;
+      saveWorkPrepDraft();
+      renderPreservingScroll();
+    }
+
+    function saveWorkPrepRegistration() {
+      const draft = workPrepDraftWithDefaults();
+      const category = categoryById(draft.categoryId);
+      const tools = category ? visibleToolsForCategory(category.id) : [];
+      draft.workerIds = normalizeWorkPrepWorkerIds(draft);
+      draft.toolIds = normalizeWorkPrepToolIds(draft);
+      state.workPrepDraft = draft;
+      saveWorkPrepDraft();
+      if (!draft.workDate) return toast("작업일을 선택하세요.");
+      if (!draft.shipNo) return toast("호선을 선택하세요.");
+      if (!draft.categoryId) return toast("작업 유형을 선택하세요.");
+      if (!draft.leaderWorkerId) return toast("조장을 선택하세요.");
+      if (tools.length && !draft.toolIds.length) return toast("공기구/준비물을 1개 이상 선택하세요.");
+      toast("작업 준비 등록 초안이 저장되었습니다.");
+    }
+
+    function renderWorkPrepRegister() {
+      const draft = workPrepDraftWithDefaults();
+      const teams = uniqueWorkerTeams();
+      const ships = visibleWorkerShips();
+      const categories = state.categories.sort(byOrder);
+      const leaders = state.workers.filter(isLeaderWorker).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      const selectedCategory = categoryById(draft.categoryId) || categories[0] || null;
+      const tools = selectedCategory ? visibleToolsForCategory(selectedCategory.id) : [];
+      const workerChoices = state.workers
+        .filter((worker) => !draft.team || worker.team === draft.team || isLeaderWorker(worker))
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      const selectedWorkers = new Set(draft.workerIds || []);
+      const selectedTools = new Set(draft.toolIds || []);
+
+      const body = `<div class="work-prep-status-strip" aria-label="작업 준비 상태">
+        ${["작업지시", "준비중", "확정", "사용됨"].map((label, index) => `<span class="${index === 0 ? "active" : ""}">${esc(label)}</span>`).join("")}
+      </div>
+      <section class="work-prep-register-card">
+        <div class="section-title">작업지시 기본 정보</div>
+        <div class="work-prep-register-grid">
+          <div class="field material-flow-field">
+            <label for="workPrepDate">작업일</label>
+            <input class="input" id="workPrepDate" data-work-prep-field="workDate" type="date" value="${esc(draft.workDate)}" />
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepTeam">팀/소속</label>
+            <select class="select" id="workPrepTeam" data-work-prep-field="team">
+              ${teams.map((team) => `<option value="${esc(team)}" ${team === draft.team ? "selected" : ""}>${esc(team)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepShip">호선</label>
+            <select class="select" id="workPrepShip" data-work-prep-field="shipNo">
+              ${ships.map((ship) => `<option value="${esc(ship.no)}" ${ship.no === draft.shipNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` · ${esc(ship.type)}` : ""}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepCategory">작업 유형</label>
+            <select class="select" id="workPrepCategory" data-work-prep-field="categoryId">
+              ${categories.map((cat) => `<option value="${esc(cat.id)}" ${cat.id === draft.categoryId ? "selected" : ""}>${esc(workLabel(cat))}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+      </section>
+      <section class="work-prep-register-card">
+        <div class="section-title">조장 / 같이 작업자</div>
+        <div class="field material-flow-field">
+          <label for="workPrepLeader">조장 <small>선택 시 같이 작업자에 자동 포함</small></label>
+          <select class="select" id="workPrepLeader" data-work-prep-field="leaderWorkerId">
+            ${leaders.map((worker) => `<option value="${esc(worker.id)}" ${worker.id === draft.leaderWorkerId ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}</option>`).join("")}
+          </select>
+        </div>
+        <div class="work-prep-chip-grid" aria-label="같이 작업자 선택">
+          ${workerChoices.map((worker) => {
+            const checked = selectedWorkers.has(worker.id) || worker.id === draft.leaderWorkerId;
+            const locked = worker.id === draft.leaderWorkerId;
+            return `<label class="work-prep-chip ${checked ? "checked" : ""} ${locked ? "locked" : ""}">
+              <input type="checkbox" data-work-prep-worker="${esc(worker.id)}" ${checked ? "checked" : ""} ${locked ? "disabled" : ""} />
+              <span>${esc(worker.name)}</span>
+              <em>${esc(worker.team || "-")}${isLeaderWorker(worker) ? ` · ${esc(LEADER_WORKER_POSITION)}` : ""}</em>
+            </label>`;
+          }).join("")}
+        </div>
+      </section>
+      <section class="work-prep-register-card">
+        <div class="section-title">공기구 / 준비물 <span class="small muted">${esc(selectedCategory ? workLabel(selectedCategory) : "작업 유형")} 기준</span></div>
+        ${tools.length ? `<div class="work-prep-chip-grid tools" aria-label="공기구 준비물 선택">
+          ${tools.map((tool) => `<label class="work-prep-chip ${selectedTools.has(tool.id) ? "checked" : ""}">
+            <input type="checkbox" data-work-prep-tool="${esc(tool.id)}" ${selectedTools.has(tool.id) ? "checked" : ""} />
+            <span>${esc(tool.name)}</span>
+            <em>${esc(normalizeToolNature(tool.nature))}</em>
+          </label>`).join("")}
+        </div>` : `<div class="notice">선택한 작업 유형에 지정된 공기구/준비물이 없습니다.</div>`}
+      </section>`;
+
+      const footer = `<button class="btn-light material-flow-secondary" data-action="close-work-prep-register" type="button">작업 선택으로</button>
+        <button class="material-flow-primary" data-action="save-work-prep-registration" type="button">준비 시작</button>`;
+      return `<section class="material-flow check-flow work-prep-register-flow">
+        <div class="material-flow-head">
+          <div class="material-flow-kicker">작업 전 점검 · 작업 준비 등록</div>
+          <div class="material-flow-title">
+            <button class="material-back" data-action="close-work-prep-register" type="button" aria-label="작업 선택으로 돌아가기">‹</button>
+            <h1>작업 준비 등록</h1>
+          </div>
+          <p>작업지시 기준으로 조장, 같이 작업자, 공기구/준비물을 먼저 정리합니다.</p>
+          <div class="material-flow-progress" role="progressbar" aria-label="작업 준비 등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><span style="width:25%"></span></div>
+        </div>
+        <div class="material-flow-body">${body}</div>
+        <div class="material-flow-footer">${footer}</div>
+      </section>`;
+    }
+
     function renderCheck() {
+      if (state.workPrepRegisterOpen) return renderWorkPrepRegister();
       if (!state.selectedCategoryId) {
         const categories = state.categories.sort(byOrder);
-        const body = `<div class="work-grid check-flow-work-grid">
+        const prepEntry = canOpenWorkPrepRegister() ? `<section class="work-prep-entry-card">
+          <div>
+            <strong>작업 준비 등록</strong>
+            <span>조장/관리/총무가 점검 전 작업자와 공기구를 먼저 정리합니다.</span>
+          </div>
+          <button class="btn" data-action="open-work-prep-register" type="button">등록</button>
+        </section>` : "";
+        const body = `${prepEntry}<div class="work-grid check-flow-work-grid">
           ${categories.length ? categories.map((cat) => {
             return `<button class="work-card" style="--accent:${esc(categoryAccent(cat))}" data-select-category="${cat.id}" type="button">
               <span class="work-icon">${categoryVisual(cat)}</span>
@@ -5701,6 +5953,9 @@
         "worker-logout": logoutWorker,
         "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
+        "open-work-prep-register": openWorkPrepRegister,
+        "close-work-prep-register": closeWorkPrepRegister,
+        "save-work-prep-registration": saveWorkPrepRegistration,
         "submit-inspection": submitInspection,
         "submit-unsafe": submitUnsafeIssue,
         "submit-material": submitMissingMaterial,
@@ -6359,6 +6614,18 @@
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-work-prep-field]")) {
+        updateWorkPrepDraftField(event.target.dataset.workPrepField, event.target.value);
+        return;
+      }
+      if (event.target.matches("[data-work-prep-worker]")) {
+        toggleWorkPrepWorker(event.target.dataset.workPrepWorker, event.target.checked);
+        return;
+      }
+      if (event.target.matches("[data-work-prep-tool]")) {
+        toggleWorkPrepTool(event.target.dataset.workPrepTool, event.target.checked);
+        return;
+      }
       if (event.target.id === "otherWorkerSelect") {
         selectPledgeWorker(event.target.value);
         return;
