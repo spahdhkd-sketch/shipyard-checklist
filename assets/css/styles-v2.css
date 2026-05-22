@@ -9620,3 +9620,34 @@
       width: 100%;
       min-width: 0;
     }
+    body.login-required {
+      background:
+        radial-gradient(circle at 18% 20%, rgba(157, 214, 197, .22), transparent 32%),
+        linear-gradient(135deg, #07162f 0%, #0f3d3a 100%) !important;
+    }
+
+    body.login-required .app {
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      min-height: 100vh !important;
+      margin: 0 !important;
+      background:
+        radial-gradient(circle at 18% 20%, rgba(157, 214, 197, .22), transparent 32%),
+        linear-gradient(135deg, #07162f 0%, #0f3d3a 100%) !important;
+      box-shadow: none !important;
+    }
+
+    body.login-required .sidebar,
+    body.login-required .mobile-header,
+    body.login-required .bottom-nav,
+    body.login-required .desktop-preview-toggle {
+      display: none !important;
+    }
+
+    body.login-required .main {
+      width: 100% !important;
+      min-height: 100vh !important;
+      padding: 0 !important;
+      background: transparent !important;
+    }

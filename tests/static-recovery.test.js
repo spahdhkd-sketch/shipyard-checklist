@@ -209,6 +209,9 @@ assert.match(css, /\.home-version-badge\.online \.sync-dot[\s\S]*background: #4a
 assert.match(css, /\.home-version-badge\.pending \.sync-dot[\s\S]*background: #fbbf24/);
 assert.match(css, /\.home-version-badge\.error \.sync-dot[\s\S]*background: #fb7185/);
 assert.match(css, /body\.login-required \.app[\s\S]*linear-gradient\(135deg, #07162f 0%, #0f3d3a 100%\)/);
+assert.match(css, /body\.login-required \.app[\s\S]*display: block !important/);
+assert.match(css, /body\.login-required \.sidebar,[\s\S]*body\.login-required \.desktop-preview-toggle[\s\S]*display: none !important/);
+assert.match(css, /body\.login-required \.main[\s\S]*padding: 0 !important/);
 assert.match(css, /\.unsafe-inline-detail/);
 assert.match(css, /body\.screen-mobile \.unsafe-inline-detail \.unsafe-photo-grid/);
 assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\) !important/);
