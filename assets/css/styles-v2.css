@@ -5249,7 +5249,7 @@
 
     body.preview-mobile .app {
       display: block;
-      width: min(430px, 100vw);
+      width: min(430px, 100%);
       min-height: 100vh;
       margin: 0 auto;
       background: var(--page);
@@ -7745,7 +7745,7 @@
 
     .app {
       display: block;
-      width: min(430px, 100vw);
+      width: min(430px, 100%);
       min-height: 100vh;
       margin: 0 auto;
       background: var(--page);
@@ -7960,7 +7960,7 @@
       left: 50%;
       right: auto;
       bottom: 0;
-      width: min(430px, 100vw);
+      width: min(430px, 100%);
       padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
       background: rgba(255,255,255,.96);
       border-top: 1px solid var(--line);
