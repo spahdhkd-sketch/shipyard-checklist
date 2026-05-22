@@ -136,6 +136,8 @@ assert.match(app, /const loadWorkerSession = \(\) =>/);
 assert.match(app, /verify_worker_login/);
 assert.match(app, /id="loginEmployeeNo" type="password" inputmode="text" autocomplete="current-password" autocapitalize="characters"/);
 assert.match(app, /function inspectionActualDate\(row\) \{[\s\S]*if \(row\?\.date\) return dateOnly\(row\.date\);[\s\S]*return Number\.isNaN\(createdAt\.getTime\(\)\) \? dateOnly\(row\.createdAt\) : localDate\(createdAt\);/);
+assert.match(app, /accept="image\/\*" capture="environment" multiple/);
+assert.match(app, /최대 \$\{ISSUE_MATERIAL_RULES\.MAX_UNSAFE_PHOTOS\}장 · 촬영 가능/);
 assert.match(app, /label: "담당 작업자"/);
 assert.match(app, /action: "expand-pledge-worker"/);
 assert.match(app, /로그인한 작업자로 자동 접수됩니다/);

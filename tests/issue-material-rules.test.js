@@ -34,7 +34,7 @@ const materialRecords = [
 
 assert.deepStrictEqual(UNSAFE_STATUSES, ["접수", "조치중", "완료"]);
 assert.deepStrictEqual(MATERIAL_STATUSES, ["접수", "확인중", "완료"]);
-assert.strictEqual(MAX_UNSAFE_PHOTOS, 3);
+assert.strictEqual(MAX_UNSAFE_PHOTOS, 2);
 
 assert.deepStrictEqual(
   createWorkerSnapshot("worker-1", workers),

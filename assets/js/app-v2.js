@@ -3190,8 +3190,8 @@
         <div class="small muted material-selected-note">로그인한 작업자로 자동 접수됩니다.</div>
       </div>
       <div class="field material-flow-field">
-        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 3장</small></label>
-        <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
+        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}장 · 촬영 가능</small></label>
+        <input class="input" id="unsafePhotos" type="file" accept="image/*" capture="environment" multiple />
         <div class="small muted">${photoNames.length ? `${esc(photoNames.join(", "))}` : "사진 없이도 다음 단계로 진행할 수 있습니다."}</div>
       </div>`;
       return unsafeFlowShell(2, "내용 입력", `${state.unsafeDraft.shipNo || "선택한 호선"}에서 발견한 위험 요소를 적어주세요`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-unsafe-next type="button" data-required-message="${esc(flowRequiredText(unsafeMissingFields(2)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
@@ -6286,7 +6286,7 @@
       if (errors.length) return toast(errors[0]);
       const input = $("unsafePhotos");
       const files = state.unsafePhotoFiles?.length ? state.unsafePhotoFiles : Array.from(input?.files || []);
-      if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast("사진은 최대 3개까지 첨부할 수 있습니다.");
+      if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
       if (!files.length && !confirm("사진 없이 등록하시겠습니까?")) return;
       const now = serverNow().toISOString();
       const id = uid("unsafe");
@@ -7476,8 +7476,8 @@
       const uploaded = [];
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
-        const storagePath = `unsafe/${issueId}/original-${index + 1}.${photoExtension(file)}`;
-        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: true });
+        const storagePath = `unsafe/${issueId}/${uid("photoFile")}-${index + 1}.${photoExtension(file)}`;
+        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: false });
         if (error) throw error;
         uploaded.push({
           id: uid("photo"),

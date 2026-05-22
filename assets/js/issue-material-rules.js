@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
   const UNSAFE_STATUSES = ["접수", "조치중", "완료"];
   const MATERIAL_STATUSES = ["접수", "확인중", "완료"];
-  const MAX_UNSAFE_PHOTOS = 3;
+  const MAX_UNSAFE_PHOTOS = 2;
 
   function compactText(value) {
     return String(value || "").trim();
