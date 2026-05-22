@@ -9143,8 +9143,32 @@
       margin-bottom: 14px;
     }
 
+    body:not(.preview-mobile):not(.screen-mobile) .worker-form {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px auto;
+    }
+
     .worker-row .item-main {
       min-width: 0;
+    }
+
+    .worker-position-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      vertical-align: middle;
+    }
+
+    .worker-position-badge.is-leader {
+      border-color: var(--color-brand-secondary-border);
+      background: var(--color-brand-secondary);
+      color: var(--color-brand-secondary-text);
     }
 
     .issue-form .form-actions,

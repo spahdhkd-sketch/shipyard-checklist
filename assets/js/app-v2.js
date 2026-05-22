@@ -400,6 +400,7 @@
           id: row.id,
           name: row.name,
           team: row.team || "",
+          position: normalizeWorkerPosition(row.position),
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
@@ -407,6 +408,7 @@
           id: row.id,
           name: row.name,
           team: row.team || "",
+          position: normalizeWorkerPosition(row.position),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }),
@@ -811,6 +813,9 @@
     const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache";
     const HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS = new Set(["worker_001", "worker_002", "worker_007", "worker_013"]);
     const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "허지원", "김준혁", "김경제"]);
+    const DEFAULT_WORKER_POSITION = "작업자";
+    const LEADER_WORKER_POSITION = "조장";
+    const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION];
 
     function signatureCacheDateKey() {
       return today();
@@ -818,6 +823,15 @@
 
     function normalizedWorkerName(workerName) {
       return String(workerName || "").trim();
+    }
+
+    function normalizeWorkerPosition(position) {
+      const value = String(position || "").trim();
+      return WORKER_POSITIONS.includes(value) ? value : DEFAULT_WORKER_POSITION;
+    }
+
+    function isLeaderWorker(worker) {
+      return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
     }
 
     function isHiddenPledgeAnalyticsWorker(worker) {
@@ -1175,6 +1189,7 @@
         id: worker.id || uid("worker"),
         name: String(worker.name || "").trim(),
         team: String(worker.team || "").trim(),
+        position: normalizeWorkerPosition(worker.position),
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
       })).filter((worker) => worker.name);
@@ -1866,7 +1881,7 @@
       const worker = state.workers.find((row) => row.id === workerId);
       if (worker) return worker;
       if (!workerId) return null;
-      return { id: workerId, name: state.workerSession?.workerName || "작업자", team: "" };
+      return { id: workerId, name: state.workerSession?.workerName || "작업자", team: "", position: DEFAULT_WORKER_POSITION };
     }
 
     function applyLoggedInWorkerToDrafts() {
@@ -1926,7 +1941,7 @@
             <label for="loginWorkerId">아이디</label>
             <select class="select" id="loginWorkerId" ${disabled ? "disabled" : ""} required>
               <option value="">작업자 선택</option>
-              ${workers.map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}</option>`).join("")}
+              ${workers.map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}${isLeaderWorker(worker) ? ` · ${esc(LEADER_WORKER_POSITION)}` : ""}</option>`).join("")}
             </select>
           </div>
           <div class="field">
@@ -3602,6 +3617,12 @@
             <label for="workerTeam">소속/팀</label>
             <input class="input" id="workerTeam" placeholder="예) 배관팀" />
           </div>
+          <div class="field">
+            <label for="workerPosition">직책</label>
+            <select class="select" id="workerPosition">
+              ${renderWorkerPositionOptions(DEFAULT_WORKER_POSITION)}
+            </select>
+          </div>
           <button class="btn" data-action="add-worker" type="button">추가</button>
         </div>
         <div class="list worker-list">
@@ -3610,13 +3631,21 @@
       </section>`;
     }
 
+    function renderWorkerPositionOptions(selectedPosition) {
+      const selected = normalizeWorkerPosition(selectedPosition);
+      return WORKER_POSITIONS.map((position) => `<option value="${esc(position)}" ${position === selected ? "selected" : ""}>${esc(position)}</option>`).join("");
+    }
+
     function renderWorkerRow(worker) {
+      const position = normalizeWorkerPosition(worker.position);
+      const positionAction = isLeaderWorker(worker) ? "작업자로 변경" : "조장 지정";
       return `<div class="item-row worker-row">
         <div class="item-main">
           <div class="item-name">${esc(worker.name)}</div>
-          <div class="small muted">${esc(worker.team || "소속/팀 없음")}</div>
+          <div class="small muted">${esc(worker.team || "소속/팀 없음")} · <span class="worker-position-badge ${isLeaderWorker(worker) ? "is-leader" : ""}">${esc(position)}</span></div>
         </div>
         <div class="item-actions">
+          <button class="btn-light" data-toggle-worker-position="${esc(worker.id)}" type="button">${esc(positionAction)}</button>
           <button class="btn-light" data-edit-worker="${esc(worker.id)}" type="button">수정</button>
           <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
         </div>
@@ -5964,6 +5993,7 @@
         scrollScreenTop();
       }
       if (button.dataset.action === "add-worker") addWorker();
+      if (button.dataset.toggleWorkerPosition) toggleWorkerPosition(button.dataset.toggleWorkerPosition);
       if (button.dataset.editWorker) editWorker(button.dataset.editWorker);
       if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
       if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
@@ -6672,9 +6702,10 @@
       if (!requireAdmin()) return;
       const name = $("workerName")?.value.trim() || "";
       const team = $("workerTeam")?.value.trim() || "";
+      const position = normalizeWorkerPosition($("workerPosition")?.value || "");
       if (!name) return toast("작업자 이름을 입력하세요.");
       const now = serverNow().toISOString();
-      state.workers.push({ id: uid("worker"), name, team, createdAt: now, updatedAt: now });
+      state.workers.push({ id: uid("worker"), name, team, position, createdAt: now, updatedAt: now });
       persistAndSync("workers");
       render();
       toast("작업자를 추가했습니다.");
@@ -6688,14 +6719,30 @@
       if (name === null) return;
       const team = prompt("소속/팀", worker.team || "");
       if (team === null) return;
+      const position = prompt("직책 (작업자 또는 조장)", normalizeWorkerPosition(worker.position));
+      if (position === null) return;
+      const cleanPosition = normalizeWorkerPosition(position);
       const cleanName = name.trim();
       if (!cleanName) return toast("작업자 이름을 입력하세요.");
+      if (!WORKER_POSITIONS.includes(position.trim())) return toast("직책은 작업자 또는 조장으로 입력하세요.");
       worker.name = cleanName;
       worker.team = team.trim();
+      worker.position = cleanPosition;
       worker.updatedAt = serverNow().toISOString();
       persistAndSync("workers");
       render();
       toast("작업자를 수정했습니다.");
+    }
+
+    function toggleWorkerPosition(id) {
+      if (!requireAdmin()) return;
+      const worker = state.workers.find((row) => row.id === id);
+      if (!worker) return;
+      worker.position = isLeaderWorker(worker) ? DEFAULT_WORKER_POSITION : LEADER_WORKER_POSITION;
+      worker.updatedAt = serverNow().toISOString();
+      persistAndSync("workers");
+      render();
+      toast(`${worker.name}님 직책을 ${worker.position}로 표시했습니다.`);
     }
 
     async function deleteWorker(id) {
