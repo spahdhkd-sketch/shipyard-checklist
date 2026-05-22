@@ -1405,6 +1405,14 @@
       min-height: 42px;
     }
 
+    body.screen-mobile .photo-retry-actions,
+    body.preview-mobile .photo-retry-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+
     body.screen-mobile .unsafe-meta-grid,
     body.preview-mobile .unsafe-meta-grid,
     body.screen-mobile .unsafe-memo-row,
@@ -3258,6 +3266,28 @@
       border-color: #e2b260;
       color: #8a5a12;
       background: #fffdf7;
+    }
+
+    .photo-retry-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .photo-retry-file {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      cursor: pointer;
+    }
+
+    .photo-retry-input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
     }
 
     .unsafe-detail-body,

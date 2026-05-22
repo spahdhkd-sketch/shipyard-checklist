@@ -3724,7 +3724,11 @@
           <span>${rows.length}장 · 네트워크 복구 후 다시 전송할 수 있습니다.</span>
           ${rows.some((row) => !row.dataUrl) ? `<em>일부 파일은 다시 첨부가 필요합니다.</em>` : ""}
         </div>
-        <button class="btn-light" data-action="retry-photo-upload" data-retry-photo-upload="${esc(issueId)}" ${retryable ? "" : "disabled"} type="button">재시도</button>
+        <div class="photo-retry-actions">
+          <button class="btn-light" data-action="retry-photo-upload" data-retry-photo-upload="${esc(issueId)}" ${retryable ? "" : "disabled"} type="button">재시도</button>
+          <label class="btn-light photo-retry-file" for="retryPhoto_${esc(issueId)}">사진 다시 선택</label>
+          <input class="photo-retry-input" id="retryPhoto_${esc(issueId)}" data-retry-photo-file="${esc(issueId)}" type="file" accept="image/*" multiple />
+        </div>
       </div>`;
     }
 
@@ -6163,6 +6167,9 @@
         saveJson("unsafeDraft", state.unsafeDraft);
         render();
       }
+      if (event.target.dataset.retryPhotoFile) {
+        retryPendingPhotoUploadWithFiles(event.target.dataset.retryPhotoFile, Array.from(event.target.files || []));
+      }
       if (event.target.id === "materialShipNo") {
         state.materialDraft.shipNo = event.target.value;
         saveJson("materialDraft", state.materialDraft);
@@ -7574,6 +7581,19 @@
       if (!issueId || !pendingRows.length) return toast("재시도할 사진이 없습니다.");
       const files = (await Promise.all(pendingRows.map(pendingUploadToFile))).filter(Boolean);
       if (!files.length) return toast("사진 파일을 다시 첨부해야 재시도할 수 있습니다.");
+      setSyncStatus("사진 재전송 중", "pending");
+      const row = state.unsafeIssues.find((item) => item.id === issueId);
+      const ok = await syncUnsafeIssue(row || { id: issueId }, files);
+      render();
+      toast(ok ? "사진 업로드를 다시 완료했습니다." : "사진 업로드 재시도에 실패했습니다.");
+    }
+
+    async function retryPendingPhotoUploadWithFiles(issueId, selectedFiles) {
+      const files = selectedFiles.slice(0, ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS);
+      if (!issueId || !files.length) return;
+      if (selectedFiles.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) {
+        toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
+      }
       setSyncStatus("사진 재전송 중", "pending");
       const row = state.unsafeIssues.find((item) => item.id === issueId);
       const ok = await syncUnsafeIssue(row || { id: issueId }, files);
