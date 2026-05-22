@@ -4075,6 +4075,52 @@
       font-weight: 800;
     }
 
+    .monthly-worker-month-meta {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .monthly-worker-month-meta em {
+      color: #607084;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .monthly-worker-month-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 7px;
+      border-radius: 6px;
+      color: #1f4f68;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .monthly-worker-month-label.is-highlight {
+      animation: monthlyMonthPulse .9s ease-out both;
+    }
+
+    @keyframes monthlyMonthPulse {
+      0% {
+        color: #073b36;
+        background: #d9f4eb;
+        box-shadow: 0 0 0 0 rgba(22, 129, 116, .28);
+      }
+      45% {
+        color: #073b36;
+        background: #d9f4eb;
+        box-shadow: 0 0 0 6px rgba(22, 129, 116, .12);
+      }
+      100% {
+        color: #1f4f68;
+        background: transparent;
+        box-shadow: 0 0 0 0 rgba(22, 129, 116, 0);
+      }
+    }
+
     .monthly-worker-toolbar,
     .monthly-rest-add {
       display: flex;

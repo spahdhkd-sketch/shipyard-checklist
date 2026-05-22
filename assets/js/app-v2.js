@@ -937,6 +937,8 @@
       }),
       monthlyWorkerExpandedKeys: loadJson("monthlyWorkerExpandedKeys", null),
       selectedMonthlyWorkerMonth: "",
+      monthlyWorkerMonthHighlight: false,
+      monthlyWorkerMonthHighlightTimer: null,
       monthlyRestDayPanelOpen: false,
       photoViewer: null,
       unsafePhotoFiles: [],
@@ -4369,6 +4371,10 @@
       return columns.map((cards) => `<div class="monthly-worker-card-column">${cards.join("")}</div>`).join("");
     }
 
+    function renderMonthlyWorkerMonthMeta(monthText) {
+      return `<span class="monthly-worker-month-meta"><b class="monthly-worker-month-label ${state.monthlyWorkerMonthHighlight ? "is-highlight" : ""}">${esc(monthText)}</b><em>작업자별 일일 점검 이행 현황</em></span>`;
+    }
+
     function renderMonthlyRestDaySettings() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
@@ -4405,7 +4411,7 @@
       if (!stats.workers.length) {
         return `<section class="analytics-panel monthly-worker-analytics">
           <div class="monthly-worker-head">
-            <div><strong>월간 작업자 점검 현황</strong><span>${monthText} · 작업자별 일일 점검 이행 현황</span></div>
+            <div><strong>월간 작업자 점검 현황</strong>${renderMonthlyWorkerMonthMeta(monthText)}</div>
             <div class="monthly-worker-toolbar">
               <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
               <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
@@ -4421,7 +4427,7 @@
       const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
       return `<section class="analytics-panel monthly-worker-analytics">
         <div class="monthly-worker-head">
-          <div><strong>월간 작업자 점검 현황</strong><span>${monthText} · 작업자별 일일 점검 이행 현황</span></div>
+          <div><strong>월간 작업자 점검 현황</strong>${renderMonthlyWorkerMonthMeta(monthText)}</div>
           <div class="monthly-worker-toolbar">
             <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
             <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
@@ -6898,9 +6904,19 @@
     function setMonthlyWorkerMonth(mode) {
       const currentMonth = monthKeyForDate();
       const selected = selectedMonthlyWorkerMonth();
-      if (mode === "current") state.selectedMonthlyWorkerMonth = currentMonth;
-      if (mode === "prev") state.selectedMonthlyWorkerMonth = monthKeyOffset(selected, -1);
-      if (mode === "next") state.selectedMonthlyWorkerMonth = monthKeyOffset(selected, 1) <= currentMonth ? monthKeyOffset(selected, 1) : selected;
+      let nextMonth = selected;
+      if (mode === "current") nextMonth = currentMonth;
+      if (mode === "prev") nextMonth = monthKeyOffset(selected, -1);
+      if (mode === "next") nextMonth = monthKeyOffset(selected, 1) <= currentMonth ? monthKeyOffset(selected, 1) : selected;
+      state.selectedMonthlyWorkerMonth = nextMonth;
+      if (nextMonth !== selected) {
+        state.monthlyWorkerMonthHighlight = true;
+        clearTimeout(state.monthlyWorkerMonthHighlightTimer);
+        state.monthlyWorkerMonthHighlightTimer = setTimeout(() => {
+          state.monthlyWorkerMonthHighlight = false;
+          if (state.view === "analytics") render();
+        }, 900);
+      }
       render();
     }
 
