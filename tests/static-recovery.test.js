@@ -193,6 +193,7 @@ assert.match(app, /const filterGroups = ISSUE_MATERIAL_RULES\.groupMaterialsBySh
 assert.match(app, /월간 작업자 점검 현황/);
 assert.match(app, /function currentMonthRange\(/);
 assert.match(app, /function monthlyWorkerInspectionStats\(/);
+assert.doesNotMatch(app, /attentionWorkers/);
 assert.match(app, /visiblePledgeAnalyticsWorkers\(\)\.forEach\(\(worker\) =>/);
 assert.doesNotMatch(app, /기록 기반/);
 assert.match(app, /\]\.filter\(\(row\) => visiblePledgeAnalyticsWorkerName\(row\.worker\)\)\.sort/);
@@ -269,6 +270,8 @@ assert.match(css, /\.bottom-nav \.nav-icon svg[\s\S]*width: 29px/);
 assert.match(css, /\.material-board \.material-kpi-grid/);
 assert.match(css, /\.material-board \.material-kpi\.active/);
 assert.match(css, /\.monthly-worker-analytics/);
+assert.doesNotMatch(app, /monthly-worker-attention/);
+assert.doesNotMatch(css, /monthly-worker-attention/);
 assert.match(css, /\.monthly-worker-card-list/);
 assert.match(css, /\.monthly-worker-card-item/);
 assert.match(css, /\.monthly-worker-calendar-grid/);

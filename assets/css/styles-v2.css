@@ -4061,7 +4061,6 @@
     }
 
     .monthly-worker-head strong,
-    .monthly-worker-attention > strong,
     .monthly-rest-lists strong {
       display: block;
       color: #07162f;
@@ -4087,15 +4086,14 @@
 
     .monthly-worker-kpis {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
       padding: 16px 18px 0;
     }
 
     .monthly-worker-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 312px;
-      gap: 16px;
+      grid-template-columns: minmax(0, 1fr);
       padding: 16px 18px 18px;
       align-items: start;
     }
@@ -4292,44 +4290,11 @@
       line-height: 1;
     }
 
-    .monthly-worker-attention em,
-    .monthly-worker-attention article span {
-      color: #607084;
-      font-size: 11px;
-      font-style: normal;
-      font-weight: 800;
-    }
-
-    .monthly-worker-attention {
-      display: grid;
-      gap: 10px;
-    }
-
-    .monthly-worker-attention article {
-      display: grid;
-      gap: 6px;
-      padding: 12px;
-      border: 1px solid #fed7aa;
-      border-radius: 8px;
-      background: #fff7ed;
-    }
-
-    .monthly-worker-attention article:first-of-type {
-      border-color: #fecaca;
-      background: #fef2f2;
-    }
-
-    .monthly-worker-attention article b {
-      color: #dc2626;
-      font-size: 14px;
-      font-weight: 900;
-    }
-
     .monthly-worker-legend {
       display: flex;
       gap: 8px 10px;
       flex-wrap: wrap;
-      padding-top: 4px;
+      padding: 4px 2px 0;
       color: #536781;
       font-size: 11px;
       font-weight: 900;

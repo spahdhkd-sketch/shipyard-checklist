@@ -4263,10 +4263,6 @@
       const todayOrMonthEnd = range.isCurrentMonth ? todayValue : range.end;
       const dueLabel = range.isCurrentMonth ? "오늘 미점검" : "월말 미점검";
       const dueMissing = workers.filter((worker) => workerDayInspectionStatus(worker.name, todayOrMonthEnd) === "missing").length;
-      const attentionWorkers = workers
-        .filter((worker) => worker.counts.missing >= 3)
-        .sort((a, b) => b.counts.missing - a.counts.missing || a.rate - b.rate)
-        .slice(0, 5);
       return {
         range,
         workers,
@@ -4274,7 +4270,6 @@
         rate: totals.target ? Math.round(totals.done / totals.target * 100) : 0,
         dueLabel,
         dueMissing,
-        attentionWorkers,
       };
     }
 
@@ -4430,27 +4425,15 @@
         <div class="monthly-worker-kpis">
           ${analyticsKpi("월간 점검률", `${stats.rate}%`, `${stats.totals.done}/${stats.totals.target} 대상일 완료`, "done")}
           ${analyticsKpi(stats.dueLabel, `${stats.dueMissing}명`, `${stats.range.isCurrentMonth ? "오늘" : "월말"} 기준 누락`, "danger")}
-          ${analyticsKpi("3일 이상 누락", `${stats.attentionWorkers.length}명`, "월간 누락일 3일 이상", "warn")}
           ${analyticsKpi("대상 작업자", `${stats.workers.length}명`, `휴무 ${stats.totals.rest}칸 제외`, "ship")}
         </div>
         <div class="monthly-worker-layout">
           <div class="monthly-worker-card-list">
             ${stats.workers.map((worker) => renderMonthlyWorkerCard(worker, stats.range, expandedWorkers.has(monthlyWorkerCardKey(worker)))).join("")}
-          </div>
-          <aside class="monthly-worker-attention">
-            <strong>주의 필요 작업자</strong>
-            ${stats.attentionWorkers.length ? stats.attentionWorkers.map((worker) => {
-              const recentMissing = worker.dayStatuses.filter((day) => day.status === "missing").slice(-3).map((day) => `${day.day}일`).join(", ");
-              return `<article>
-                <div><strong>${esc(worker.name)}</strong><span>${esc(worker.team || "-")}</span></div>
-                <b>누락 ${worker.counts.missing}일</b>
-                <em>최근 누락: ${esc(recentMissing || "-")}</em>
-              </article>`;
-            }).join("") : `<div class="empty">3일 이상 누락 작업자가 없습니다.</div>`}
             <div class="monthly-worker-legend">
               ${["done", "partial", "missing", "rest", "excluded"].map((status) => `<span>${renderWorkerHeatmapCell(status)} ${monthlyStatusLabel(status)}</span>`).join("")}
             </div>
-          </aside>
+          </div>
         </div>
         ${restOpen ? renderMonthlyRestDaySettings() : ""}
       </section>`;
