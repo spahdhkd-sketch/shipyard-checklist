@@ -4100,8 +4100,17 @@
 
     .monthly-worker-card-list {
       display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       min-width: 0;
+      align-items: start;
+    }
+
+    .monthly-worker-card-column {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+      align-content: start;
     }
 
     .monthly-worker-card-item {
@@ -4292,6 +4301,7 @@
 
     .monthly-worker-legend {
       display: flex;
+      grid-column: 1 / -1;
       gap: 8px 10px;
       flex-wrap: wrap;
       padding: 4px 2px 0;
@@ -4441,6 +4451,10 @@
         justify-content: flex-start;
       }
 
+      .monthly-worker-card-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .unsafe-detail-top,
       .pledge-sign {
         flex-direction: column;
@@ -4529,6 +4543,10 @@
       .monthly-worker-kpis,
       .monthly-worker-layout {
         padding-inline: 12px;
+      }
+
+      .monthly-worker-card-list {
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .monthly-worker-head,

@@ -4361,6 +4361,14 @@
       </article>`;
     }
 
+    function renderMonthlyWorkerCardColumns(workers, range, expandedWorkers) {
+      const columns = [[], [], []];
+      workers.forEach((worker, index) => {
+        columns[index % columns.length].push(renderMonthlyWorkerCard(worker, range, expandedWorkers.has(monthlyWorkerCardKey(worker))));
+      });
+      return columns.map((cards) => `<div class="monthly-worker-card-column">${cards.join("")}</div>`).join("");
+    }
+
     function renderMonthlyRestDaySettings() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
@@ -4429,7 +4437,7 @@
         </div>
         <div class="monthly-worker-layout">
           <div class="monthly-worker-card-list">
-            ${stats.workers.map((worker) => renderMonthlyWorkerCard(worker, stats.range, expandedWorkers.has(monthlyWorkerCardKey(worker)))).join("")}
+            ${renderMonthlyWorkerCardColumns(stats.workers, stats.range, expandedWorkers)}
             <div class="monthly-worker-legend">
               ${["done", "partial", "missing", "rest", "excluded"].map((status) => `<span>${renderWorkerHeatmapCell(status)} ${monthlyStatusLabel(status)}</span>`).join("")}
             </div>
