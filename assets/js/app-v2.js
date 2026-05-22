@@ -916,6 +916,7 @@
       monthlyRestDayPanelOpen: false,
       photoViewer: null,
       unsafePhotoFiles: [],
+      unsafePhotoUploadingIds: [],
       selectedCategoryId: null,
       manageCategoryId: null,
       editCategoryId: null,
@@ -965,6 +966,7 @@
       lastMaterialId: "",
       lastInspectionId: "",
       inspectionSubmitting: false,
+      unsafeSubmitting: false,
       pledgeTemplateEditing: false,
     };
     let cachedSupabaseClient = null;
@@ -3765,6 +3767,27 @@
       return state.pendingPhotoUploads.filter((row) => row.issueId === issueId);
     }
 
+    function isUnsafePhotoUploading(issueId) {
+      return (state.unsafePhotoUploadingIds || []).includes(issueId);
+    }
+
+    function markUnsafePhotoUploading(issueId, uploading) {
+      if (!issueId) return;
+      const ids = new Set(state.unsafePhotoUploadingIds || []);
+      if (uploading) ids.add(issueId);
+      else ids.delete(issueId);
+      state.unsafePhotoUploadingIds = [...ids];
+    }
+
+    function renderPhotoUploadProgressPanel(count = 0) {
+      return `<div class="photo-retry-panel photo-upload-progress" role="status" aria-live="polite">
+        <div>
+          <strong>사진 업로드 중</strong>
+          <span>${Number(count || 0)}장 · 완료되면 자동으로 사진 수가 갱신됩니다.</span>
+        </div>
+      </div>`;
+    }
+
     function renderPendingPhotoUploadPanel(issueId, rows = pendingPhotoUploadsFor(issueId)) {
       if (!rows.length) return "";
       const retryable = rows.some((row) => row.dataUrl);
@@ -4556,6 +4579,7 @@
       const photoUrl = photo ? publicPhotoUrl(photo) : "";
       const photoCount = unsafePhotosFor(row.id).length;
       const pendingPhotoCount = pendingPhotoUploadsFor(row.id).length;
+      const uploading = isUnsafePhotoUploading(row.id);
       return `<article class="record-card clickable-record" data-unsafe-record-detail="${esc(row.id)}" tabindex="0" role="button" aria-label="${esc(row.shipNo)} 불안전요소 상세 보기">
         <div class="record-card-main">
           <div class="record-card-headline">
@@ -4564,6 +4588,7 @@
               <strong>${esc(row.shipNo)}</strong>
               <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
               ${photoCount > 1 ? `<span class="small muted">사진 ${photoCount}장</span>` : ""}
+              ${uploading ? `<span class="small muted">사진 업로드 중</span>` : ""}
               ${pendingPhotoCount ? `<span class="small muted">사진 업로드 대기 ${pendingPhotoCount}장</span>` : ""}
             </div>
           </div>
@@ -4578,11 +4603,14 @@
     function renderUnsafeDetail(row) {
       const photos = unsafePhotosFor(row.id);
       const pendingPhotos = pendingPhotoUploadsFor(row.id);
+      const uploading = isUnsafePhotoUploading(row.id);
       const photoHtml = photos.length
         ? `<div class="unsafe-detail-photos">${photos.map((photo, index) => {
             const url = publicPhotoUrl(photo);
             return url ? `<figure><img class="unsafe-detail-photo" src="${esc(url)}" alt="불안전요소 사진 ${index + 1}" /><figcaption>사진 ${index + 1}</figcaption></figure>` : "";
           }).join("")}</div>`
+        : uploading
+          ? renderPhotoUploadProgressPanel(row.expectedPhotoCount || 0)
         : pendingPhotos.length
           ? renderPendingPhotoUploadPanel(row.id, pendingPhotos)
           : `<div class="empty">첨부된 사진이 없습니다.</div>`;
@@ -4639,15 +4667,20 @@
 
     function renderUnsafeComplete(row) {
       const photos = state.issuePhotos.filter((photo) => photo.targetType === "unsafe_issue" && photo.targetId === row.id);
+      const pendingPhotos = pendingPhotoUploadsFor(row.id);
+      const uploading = isUnsafePhotoUploading(row.id);
+      const photoValue = uploading ? "업로드 중" : (pendingPhotos.length ? "대기" : (photos.length || 0));
       return renderCompletionScreen({
         type: "unsafe",
         icon: "warning",
-        title: "신고가 접수되었습니다",
-        message: `${row.shipNo || "-"} 불안전요소가 관리자에게 전달됐습니다. 처리 내역은 불안전요소 탭에서 확인하세요.`,
+        title: uploading ? "신고 접수 및 사진 업로드 중" : "신고가 접수되었습니다",
+        message: uploading
+          ? `${row.shipNo || "-"} 불안전요소가 접수됐고 사진을 업로드하고 있습니다. 완료되면 사진 수가 자동 갱신됩니다.`
+          : `${row.shipNo || "-"} 불안전요소가 관리자에게 전달됐습니다. 처리 내역은 불안전요소 탭에서 확인하세요.`,
         stats: [
           { value: "위험", label: "위험도", tone: "pink" },
           { value: row.shipNo || "-", label: "호선" },
-          { value: photos.length || 0, label: "사진" },
+          { value: photoValue, label: "사진" },
         ],
         actions: [
           { label: "목록 보기", action: "view-unsafe-list" },
@@ -6360,6 +6393,7 @@
     }
 
     async function submitUnsafeIssue() {
+      if (state.unsafeSubmitting) return toast("불안전요소 접수 중입니다. 잠시만 기다려주세요.");
       syncUnsafeDraftFromDom();
       saveUnsafeDraft();
       const missing = unsafeMissingFields(3);
@@ -6370,6 +6404,7 @@
       const files = state.unsafePhotoFiles?.length ? state.unsafePhotoFiles : inputFiles;
       if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
       if (!files.length && !confirm("사진 없이 등록하시겠습니까?")) return;
+      state.unsafeSubmitting = true;
       const now = serverNow().toISOString();
       const id = uid("unsafe");
       const snapshot = ISSUE_MATERIAL_RULES.createWorkerSnapshot(state.unsafeDraft.workerId, state.workers);
@@ -6383,18 +6418,24 @@
         createdAt: now,
         updatedAt: now,
         completedAt: "",
+        expectedPhotoCount: files.length,
       };
       row.statusHistory = ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] });
       state.unsafeIssues.unshift(row);
       state.lastUnsafeIssueId = id;
       state.unsafeDraft = createUnsafeDraft();
       state.unsafePhotoFiles = [];
+      if (files.length) markUnsafePhotoUploading(id, true);
       persist();
       render();
       scrollScreenTop();
       replaceRouteState();
-      toast("불안전요소가 접수되었습니다.");
-      syncUnsafeIssue(row, files);
+      toast(files.length ? "불안전요소가 접수되었습니다. 사진 업로드 중입니다." : "불안전요소가 접수되었습니다.");
+      try {
+        await syncUnsafeIssue(row, files);
+      } finally {
+        state.unsafeSubmitting = false;
+      }
     }
 
     async function submitMissingMaterial() {
@@ -7613,16 +7654,21 @@
         const photos = await uploadUnsafePhotos(row.id, files);
         state.issuePhotos.push(...photos);
         state.pendingPhotoUploads = state.pendingPhotoUploads.filter((item) => item.issueId !== row.id);
+        markUnsafePhotoUploading(row.id, false);
         persist();
         enqueueSyncRows("unsafeIssues", [row]);
         enqueueSyncRows("issuePhotos", photos);
         flushPendingSyncQueue();
+        render();
+        if (photos.length) toast(`사진 ${photos.length}장 업로드가 완료되었습니다.`);
         return true;
       } catch (error) {
         console.error(error);
+        markUnsafePhotoUploading(row.id, false);
         if (files.length) await createPendingPhotoUploads(row.id, files, error);
         enqueueSyncRows("unsafeIssues", [row]);
         flushPendingSyncQueue();
+        render();
         toast("사진 업로드에 실패했습니다. 상세 화면에서 재시도할 수 있습니다.");
         return false;
       }
