@@ -126,6 +126,9 @@ assert.match(app, /const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache"/);
 assert.match(app, /function signatureCacheDateKey\(\)/);
 assert.match(app, /function cachedPledgeSignatureForWorker\(workerName\)/);
 assert.match(app, /function savePledgeSignatureForWorker\(workerName, signature\)/);
+assert.match(app, /const HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS = new Set\(\["worker_001", "worker_007", "worker_013"\]\)/);
+assert.match(app, /const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set\(\["김광수", "김준혁", "김경제"\]\)/);
+assert.match(app, /function visiblePledgeAnalyticsWorkers\(\)/);
 assert.match(app, /function preloadCachedPledgeSignature\(\)/);
 assert.match(app, /workerFallbackOpen: false/);
 assert.match(app, /function workerMatchesCategoryNature\(worker, categoryNature\)/);
@@ -189,6 +192,8 @@ assert.match(app, /const filterGroups = ISSUE_MATERIAL_RULES\.groupMaterialsBySh
 assert.match(app, /월간 작업자 점검 현황/);
 assert.match(app, /function currentMonthRange\(/);
 assert.match(app, /function monthlyWorkerInspectionStats\(/);
+assert.match(app, /visiblePledgeAnalyticsWorkers\(\)\.forEach\(\(worker\) =>/);
+assert.match(app, /\]\.filter\(\(row\) => !hiddenPledgeAnalyticsWorkerName\(row\.worker\)\)\.sort/);
 assert.match(app, /function workerDayInspectionStatus\(workerName, date\)/);
 assert.match(app, /function renderMonthlyWorkerAnalytics\(/);
 assert.match(app, /function renderWorkerHeatmapCell\(status/);

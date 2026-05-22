@@ -809,6 +809,8 @@
     }
 
     const PLEDGE_SIGNATURE_CACHE_KEY = "pledgeSignatureCache";
+    const HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS = new Set(["worker_001", "worker_007", "worker_013"]);
+    const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "김준혁", "김경제"]);
 
     function signatureCacheDateKey() {
       return today();
@@ -816,6 +818,21 @@
 
     function normalizedWorkerName(workerName) {
       return String(workerName || "").trim();
+    }
+
+    function isHiddenPledgeAnalyticsWorker(worker) {
+      if (!worker) return false;
+      const id = String(worker.id || worker.workerId || "").trim();
+      const name = normalizedWorkerName(worker.name || worker.worker || worker.workerNameSnapshot || "");
+      return HIDDEN_PLEDGE_ANALYTICS_WORKER_IDS.has(id) || HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES.has(name);
+    }
+
+    function visiblePledgeAnalyticsWorkers() {
+      return state.workers.filter((worker) => !isHiddenPledgeAnalyticsWorker(worker));
+    }
+
+    function hiddenPledgeAnalyticsWorkerName(name) {
+      return HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES.has(normalizedWorkerName(name));
     }
 
     function loadPledgeSignatureCache() {
@@ -3926,7 +3943,7 @@
         const name = row.worker || "미지정";
         if (!byWorker.has(name)) byWorker.set(name, row);
       });
-      const workerRows = state.workers.map((worker) => {
+      const workerRows = visiblePledgeAnalyticsWorkers().map((worker) => {
         const row = byWorker.get(worker.name);
         return {
           name: worker.name,
@@ -3939,6 +3956,7 @@
       });
       todayInspections.forEach((row) => {
         const name = row.worker || "미지정";
+        if (hiddenPledgeAnalyticsWorkerName(name)) return;
         if (workerRows.some((worker) => worker.name === name)) return;
         workerRows.push({
           name,
@@ -3954,8 +3972,8 @@
 
     function pledgeWeekStats() {
       return Array.from({ length: 7 }, (_, index) => addDays(today(), index - 6)).map((date) => {
-        const rows = state.inspections.filter((row) => row.date === date);
-        const total = Math.max(state.workers.length, rows.length);
+        const rows = state.inspections.filter((row) => row.date === date && !hiddenPledgeAnalyticsWorkerName(row.worker));
+        const total = Math.max(visiblePledgeAnalyticsWorkers().length, rows.length);
         const done = rows.filter((row) => String(row.safetyPledge || "").trim()).length;
         const pct = total ? Math.round(done / total * 100) : 0;
         return { date, total, done, pct };
@@ -4208,7 +4226,7 @@
 
     function monthlyWorkerRows(range = currentMonthRange()) {
       const byName = new Map();
-      state.workers.forEach((worker) => {
+      visiblePledgeAnalyticsWorkers().forEach((worker) => {
         const name = String(worker.name || "").trim();
         if (!name) return;
         byName.set(normalizedWorkerName(name), { name, team: worker.team || "-", source: "workers" });
@@ -4218,6 +4236,7 @@
         if (!actualDate || actualDate < range.start || actualDate > range.end) return;
         const name = String(row.worker || "").trim();
         if (!name) return;
+        if (hiddenPledgeAnalyticsWorkerName(name)) return;
         const key = normalizedWorkerName(name);
         if (!byName.has(key)) byName.set(key, { name, team: "기록 기반", source: "history" });
       });
@@ -4443,7 +4462,7 @@
       const recent = [
         ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소 등록", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
         ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
-      ].sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
+      ].filter((row) => !hiddenPledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
       return `<section class="admin-board analytics-board">
         <div class="admin-board-top">
           <div>
@@ -4526,7 +4545,7 @@
         </select>
         <select class="select" data-record-filter="${kind}:workerId">
           <option value="">전체 등록자</option>
-          ${state.workers.map((worker) => `<option value="${esc(worker.id)}" ${filters.workerId === worker.id ? "selected" : ""}>${esc(worker.name)}</option>`).join("")}
+          ${visiblePledgeAnalyticsWorkers().map((worker) => `<option value="${esc(worker.id)}" ${filters.workerId === worker.id ? "selected" : ""}>${esc(worker.name)}</option>`).join("")}
         </select>
         ${kind === "materials" ? `<input class="input" data-record-filter="materials:materialName" value="${esc(filters.materialName)}" placeholder="자재명 필터" />` : ""}
         <select class="select" data-record-filter="${kind}:sort">
