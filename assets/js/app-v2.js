@@ -835,6 +835,12 @@
       return HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES.has(normalizedWorkerName(name));
     }
 
+    function visiblePledgeAnalyticsWorkerName(name) {
+      const workerName = normalizedWorkerName(name);
+      if (!workerName) return false;
+      return visiblePledgeAnalyticsWorkers().some((worker) => normalizedWorkerName(worker.name) === workerName);
+    }
+
     function loadPledgeSignatureCache() {
       return loadJson(PLEDGE_SIGNATURE_CACHE_KEY, {});
     }
@@ -3954,19 +3960,6 @@
           pledge: row ? row.safetyPledge || "" : "",
         };
       });
-      todayInspections.forEach((row) => {
-        const name = row.worker || "미지정";
-        if (hiddenPledgeAnalyticsWorkerName(name)) return;
-        if (workerRows.some((worker) => worker.name === name)) return;
-        workerRows.push({
-          name,
-          team: "-",
-          shipNo: row.shipNo || "-",
-          time: row.time || "-",
-          done: Boolean(String(row.safetyPledge || "").trim()),
-          pledge: row.safetyPledge || "",
-        });
-      });
       return workerRows;
     }
 
@@ -4231,15 +4224,6 @@
         if (!name) return;
         byName.set(normalizedWorkerName(name), { name, team: worker.team || "-", source: "workers" });
       });
-      state.inspections.forEach((row) => {
-        const actualDate = monthlyInspectionDate(row);
-        if (!actualDate || actualDate < range.start || actualDate > range.end) return;
-        const name = String(row.worker || "").trim();
-        if (!name) return;
-        if (hiddenPledgeAnalyticsWorkerName(name)) return;
-        const key = normalizedWorkerName(name);
-        if (!byName.has(key)) byName.set(key, { name, team: "기록 기반", source: "history" });
-      });
       return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     }
 
@@ -4462,7 +4446,7 @@
       const recent = [
         ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소 등록", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
         ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
-      ].filter((row) => !hiddenPledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
+      ].filter((row) => visiblePledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
       return `<section class="admin-board analytics-board">
         <div class="admin-board-top">
           <div>
