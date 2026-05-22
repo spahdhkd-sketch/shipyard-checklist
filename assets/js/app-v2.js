@@ -3190,8 +3190,8 @@
         <div class="small muted material-selected-note">로그인한 작업자로 자동 접수됩니다.</div>
       </div>
       <div class="field material-flow-field">
-        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}장 · 촬영 가능</small></label>
-        <input class="input" id="unsafePhotos" type="file" accept="image/*" capture="environment" multiple />
+        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}장 · 촬영/갤러리 가능</small></label>
+        <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
         <div class="small muted">${photoNames.length ? `${esc(photoNames.join(", "))}` : "사진 없이도 다음 단계로 진행할 수 있습니다."}</div>
       </div>`;
       return unsafeFlowShell(2, "내용 입력", `${state.unsafeDraft.shipNo || "선택한 호선"}에서 발견한 위험 요소를 적어주세요`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-unsafe-next type="button" data-required-message="${esc(flowRequiredText(unsafeMissingFields(2)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
@@ -3402,6 +3402,26 @@
     function currentUnsafePhotoNames() {
       const files = Array.isArray(state.unsafePhotoFiles) ? state.unsafePhotoFiles : [];
       return files.length ? files.map((file) => file.name) : [];
+    }
+
+    function photoFileKey(file) {
+      return [
+        file?.name || "",
+        file?.size || 0,
+        file?.lastModified || 0,
+        file?.type || "",
+      ].join(":");
+    }
+
+    function mergeUnsafePhotoFiles(files) {
+      const merged = [];
+      const seen = new Set();
+      [...(state.unsafePhotoFiles || []), ...(Array.isArray(files) ? files : [])].forEach((file) => {
+        if (!file || seen.has(photoFileKey(file))) return;
+        seen.add(photoFileKey(file));
+        if (merged.length < ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) merged.push(file);
+      });
+      return merged;
     }
 
     function reconcileUnsafePhotoDraft() {
@@ -6133,8 +6153,10 @@
         updateFlowNextControls();
       }
       if (event.target.id === "unsafePhotos") {
-        state.unsafePhotoFiles = Array.from(event.target.files || []).slice(0, ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS);
-        if ((event.target.files || []).length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) {
+        const incoming = Array.from(event.target.files || []);
+        const beforeCount = state.unsafePhotoFiles.length;
+        state.unsafePhotoFiles = mergeUnsafePhotoFiles(incoming);
+        if (incoming.length + beforeCount > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) {
           toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
         }
         state.unsafeDraft.photos = state.unsafePhotoFiles.map((file) => file.name);
@@ -7422,7 +7444,34 @@
     function photoExtension(file) {
       const name = String(file && file.name || "").toLowerCase();
       const ext = name.split(".").pop();
-      return ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+      if (["jpg", "jpeg", "png", "webp", "heic", "heif"].includes(ext)) return ext;
+      const type = String(file?.type || "").toLowerCase();
+      if (type.includes("png")) return "png";
+      if (type.includes("webp")) return "webp";
+      if (type.includes("heic")) return "heic";
+      if (type.includes("heif")) return "heif";
+      return "jpg";
+    }
+
+    function photoMimeType(file) {
+      const type = String(file?.type || "").toLowerCase();
+      if (type.startsWith("image/") && type !== "image/jpg") return type;
+      const ext = photoExtension(file);
+      if (ext === "png") return "image/png";
+      if (ext === "webp") return "image/webp";
+      if (ext === "heic") return "image/heic";
+      if (ext === "heif") return "image/heif";
+      return "image/jpeg";
+    }
+
+    function normalizedPhotoFile(file) {
+      if (!file) return file;
+      const type = photoMimeType(file);
+      if (file.type === type) return file;
+      return new File([file], file.name || `photo.${photoExtension(file)}`, {
+        type,
+        lastModified: file.lastModified || Date.now(),
+      });
     }
 
     function fileToDataUrl(file) {
@@ -7439,13 +7488,13 @@
       const now = serverNow().toISOString();
       const entries = [];
       for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+        const file = normalizedPhotoFile(files[index]);
         const dataUrl = file.size <= PENDING_PHOTO_RETRY_MAX_BYTES ? await fileToDataUrl(file) : "";
         entries.push({
           id: uid("pendingPhoto"),
           issueId,
           fileName: file.name || `photo-${index + 1}.${photoExtension(file)}`,
-          fileType: file.type || "image/jpeg",
+          fileType: photoMimeType(file),
           fileSize: file.size || 0,
           dataUrl,
           status: "failed",
@@ -7475,9 +7524,9 @@
       if (!client) throw new Error("사진 업로드 서버 연결이 없습니다.");
       const uploaded = [];
       for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+        const file = normalizedPhotoFile(files[index]);
         const storagePath = `unsafe/${issueId}/${uid("photoFile")}-${index + 1}.${photoExtension(file)}`;
-        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: false });
+        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: false, contentType: photoMimeType(file) });
         if (error) throw error;
         uploaded.push({
           id: uid("photo"),
