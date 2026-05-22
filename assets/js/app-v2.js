@@ -996,6 +996,8 @@
       serverClockSyncedAt: "",
       workerSession: loadWorkerSession(),
       loginSubmitting: false,
+      loginWorkerId: "",
+      loginWorkerPickerOpen: false,
       unsafeDraft: createUnsafeDraft(loadJson("unsafeDraft", {})),
       materialDraft: createMaterialDraft(loadJson("materialDraft", {})),
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
@@ -1921,6 +1923,7 @@
     function renderLogin() {
       const workers = [...state.workers].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
       const disabled = !workers.length || state.loginSubmitting;
+      const selectedWorker = workers.find((worker) => worker.id === state.loginWorkerId);
       return `<section class="login-screen" aria-labelledby="loginTitle">
         <div class="login-hero">
           <div class="login-brand">
@@ -1939,10 +1942,8 @@
         <form class="login-card" data-login-form>
           <div class="field">
             <label for="loginWorkerId">아이디</label>
-            <select class="select" id="loginWorkerId" ${disabled ? "disabled" : ""} required>
-              <option value="">작업자 선택</option>
-              ${workers.map((worker) => `<option value="${esc(worker.id)}">${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}${isLeaderWorker(worker) ? ` · ${esc(LEADER_WORKER_POSITION)}` : ""}</option>`).join("")}
-            </select>
+            <input id="loginWorkerId" type="hidden" value="${esc(selectedWorker?.id || "")}" required />
+            ${renderLoginWorkerPicker(workers, selectedWorker, disabled)}
           </div>
           <div class="field">
             <label for="loginEmployeeNo">비밀번호</label>
@@ -1953,6 +1954,30 @@
           <div class="login-help">${workers.length ? "사번이 등록되지 않은 작업자는 관리자에게 사번 등록을 요청하세요." : "작업자 목록을 불러오는 중입니다."}</div>
         </form>
       </section>`;
+    }
+
+    function renderLoginWorkerLabel(worker, placeholder = "작업자 선택") {
+      if (!worker) return `<span class="login-worker-placeholder">${esc(placeholder)}</span>`;
+      return `<span class="login-worker-text">
+        <strong>${esc(worker.name)}</strong>
+        ${worker.team ? `<em>${esc(worker.team)}</em>` : ""}
+        ${isLeaderWorker(worker) ? `<span class="login-worker-role">${esc(LEADER_WORKER_POSITION)}</span>` : ""}
+      </span>`;
+    }
+
+    function renderLoginWorkerPicker(workers, selectedWorker, disabled) {
+      const expanded = state.loginWorkerPickerOpen && !disabled;
+      return `<div class="login-worker-picker ${expanded ? "open" : ""}" data-login-worker-picker>
+        <button class="login-worker-trigger" data-action="toggle-login-worker-picker" type="button" aria-haspopup="listbox" aria-expanded="${expanded ? "true" : "false"}" ${disabled ? "disabled" : ""}>
+          ${renderLoginWorkerLabel(selectedWorker)}
+          <span class="login-worker-chevron" aria-hidden="true"></span>
+        </button>
+        ${expanded ? `<div class="login-worker-options" role="listbox" aria-label="작업자 선택">
+          ${workers.map((worker) => `<button class="login-worker-option ${worker.id === selectedWorker?.id ? "selected" : ""}" data-login-worker-select="${esc(worker.id)}" type="button" role="option" aria-selected="${worker.id === selectedWorker?.id ? "true" : "false"}">
+            ${renderLoginWorkerLabel(worker)}
+          </button>`).join("")}
+        </div>` : ""}
+      </div>`;
     }
 
     function logoutButton() {
@@ -5745,11 +5770,28 @@
         return;
       }
 
+      if (state.loginWorkerPickerOpen && !event.target.closest("[data-login-worker-picker]")) {
+        state.loginWorkerPickerOpen = false;
+        render();
+        return;
+      }
+
       const button = event.target.closest("button");
       if (!button) return;
 
       if (button.dataset.monthlyWorkerMonth) {
         setMonthlyWorkerMonth(button.dataset.monthlyWorkerMonth);
+        return;
+      }
+      if (button.dataset.action === "toggle-login-worker-picker") {
+        state.loginWorkerPickerOpen = !state.loginWorkerPickerOpen;
+        render();
+        return;
+      }
+      if (button.dataset.loginWorkerSelect) {
+        state.loginWorkerId = button.dataset.loginWorkerSelect;
+        state.loginWorkerPickerOpen = false;
+        render();
         return;
       }
       if (button.dataset.monthlyWorkerToggle) {
@@ -6592,7 +6634,7 @@
 
     async function submitWorkerLogin() {
       if (state.loginSubmitting) return;
-      const workerId = $("loginWorkerId")?.value || "";
+      const workerId = $("loginWorkerId")?.value || state.loginWorkerId || "";
       const employeeNo = normalizeEmployeeNo($("loginEmployeeNo")?.value || "");
       const worker = state.workers.find((row) => row.id === workerId);
       if (!worker) return toast("작업자를 선택하세요.");
@@ -6613,6 +6655,7 @@
         workerName: worker.name,
         loggedInAt: serverNow().toISOString(),
       };
+      state.loginWorkerPickerOpen = false;
       saveWorkerSession(state.workerSession);
       toast(`${worker.name}님 로그인되었습니다.`);
       render();

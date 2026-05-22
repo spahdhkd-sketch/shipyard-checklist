@@ -49,6 +49,7 @@ assert.match(html, /id="homeVersionLabel"/);
 });
 
 const app = read("assets/js/app-v2.js");
+const styles = read("assets/css/styles-v2.css");
 assert.match(app, /const APP_VERSION = "0\.3-20260521"/);
 assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 60 \* 1000/);
 assert.match(app, /const SYNC_RETRY_DELAY_MS = 8 \* 1000/);
@@ -145,6 +146,10 @@ assert.match(app, /function normalizeWorkerPosition\(position\)/);
 assert.match(app, /position: normalizeWorkerPosition\(row\.position\)/);
 assert.match(app, /id="workerPosition"/);
 assert.match(app, /data-toggle-worker-position/);
+assert.match(app, /function renderLoginWorkerPicker\(workers, selectedWorker, disabled\)/);
+assert.match(app, /class="login-worker-role"/);
+assert.match(app, /data-login-worker-select/);
+assert.match(styles, /\.login-worker-role \{[\s\S]*color: #fff;/);
 assert.match(app, /function inspectionActualDate\(row\) \{[\s\S]*if \(row\?\.date\) return dateOnly\(row\.date\);[\s\S]*return Number\.isNaN\(createdAt\.getTime\(\)\) \? dateOnly\(row\.createdAt\) : localDate\(createdAt\);/);
 assert.match(app, /id="unsafePhotoCamera" data-unsafe-photo-input="camera" type="file" accept="image\/\*" capture="environment"/);
 assert.match(app, /id="unsafePhotoGallery" data-unsafe-photo-input="gallery" type="file" accept="image\/\*" multiple/);
