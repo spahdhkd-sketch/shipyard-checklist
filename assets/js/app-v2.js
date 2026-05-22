@@ -3189,12 +3189,44 @@
         <div class="readonly-box"><strong>${esc(selectedWorker?.name || currentWorkerSessionLabel())}</strong>${selectedWorker?.team ? `<small>${esc(selectedWorker.team)}</small>` : ""}</div>
         <div class="small muted material-selected-note">로그인한 작업자로 자동 접수됩니다.</div>
       </div>
-      <div class="field material-flow-field">
-        <label for="unsafePhotos"><span>현장 사진 첨부</span><small>선택, 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}장 · 촬영/갤러리 가능</small></label>
-        <input class="input" id="unsafePhotos" type="file" accept="image/*" multiple />
-        <div class="small muted">${photoNames.length ? `${esc(photoNames.join(", "))}` : "사진 없이도 다음 단계로 진행할 수 있습니다."}</div>
-      </div>`;
+      ${renderUnsafePhotoPicker(photoNames)}`;
       return unsafeFlowShell(2, "내용 입력", `${state.unsafeDraft.shipNo || "선택한 호선"}에서 발견한 위험 요소를 적어주세요`, body, `<button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-unsafe-next type="button" data-required-message="${esc(flowRequiredText(unsafeMissingFields(2)))}" ${ready ? "" : "disabled"}>다음 → 최종 확인</button>`);
+    }
+
+    function renderUnsafePhotoPicker(photoNames = currentUnsafePhotoNames()) {
+      const files = Array.isArray(state.unsafePhotoFiles) ? state.unsafePhotoFiles : [];
+      const max = ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS;
+      const countLabel = files.length ? `${files.length}/${max}장 선택됨` : `최대 ${max}장`;
+      const statusLabel = files.length ? `첨부 파일 ${files.length}장 등록됨` : "선택된 파일 없음";
+      const slots = Array.from({ length: max }, (_, index) => {
+        const file = files[index];
+        if (!file) {
+          return `<div class="unsafe-photo-chip is-empty"><span>사진 ${index + 1}</span><small>비어 있음</small></div>`;
+        }
+        return `<div class="unsafe-photo-chip">
+          <span>${esc(file.name || `사진 ${index + 1}`)}</span>
+          <small>${esc(formatBytes(file.size || 0))}</small>
+          <button type="button" data-remove-unsafe-photo="${index}" aria-label="${esc(file.name || `사진 ${index + 1}`)} 삭제">삭제</button>
+        </div>`;
+      }).join("");
+      return `<div class="field material-flow-field unsafe-photo-field">
+        <label><span>현장 사진 첨부</span><small>선택 사항 · ${esc(countLabel)}</small></label>
+        <div class="unsafe-photo-actions" aria-label="현장 사진 첨부 방식">
+          <label class="unsafe-photo-action" for="unsafePhotoCamera">
+            <strong>카메라 촬영</strong>
+            <small>촬영 후 1장씩 추가</small>
+          </label>
+          <label class="unsafe-photo-action" for="unsafePhotoGallery">
+            <strong>갤러리 선택</strong>
+            <small>사진 선택 또는 추가</small>
+          </label>
+        </div>
+        <input class="unsafe-photo-input" id="unsafePhotoCamera" data-unsafe-photo-input="camera" type="file" accept="image/*" capture="environment" />
+        <input class="unsafe-photo-input" id="unsafePhotoGallery" data-unsafe-photo-input="gallery" type="file" accept="image/*" multiple />
+        <div class="unsafe-photo-status">${esc(statusLabel)}</div>
+        <div class="unsafe-photo-selected" aria-live="polite">${slots}</div>
+        <div class="small muted">${photoNames.length ? "선택한 사진은 제출 시 함께 업로드됩니다." : "사진 없이도 다음 단계로 진행할 수 있습니다."}</div>
+      </div>`;
     }
 
     function renderUnsafeConfirmStep() {
@@ -3404,6 +3436,13 @@
       return files.length ? files.map((file) => file.name) : [];
     }
 
+    function formatBytes(bytes) {
+      const value = Number(bytes) || 0;
+      if (value < 1024) return `${value}B`;
+      if (value < 1024 * 1024) return `${Math.round(value / 1024)}KB`;
+      return `${(value / 1024 / 1024).toFixed(1)}MB`;
+    }
+
     function photoFileKey(file) {
       return [
         file?.name || "",
@@ -3422,6 +3461,17 @@
         if (merged.length < ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) merged.push(file);
       });
       return merged;
+    }
+
+    function updateUnsafePhotoDraftFromFiles() {
+      state.unsafeDraft.photos = currentUnsafePhotoNames();
+      saveJson("unsafeDraft", state.unsafeDraft);
+    }
+
+    function removeUnsafePhotoFile(index) {
+      state.unsafePhotoFiles = (state.unsafePhotoFiles || []).filter((_, fileIndex) => fileIndex !== index);
+      updateUnsafePhotoDraftFromFiles();
+      render();
     }
 
     function reconcileUnsafePhotoDraft() {
@@ -5645,6 +5695,10 @@
         render();
         return;
       }
+      if (button.dataset.removeUnsafePhoto !== undefined) {
+        removeUnsafePhotoFile(Number(button.dataset.removeUnsafePhoto));
+        return;
+      }
       if (button.dataset.unsafeEditStep) {
         state.unsafeDraft.step = Number(button.dataset.unsafeEditStep) || 1;
         saveUnsafeDraft();
@@ -6156,15 +6210,14 @@
         saveJson("unsafeDraft", state.unsafeDraft);
         updateFlowNextControls();
       }
-      if (event.target.id === "unsafePhotos") {
+      if (event.target.dataset.unsafePhotoInput) {
         const incoming = Array.from(event.target.files || []);
         const beforeCount = state.unsafePhotoFiles.length;
         state.unsafePhotoFiles = mergeUnsafePhotoFiles(incoming);
         if (incoming.length + beforeCount > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) {
           toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
         }
-        state.unsafeDraft.photos = state.unsafePhotoFiles.map((file) => file.name);
-        saveJson("unsafeDraft", state.unsafeDraft);
+        updateUnsafePhotoDraftFromFiles();
         render();
       }
       if (event.target.dataset.retryPhotoFile) {
@@ -6313,8 +6366,8 @@
       if (missing.length) return toast(flowRequiredText(missing));
       const errors = ISSUE_MATERIAL_RULES.validateUnsafeDraft(state.unsafeDraft);
       if (errors.length) return toast(errors[0]);
-      const input = $("unsafePhotos");
-      const files = state.unsafePhotoFiles?.length ? state.unsafePhotoFiles : Array.from(input?.files || []);
+      const inputFiles = Array.from(document.querySelectorAll("[data-unsafe-photo-input]")).flatMap((input) => Array.from(input.files || []));
+      const files = state.unsafePhotoFiles?.length ? state.unsafePhotoFiles : inputFiles;
       if (files.length > ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS) return toast(`사진은 최대 ${ISSUE_MATERIAL_RULES.MAX_UNSAFE_PHOTOS}개까지 첨부할 수 있습니다.`);
       if (!files.length && !confirm("사진 없이 등록하시겠습니까?")) return;
       const now = serverNow().toISOString();

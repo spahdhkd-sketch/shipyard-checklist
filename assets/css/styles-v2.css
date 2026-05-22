@@ -2479,6 +2479,119 @@
       font-weight: 800;
     }
 
+    .unsafe-photo-field {
+      gap: 10px;
+    }
+
+    .unsafe-photo-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .unsafe-photo-actions .unsafe-photo-action {
+      display: block;
+      min-width: 0;
+      min-height: 64px;
+      padding: 12px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #fff;
+      color: #07162f;
+      cursor: pointer;
+    }
+
+    .unsafe-photo-action strong,
+    .unsafe-photo-action small {
+      display: block;
+      text-align: center;
+    }
+
+    .unsafe-photo-action strong {
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+
+    .unsafe-photo-action small {
+      margin-top: 4px;
+      color: #607084;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .unsafe-photo-input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .unsafe-photo-status {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border: 1px solid #d7e0ea;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .unsafe-photo-selected {
+      display: grid;
+      gap: 8px;
+    }
+
+    .unsafe-photo-chip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid #d7e0ea;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .unsafe-photo-chip span {
+      overflow: hidden;
+      color: #07162f;
+      font-size: 13px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .unsafe-photo-chip small {
+      color: #607084;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .unsafe-photo-chip button {
+      min-width: 48px;
+      min-height: 30px;
+      border: 1px solid #f3c7c7;
+      border-radius: 8px;
+      background: #fff5f5;
+      color: #b42318;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .unsafe-photo-chip.is-empty {
+      grid-template-columns: minmax(0, 1fr) auto;
+      background: #f8fafc;
+      color: #64748b;
+    }
+
     .material-summary-pill,
     .material-confirm-head {
       display: grid;
