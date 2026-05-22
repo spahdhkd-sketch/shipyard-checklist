@@ -935,6 +935,7 @@
         holidayData: {},
         customRestDays: [],
       }),
+      monthlyWorkerExpandedKeys: loadJson("monthlyWorkerExpandedKeys", null),
       selectedMonthlyWorkerMonth: "",
       monthlyRestDayPanelOpen: false,
       photoViewer: null,
@@ -4298,6 +4299,73 @@
       return `<span class="monthly-worker-cell ${esc(status)}" title="${esc(day ? `${day}일 ${monthlyStatusLabel(status)}` : monthlyStatusLabel(status))}" aria-label="${esc(monthlyStatusLabel(status))}">${esc(day)}</span>`;
     }
 
+    function monthlyWorkerCardKey(worker) {
+      return normalizedWorkerName(worker?.name || "");
+    }
+
+    function monthlyWorkerExpandedKeySet(workers = []) {
+      if (Array.isArray(state.monthlyWorkerExpandedKeys)) return new Set(state.monthlyWorkerExpandedKeys.filter(Boolean));
+      const firstWorker = workers[0] ? monthlyWorkerCardKey(workers[0]) : "";
+      return new Set(firstWorker ? [firstWorker] : []);
+    }
+
+    function saveMonthlyWorkerExpandedKeys(keys) {
+      state.monthlyWorkerExpandedKeys = [...new Set(keys.filter(Boolean))];
+      saveJson("monthlyWorkerExpandedKeys", state.monthlyWorkerExpandedKeys);
+    }
+
+    function toggleMonthlyWorkerCard(key) {
+      const normalizedKey = normalizedWorkerName(key || "");
+      if (!normalizedKey) return;
+      const expanded = monthlyWorkerExpandedKeySet(monthlyWorkerRows());
+      if (expanded.has(normalizedKey)) expanded.delete(normalizedKey);
+      else expanded.add(normalizedKey);
+      saveMonthlyWorkerExpandedKeys([...expanded]);
+      render();
+    }
+
+    function renderMonthlyWorkerCalendar(worker, range) {
+      const statuses = new Map(worker.dayStatuses.map((day) => [day.date, day]));
+      const firstWeekday = (new Date(`${range.start}T00:00:00`).getDay() + 6) % 7;
+      const days = [
+        ...Array.from({ length: firstWeekday }, () => null),
+        ...range.dates,
+      ];
+      while (days.length % 7 !== 0) days.push(null);
+      const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
+      return `<div class="monthly-worker-calendar" aria-label="${esc(worker.name)} ${esc(range.monthKey)} 점검 달력">
+        <div class="monthly-worker-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join("")}</div>
+        <div class="monthly-worker-calendar-grid">
+          ${days.map((date) => {
+            if (!date) return `<span class="monthly-worker-calendar-cell blank" aria-hidden="true"></span>`;
+            const day = statuses.get(date) || { day: Number(date.slice(8, 10)), status: "excluded" };
+            return `<span class="monthly-worker-calendar-cell ${esc(day.status)}" title="${esc(`${day.day}일 ${monthlyStatusLabel(day.status)}`)}" aria-label="${esc(`${day.day}일 ${monthlyStatusLabel(day.status)}`)}">${esc(day.day)}</span>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }
+
+    function renderMonthlyWorkerCard(worker, range, expanded) {
+      const key = monthlyWorkerCardKey(worker);
+      return `<article class="monthly-worker-card-item ${expanded ? "is-expanded" : ""}">
+        <button class="monthly-worker-card" data-monthly-worker-toggle="${esc(key)}" aria-expanded="${expanded ? "true" : "false"}" type="button">
+          <span class="monthly-worker-card-main">
+            <span class="monthly-worker-card-person">
+              <strong>${esc(worker.name)}</strong>
+              <em>${esc(worker.team || "-")}</em>
+            </span>
+            <span class="monthly-worker-card-rate ${worker.rate >= 80 ? "good" : worker.rate >= 50 ? "warn" : "danger"}">${worker.rate}%</span>
+          </span>
+          <span class="monthly-worker-card-summary">
+            <span>완료 ${worker.counts.done}</span>
+            <span>미완료 ${worker.counts.partial + worker.counts.missing}</span>
+            <span>대상 ${worker.counts.target}</span>
+          </span>
+        </button>
+        ${expanded ? renderMonthlyWorkerCalendar(worker, range) : ""}
+      </article>`;
+    }
+
     function renderMonthlyRestDaySettings() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
@@ -4347,6 +4415,7 @@
           ${restOpen ? renderMonthlyRestDaySettings() : ""}
         </section>`;
       }
+      const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
       return `<section class="analytics-panel monthly-worker-analytics">
         <div class="monthly-worker-head">
           <div><strong>월간 작업자 점검 현황</strong><span>${monthText} · 작업자별 일일 점검 이행 현황</span></div>
@@ -4365,19 +4434,8 @@
           ${analyticsKpi("대상 작업자", `${stats.workers.length}명`, `휴무 ${stats.totals.rest}칸 제외`, "ship")}
         </div>
         <div class="monthly-worker-layout">
-          <div class="monthly-worker-heatmap-wrap">
-            <div class="monthly-worker-heatmap" style="--monthly-days:${stats.range.daysInMonth}">
-              <div class="monthly-worker-row monthly-worker-row-head">
-                <div class="monthly-worker-name">작업자</div>
-                <div class="monthly-worker-days">${stats.range.dates.map((date) => `<span>${Number(date.slice(8, 10))}</span>`).join("")}</div>
-                <div class="monthly-worker-rate">점검률</div>
-              </div>
-              ${stats.workers.map((worker) => `<div class="monthly-worker-row">
-                <div class="monthly-worker-name"><strong>${esc(worker.name)}</strong><em>${esc(worker.team || "-")}</em></div>
-                <div class="monthly-worker-days">${worker.dayStatuses.map((day) => renderWorkerHeatmapCell(day.status, day.day)).join("")}</div>
-                <div class="monthly-worker-rate"><strong>${worker.rate}%</strong><span>${worker.counts.done}/${worker.counts.target}</span></div>
-              </div>`).join("")}
-            </div>
+          <div class="monthly-worker-card-list">
+            ${stats.workers.map((worker) => renderMonthlyWorkerCard(worker, stats.range, expandedWorkers.has(monthlyWorkerCardKey(worker)))).join("")}
           </div>
           <aside class="monthly-worker-attention">
             <strong>주의 필요 작업자</strong>
@@ -5666,6 +5724,10 @@
 
       if (button.dataset.monthlyWorkerMonth) {
         setMonthlyWorkerMonth(button.dataset.monthlyWorkerMonth);
+        return;
+      }
+      if (button.dataset.monthlyWorkerToggle) {
+        toggleMonthlyWorkerCard(button.dataset.monthlyWorkerToggle);
         return;
       }
       if (button.dataset.action === "toggle-monthly-rest-settings") {
