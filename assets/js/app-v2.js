@@ -500,7 +500,7 @@
         }),
       },
     ];
-    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools"]);
+    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools", "workers"]);
 
     const starterCategories = [
       { id: "welding", label: "용접/절단 작업", icon: "welding", color: "#b8323b", toolNature: "선행/후행", order: 1 },
@@ -1903,7 +1903,7 @@
           </div>
           <div class="field">
             <label for="loginEmployeeNo">비밀번호</label>
-            <input class="input" id="loginEmployeeNo" type="password" inputmode="numeric" autocomplete="current-password" placeholder="사번 입력" ${disabled ? "disabled" : ""} required />
+            <input class="input" id="loginEmployeeNo" type="password" inputmode="text" autocomplete="current-password" autocapitalize="characters" placeholder="사번 입력" ${disabled ? "disabled" : ""} required />
           </div>
           <button class="btn login-submit" type="submit" ${disabled ? "disabled" : ""}>${state.loginSubmitting ? "확인 중" : "로그인"}</button>
           <button class="btn-light login-refresh" data-action="refresh-workers" type="button" ${state.loginSubmitting ? "disabled" : ""}>작업자 목록 새로고침</button>
@@ -5071,7 +5071,10 @@
     }
 
     function inspectionActualDate(row) {
-      return dateOnly(row?.createdAt || row?.date || "");
+      if (row?.date) return dateOnly(row.date);
+      if (!row?.createdAt) return "";
+      const createdAt = new Date(row.createdAt);
+      return Number.isNaN(createdAt.getTime()) ? dateOnly(row.createdAt) : localDate(createdAt);
     }
 
     function formatDateTime(value) {
