@@ -398,16 +398,69 @@
       line-height: 1.45;
     }
 
+    .sidebar-session-panel {
+      margin-top: 14px;
+      padding: 9px 10px 10px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 8px;
+      background: rgba(255,255,255,.08);
+    }
+
     .sync-badge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 0;
+      padding: 0;
+      border-radius: 0;
+      font-size: 12px;
+      background: transparent;
+      color: #fff;
+    }
+
+    .sync-status-copy {
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      margin-top: 13px;
-      padding: 6px 9px;
-      border-radius: 999px;
+      min-width: 0;
+      font-weight: 900;
+    }
+
+    .sidebar-logout-btn {
+      min-height: 30px;
+      padding: 0 12px;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 6px;
+      background: rgba(255,255,255,.12);
+      color: #fff;
       font-size: 12px;
-      background: rgba(255,255,255,.08);
-      color: rgba(255,255,255,.88);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .sidebar-worker-session {
+      margin-top: 9px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,.13);
+      color: #fff;
+      line-height: 1.45;
+    }
+
+    .sidebar-worker-session strong,
+    .sidebar-worker-session span {
+      display: block;
+    }
+
+    .sidebar-worker-session strong {
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .sidebar-worker-session span {
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 900;
     }
 
     .sync-dot {

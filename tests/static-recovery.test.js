@@ -132,6 +132,14 @@ assert.match(app, /const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set\(\["ê¹€ê
 assert.match(app, /function visiblePledgeAnalyticsWorkers\(\)/);
 assert.match(app, /function visiblePledgeAnalyticsWorkerName\(name\)/);
 assert.match(app, /function preloadCachedPledgeSignature\(\)/);
+assert.match(app, /function browserNotificationsAvailable\(\)/);
+assert.match(app, /async function ensureBrowserNotificationPermission\(\)/);
+assert.match(app, /function showBrowserNotification\(title, options = \{\}\)/);
+assert.match(app, /async function notifyPledgePendingWorkers\(\)/);
+assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
+assert.match(app, /data-action="notify-pledge-pending"/);
+assert.match(app, /"notify-pledge-pending": notifyPledgePendingWorkers/);
+assert.match(app, /notifyUnsafeIssueRegistered\(row\);/);
 assert.match(app, /workerFallbackOpen: false/);
 assert.match(app, /function workerMatchesCategoryNature\(worker, categoryNature\)/);
 assert.match(app, /function checkWorkerGroups\(category\)/);
@@ -299,6 +307,11 @@ assert.match(css, /\.ops-status-grid \.stat-foot\.is-empty[\s\S]*visibility: hid
 assert.match(css, /\.ops-status-grid \.stat-pill \.stat-icon,[\s\S]*width: 54px/);
 assert.match(css, /\.ops-status-grid \.stat-pill \.stat-icon svg,[\s\S]*width: 30px/);
 assert.match(css, /\.ops-process-card \.mini-process[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)[\s\S]*overflow-x: hidden/);
+assert.match(css, /\.sidebar-session-panel[\s\S]*border: 1px solid rgba\(255,255,255,\.18\)[\s\S]*border-radius: 8px/);
+assert.match(css, /\.sync-badge[\s\S]*justify-content: space-between/);
+assert.match(css, /\.sync-status-copy[\s\S]*display: inline-flex/);
+assert.match(css, /\.sidebar-worker-session[\s\S]*border-top: 1px solid rgba\(255,255,255,\.13\)/);
+assert.match(css, /\.sidebar-worker-session strong,[\s\S]*\.sidebar-worker-session span[\s\S]*display: block/);
 assert.match(css, /body\.screen-mobile \.ops-process-card \.mini-process[\s\S]*grid-auto-flow: row/);
 assert.match(css, /body\.screen-mobile \.ops-process-card \.mini-stage \.small[\s\S]*font-size: 15px[\s\S]*white-space: nowrap/);
 assert.match(css, /\.bottom-nav \.nav-btn[\s\S]*font-size: 14px[\s\S]*white-space: nowrap/);

@@ -1138,6 +1138,74 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return true;
     }
 
+    function browserNotificationsAvailable() {
+      return typeof window !== "undefined" && "Notification" in window;
+    }
+
+    async function ensureBrowserNotificationPermission() {
+      if (!browserNotificationsAvailable()) {
+        toast("이 브라우저는 알림을 지원하지 않습니다.");
+        return false;
+      }
+      if (Notification.permission === "granted") return true;
+      if (Notification.permission === "denied") {
+        toast("브라우저 알림 권한이 차단되어 있습니다.");
+        return false;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") return true;
+        toast("브라우저 알림 권한이 허용되지 않았습니다.");
+      } catch (error) {
+        console.error(error);
+        toast("브라우저 알림 권한 요청 중 오류가 발생했습니다.");
+      }
+      return false;
+    }
+
+    function showBrowserNotification(title, options = {}) {
+      if (!browserNotificationsAvailable() || Notification.permission !== "granted") return null;
+      try {
+        const notification = new Notification(title, {
+          icon: "/assets/icons/icon-192.png",
+          badge: "/assets/icons/icon-192.png",
+          ...options,
+        });
+        window.setTimeout(() => notification.close?.(), 8000);
+        return notification;
+      } catch (error) {
+        console.error(error);
+        toast("브라우저 알림을 표시하지 못했습니다.");
+        return null;
+      }
+    }
+
+    async function notifyPledgePendingWorkers() {
+      const pendingRows = pledgeDashboardRows().filter((row) => !row.done);
+      if (!pendingRows.length) {
+        toast("서약 미완료자가 없습니다.");
+        return;
+      }
+      if (!(await ensureBrowserNotificationPermission())) return;
+      const names = pendingRows.map((row) => row.name).filter(Boolean);
+      const preview = names.slice(0, 5).join(", ");
+      const extra = names.length > 5 ? ` 외 ${names.length - 5}명` : "";
+      const body = `${pendingRows.length}명 미완료: ${preview}${extra}`;
+      if (showBrowserNotification("안전 서약 미완료자", { body, tag: `pledge-pending-${today()}`, renotify: true })) {
+        toast("미완료자 브라우저 알림을 보냈습니다.");
+      }
+    }
+
+    async function notifyUnsafeIssueRegistered(row) {
+      if (!row || !(await ensureBrowserNotificationPermission())) return;
+      const body = [
+        row.shipNo ? `호선 ${row.shipNo}` : "호선 미지정",
+        row.workerNameSnapshot || "작업자",
+        shortUnsafeTitle(row.content || "불안전요소"),
+      ].filter(Boolean).join(" · ");
+      showBrowserNotification("불안전요소 등록", { body, tag: `unsafe-${row.id || Date.now()}`, renotify: true });
+    }
+
     function createUnsafeDraft(overrides = {}) {
       return {
         step: 1,
@@ -4931,7 +4999,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <section class="pledge-table-card">
             <div class="material-table-head">
               <div><strong>오늘 서약 현황</strong><span>${today().replace(/-/g, ".")} · ${rows.length}명</span></div>
-              <button class="btn" disabled title="카카오톡 API 연결 후 활성화 예정" type="button">미완료자 알림 발송</button>
+              <button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>
             </div>
             <div class="pledge-table">
               <div class="pledge-row pledge-row-head"><span>작업자</span><span>팀</span><span>호선</span><span>서약 시각</span><span>상태</span></div>
@@ -6577,6 +6645,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "worker-logout": logoutWorker,
         "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
+        "notify-pledge-pending": notifyPledgePendingWorkers,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,
@@ -7511,6 +7580,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       scrollScreenTop();
       replaceRouteState();
       toast(files.length ? "불안전요소가 접수되었습니다. 사진 업로드 중입니다." : "불안전요소가 접수되었습니다.");
+      notifyUnsafeIssueRegistered(row);
       try {
         await syncUnsafeIssue(row, files);
       } finally {
