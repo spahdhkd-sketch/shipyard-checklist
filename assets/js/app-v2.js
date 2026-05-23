@@ -1174,11 +1174,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return status.workerId && status.workerId === state.workerSession?.workerId ? status : {};
     }
 
+    function pushRegisteredForCurrentDevice() {
+      const saved = pushSubscriptionState();
+      return Boolean(saved.workerId && saved.workerId === state.workerSession?.workerId && saved.permission === "granted");
+    }
+
     function pushRegisteredForCurrentWorker() {
       const remoteStatus = pushStatusForCurrentWorker();
       if (typeof remoteStatus.registered === "boolean") return remoteStatus.registered;
-      const saved = pushSubscriptionState();
-      return Boolean(saved.workerId && saved.workerId === state.workerSession?.workerId && saved.permission === "granted");
+      return pushRegisteredForCurrentDevice();
+    }
+
+    function pushDeviceName() {
+      const ua = navigator.userAgent || "";
+      const mobileUa = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
+      const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches;
+      return mobileUa || coarsePointer ? "휴대폰" : "PC";
     }
 
     function base64UrlToUint8Array(value) {
@@ -1308,9 +1319,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function registerWorkerPushNotifications() {
       const worker = currentWorkerSessionWorker();
-      if (!worker?.id) return toast("작업자 로그인 후 휴대폰 알림을 등록하세요.");
+      if (!worker?.id) return toast("작업자 로그인 후 이 기기 알림을 등록하세요.");
       if (!pushNotificationsSupported()) return toast("이 브라우저는 휴대폰 Push 알림을 지원하지 않습니다.");
       if (state.pushRegistrationSubmitting) return;
+      if (pushRegisteredForCurrentDevice()) return toast(`${pushDeviceName()} 알림은 이미 등록되어 있습니다.`);
       const client = supabaseClient();
       if (!client) return toast("서버 동기화 연결이 필요합니다.");
 
@@ -1336,7 +1348,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             employeeNo,
             subscription: subscription.toJSON(),
             userAgent: navigator.userAgent,
-            deviceLabel: `${worker.name || currentWorkerSessionLabel()} 휴대폰`,
+            deviceLabel: `${worker.name || currentWorkerSessionLabel()} ${pushDeviceName()}`,
           },
         });
         if (error || data?.error) throw new Error(error?.message || data.error);
@@ -1344,6 +1356,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           workerId: worker.id,
           endpoint: subscription.endpoint,
           permission: Notification.permission,
+          deviceName: pushDeviceName(),
+          userAgent: navigator.userAgent,
           registeredAt: serverNow().toISOString(),
         });
         savePushSubscriptionStatus({
@@ -1353,7 +1367,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           checkedAt: serverNow().toISOString(),
         });
         updatePushRegistrationControls();
-        toast("이 휴대폰으로 브라우저 알림을 받을 수 있습니다.");
+        toast(`이 ${pushDeviceName()}로 브라우저 알림을 받을 수 있습니다.`);
       } catch (error) {
         console.error(error);
         if (/invalid_worker|forbidden|403/i.test(String(error?.message || ""))) {
@@ -1367,7 +1381,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (/push_subscription_|permission denied|registration failed|aborterror/i.test(String(error?.message || ""))) {
           return toast("브라우저 Push 구독을 완료하지 못했습니다. 알림 권한을 확인해 주세요.");
         }
-        toast("휴대폰 알림 등록에 실패했습니다.");
+        toast("브라우저 알림 등록에 실패했습니다.");
       } finally {
         state.pushRegistrationSubmitting = false;
         updatePushRegistrationControls();
@@ -1377,7 +1391,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     async function submitWorkerPushEmployeeNo(event) {
       event?.preventDefault?.();
       const worker = currentWorkerSessionWorker();
-      if (!worker?.id) return toast("작업자 로그인 후 휴대폰 알림을 등록하세요.");
+      if (!worker?.id) return toast("작업자 로그인 후 이 기기 알림을 등록하세요.");
       const input = Array.from(document.querySelectorAll("[data-push-employee-no-input]"))
         .find((node) => !node.closest("[hidden]") && !node.disabled)
         || document.querySelector("[data-push-employee-no-input]");
@@ -1432,9 +1446,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return data;
       } catch (error) {
         console.error(error);
-        if (!options.silent) toast("휴대폰 알림 발송에 실패했습니다.");
+        if (!options.silent) toast("브라우저 알림 발송에 실패했습니다.");
         return null;
       }
+    }
+
+    async function testCurrentWorkerPushNotification() {
+      const worker = currentWorkerSessionWorker();
+      if (!worker?.id) return toast("작업자 로그인 후 테스트 알림을 보낼 수 있습니다.");
+      const result = await sendWorkerPushNotification([worker.id], {
+        title: "GS 안전 체크리스트 테스트",
+        body: `${currentWorkerSessionLabel()}님 ${pushDeviceName()} 브라우저 알림 테스트입니다.`,
+        tag: `push-test-${worker.id}-${Date.now()}`,
+        url: `/${currentPageName() || "index.html"}`,
+      });
+      if (!result) return;
+      if (result.sent) {
+        toast(`테스트 알림을 ${result.sent}대 기기로 보냈습니다.`);
+        return;
+      }
+      if (result.failed) {
+        toast(`테스트 알림 발송 실패 ${result.failed}대`);
+        return;
+      }
+      toast("등록된 알림 구독이 없습니다.");
     }
 
     function unsafePushTargetWorkerIds() {
@@ -1463,7 +1498,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       if (!result) return;
       const targetText = result.sent ? `${result.sent}대 휴대폰` : `${names.length}명`;
-      toast(result.sent ? `미완료자 알림을 ${targetText}으로 보냈습니다.` : "등록된 휴대폰 알림 구독이 없습니다.");
+      toast(result.sent ? `미완료자 알림을 ${targetText}으로 보냈습니다.` : "등록된 브라우저 알림 구독이 없습니다.");
     }
 
     async function notifyUnsafeIssueRegistered(row) {
@@ -2348,10 +2383,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
       if (session && !$("desktopPushButton")) {
-        session.insertAdjacentHTML("beforeend", `<button id="desktopPushButton" class="sidebar-push-btn" data-action="register-push-notifications" type="button">휴대폰 알림 등록</button>`);
+        session.insertAdjacentHTML("beforeend", `<button id="desktopPushButton" class="sidebar-push-btn" data-action="register-push-notifications" type="button">알림 등록</button>`);
       }
       if (session && $("desktopPushButton") && !$("desktopPushEmployeeNoForm")) {
         $("desktopPushButton").insertAdjacentHTML("afterend", pushEmployeeNoFormHtml("desktop"));
+      }
+      if (session && $("desktopPushEmployeeNoForm") && !$("desktopPushTestButton")) {
+        $("desktopPushEmployeeNoForm").insertAdjacentHTML("afterend", `<button id="desktopPushTestButton" class="sidebar-push-test-btn" data-action="test-push-notification" type="button" hidden>테스트 알림</button>`);
       }
       const label = currentWorkerSessionLabel();
       if (name) name.textContent = label;
@@ -2364,27 +2402,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const loggedIn = isWorkerLoggedIn();
       const mobileLogout = $("mobileLogoutButton");
       if (mobileLogout && !$("mobilePushButton")) {
-        mobileLogout.insertAdjacentHTML("beforebegin", `<button id="mobilePushButton" class="mobile-push-btn" data-action="register-push-notifications" type="button">휴대폰 알림 등록</button>`);
+        mobileLogout.insertAdjacentHTML("beforebegin", `<button id="mobilePushButton" class="mobile-push-btn" data-action="register-push-notifications" type="button">알림 등록</button>`);
       }
       if ($("mobilePushButton") && !$("mobilePushEmployeeNoForm")) {
         $("mobilePushButton").insertAdjacentHTML("afterend", pushEmployeeNoFormHtml("mobile"));
       }
+      if ($("mobilePushEmployeeNoForm") && !$("mobilePushTestButton")) {
+        $("mobilePushEmployeeNoForm").insertAdjacentHTML("afterend", `<button id="mobilePushTestButton" class="mobile-push-test-btn" data-action="test-push-notification" type="button" hidden>테스트 알림</button>`);
+      }
       const registered = pushRegisteredForCurrentWorker();
+      const currentDeviceRegistered = pushRegisteredForCurrentDevice();
       const supported = pushNotificationsSupported();
       const checking = Boolean(state.pushSubscriptionStatusChecking);
       const registering = Boolean(state.pushRegistrationSubmitting);
       const needsEmployeeNo = loggedIn && !normalizeEmployeeNo(state.workerSession?.employeeNo || "");
-      const showEmployeeNoForm = Boolean(state.pushEmployeeNoPromptOpen && needsEmployeeNo && supported && !registered);
+      const showEmployeeNoForm = Boolean(state.pushEmployeeNoPromptOpen && needsEmployeeNo && supported && !currentDeviceRegistered);
       [
         $("desktopPushButton"),
         $("mobilePushButton"),
       ].filter(Boolean).forEach((button) => {
         button.hidden = !loggedIn;
-        button.disabled = loggedIn && (registered || checking || registering || !supported);
-        button.textContent = registering ? "알림 등록 중" : checking ? "알림 상태 확인 중" : registered ? "알림 등록됨" : needsEmployeeNo ? "사번 확인 후 등록" : "휴대폰 알림 등록";
+        button.disabled = loggedIn && (currentDeviceRegistered || checking || registering || !supported);
+        button.textContent = registering ? "알림 등록 중" : checking ? "알림 상태 확인 중" : currentDeviceRegistered ? `${pushDeviceName()} 알림 등록됨` : needsEmployeeNo ? "사번 확인 후 등록" : `${pushDeviceName()} 알림 등록`;
         button.title = needsEmployeeNo
           ? "사번을 한 번 더 확인한 뒤 이 기기에 Push 알림을 등록합니다"
           : supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
+      });
+      [
+        $("desktopPushTestButton"),
+        $("mobilePushTestButton"),
+      ].filter(Boolean).forEach((button) => {
+        button.hidden = !loggedIn || !registered;
+        button.disabled = checking || registering;
       });
       [
         $("desktopPushEmployeeNoForm"),
@@ -6975,6 +7024,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "clear-pledge-signature": clearPledgeSignature,
         "notify-pledge-pending": notifyPledgePendingWorkers,
         "register-push-notifications": registerWorkerPushNotifications,
+        "test-push-notification": testCurrentWorkerPushNotification,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,

@@ -475,8 +475,28 @@
       font-weight: 900;
     }
 
+    .sidebar-push-test-btn {
+      width: 100%;
+      min-height: 28px;
+      margin-top: 7px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 6px;
+      background: rgba(255,255,255,.1);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
     .sidebar-push-btn:disabled {
       opacity: .55;
+    }
+
+    .sidebar-push-test-btn:disabled {
+      opacity: .55;
+    }
+
+    .sidebar-push-test-btn[hidden] {
+      display: none;
     }
 
     .push-employee-form[hidden] {
@@ -8379,7 +8399,8 @@
     }
 
     .mobile-logout-btn,
-    .mobile-push-btn {
+    .mobile-push-btn,
+    .mobile-push-test-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -8399,7 +8420,12 @@
       background: rgba(20,184,166,.22);
     }
 
-    .mobile-push-btn:disabled {
+    .mobile-push-test-btn {
+      background: rgba(255,255,255,.11);
+    }
+
+    .mobile-push-btn:disabled,
+    .mobile-push-test-btn:disabled {
       opacity: .55;
     }
 
@@ -8411,7 +8437,8 @@
     }
 
     .mobile-logout-btn[hidden],
-    .mobile-push-btn[hidden] {
+    .mobile-push-btn[hidden],
+    .mobile-push-test-btn[hidden] {
       display: none;
     }
 
