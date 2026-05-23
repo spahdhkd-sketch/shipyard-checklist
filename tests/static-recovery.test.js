@@ -196,6 +196,8 @@ assert.match(app, /data-analytics-record-kind="\$\{esc\(row\.kind\)\}"/);
 assert.match(app, /data-analytics-record-id="\$\{esc\(row\.id\)\}"/);
 assert.match(app, /function openAnalyticsRecord\(kind, id\)/);
 assert.match(app, /data-stat-scope="unsafe" data-action="view-unsafe-list"/);
+assert.match(app, /unsafeCount \? "즉시 확인" : ""/);
+assert.doesNotMatch(app, /unsafeCount \? "즉시 확인" : "접수 없음"/);
 assert.match(app, /data-stat-scope="materials" data-action="view-material-list"/);
 assert.doesNotMatch(app, /data-stat-scope="unsafe" data-view="unsafe"/);
 assert.doesNotMatch(app, /data-stat-scope="materials" data-view="materials"/);

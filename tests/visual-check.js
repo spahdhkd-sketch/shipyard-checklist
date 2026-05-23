@@ -437,7 +437,7 @@ function assertCheck(name, condition) {
     assertCheck("home today stat uses larger symbol", unsafeHomeStat.todayIconWidth > unsafeHomeStat.deliveryIconWidth);
     assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
     assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
-    assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인 필요");
+    assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인");
     assertCheck("home unsafe stat highlights when received issues exist", unsafeHomeStat.highlighted);
     assertCheck("home unsafe stat uses larger symbol", unsafeHomeStat.unsafeIconWidth > unsafeHomeStat.deliveryIconWidth);
     assertCheck("home unsafe stat pulses alert highlight", unsafeHomeStat.alertAnimation.includes("unsafeStatPulse"));

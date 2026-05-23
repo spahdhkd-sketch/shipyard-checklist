@@ -2147,7 +2147,7 @@
       <section class="ops-status-grid" aria-labelledby="dashboardStatusHeading">
         ${sectionHeading("dashboardStatusHeading", "오늘 현장 상태")}
         ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", "", "today")}
-        ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "접수 없음", "unsafe")}
+        ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "", "unsafe")}
         ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", "", "materials")}
         ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
       </section>
