@@ -3774,7 +3774,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const ships = sortedShips();
       const grouped = SHIP_WORKFLOW_STAGES.map((stage) => ({
         stage,
-        ships: state.ships.filter((ship) => effectiveShipStage(ship).stage === stage),
+        ships: ships.filter((ship) => effectiveShipStage(ship).stage === stage),
       }));
       return `${renderProcessBoard(grouped)}
       <div class="panel panel-pad" style="margin-bottom:14px">
