@@ -541,7 +541,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }),
       },
     ];
-    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools", "workers"]);
+    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools", "workers", "ships", "inspections", "unsafeIssues", "missingMaterials"]);
 
     const starterCategories = [
       { id: "welding", label: "용접/절단 작업", icon: "welding", color: "#b8323b", toolNature: "선행/후행", order: 1 },

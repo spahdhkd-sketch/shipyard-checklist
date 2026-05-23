@@ -60,7 +60,7 @@ assert.match(app, /function pendingPhotoDataUrlForStorage\(value\)/);
 assert.match(app, /function compactStoragePayloadsIfNeeded\(\)/);
 assert.match(app, /dataUrl: pendingPhotoDataUrlForStorage\(row\.dataUrl\)/);
 assert.match(app, /file\.size <= PENDING_PHOTO_RETRY_MAX_BYTES/);
-assert.match(app, /const REMOTE_AUTHORITATIVE_KEYS = new Set\(\["categories", "sections", "items", "tools", "workers"\]\)/);
+assert.match(app, /const REMOTE_AUTHORITATIVE_KEYS = new Set\(\["categories", "sections", "items", "tools", "workers", "ships", "inspections", "unsafeIssues", "missingMaterials"\]\)/);
 assert.match(app, /function pendingSyncRowsForKey\(key\)/);
 assert.match(app, /function authoritativeRemoteRows\(key, remoteRows\)/);
 assert.match(app, /function applyRemoteTableRows\(key, rows\)/);
@@ -329,7 +329,7 @@ assert.match(css, /\.monthly-worker-cell\.rest/);
 assert.match(css, /\.monthly-worker-cell\.excluded/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v5-20260522-nav-font-14"/);
+assert.match(sw, /const CACHE = "gs-safety-v6-20260524"/);
 assert.match(sw, /styles-v2\.css\?v=20260522-nav-font-14/);
 assert.match(sw, /app-v2\.js\?v=20260522-nav-font-14/);
 assert.match(sw, /if \(\s*\/\\\.\(css\|js\)\$\/\.test\(requestUrl\.pathname\)\s*\)/);
