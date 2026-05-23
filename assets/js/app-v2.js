@@ -5,6 +5,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
+    const UNSAFE_PUSH_TARGET_WORKER_NAMES = ["허지원", "김준혁", "김경제"];
+    const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date.parse("2026-05-26T11:59:00+09:00");
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
@@ -1192,6 +1194,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return mobileUa || coarsePointer ? "휴대폰" : "PC";
     }
 
+    function pushTestNotificationEnabled() {
+      return serverNow().getTime() < PUSH_TEST_NOTIFICATION_DISABLE_AT;
+    }
+
     function base64UrlToUint8Array(value) {
       const padding = "=".repeat((4 - value.length % 4) % 4);
       const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
@@ -1452,6 +1458,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function testCurrentWorkerPushNotification() {
+      if (!pushTestNotificationEnabled()) return toast("테스트 알림은 비활성화되었습니다.");
       const worker = currentWorkerSessionWorker();
       if (!worker?.id) return toast("작업자 로그인 후 테스트 알림을 보낼 수 있습니다.");
       const result = await sendWorkerPushNotification([worker.id], {
@@ -1472,18 +1479,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toast("등록된 알림 구독이 없습니다.");
     }
 
-    function unsafePushTargetWorkerIds() {
+    function workerIdsForNames(names) {
+      const targets = new Set((Array.isArray(names) ? names : []).map(normalizedWorkerName).filter(Boolean));
       return state.workers
-        .filter((worker) => {
-          const team = String(worker.team || "").trim();
-          return team.includes("관리") || team.includes("총무") || team.includes("안전");
-        })
+        .filter((worker) => targets.has(normalizedWorkerName(worker.name)))
         .map((worker) => worker.id)
         .filter(Boolean);
     }
 
+    function unsafePushTargetWorkerIds() {
+      return workerIdsForNames(UNSAFE_PUSH_TARGET_WORKER_NAMES);
+    }
+
+    function pledgeRowStatus(row) {
+      return row?.status || (row?.done ? "완료" : "미완료");
+    }
+
+    function pledgePendingRows() {
+      return pledgeDashboardRows().filter((row) => pledgeRowStatus(row) === "미완료");
+    }
+
     async function notifyPledgePendingWorkers() {
-      const pendingRows = pledgeDashboardRows().filter((row) => !row.done);
+      const pendingRows = pledgePendingRows();
       if (!pendingRows.length) {
         toast("서약 미완료자가 없습니다.");
         return;
@@ -2432,8 +2449,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         $("desktopPushTestButton"),
         $("mobilePushTestButton"),
       ].filter(Boolean).forEach((button) => {
+        const testEnabled = pushTestNotificationEnabled();
         button.hidden = !loggedIn || !registered;
-        button.disabled = checking || registering;
+        button.disabled = checking || registering || !testEnabled;
+        button.title = testEnabled ? "현재 작업자에게 테스트 브라우저 알림을 보냅니다" : "테스트 알림은 2026.05.26 11:59 이후 비활성화되었습니다";
       });
       [
         $("desktopPushEmployeeNoForm"),
@@ -5310,13 +5329,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       const workerRows = visiblePledgeAnalyticsWorkers().map((worker) => {
         const row = byWorker.get(worker.name);
+        const done = Boolean(row && String(row.safetyPledge || "").trim());
         return {
           workerId: worker.id,
           name: worker.name,
           team: worker.team || "-",
           shipNo: row ? row.shipNo || "-" : "-",
           time: row ? row.time || "-" : "-",
-          done: Boolean(row && String(row.safetyPledge || "").trim()),
+          done,
+          status: done ? "완료" : "미완료",
           pledge: row ? row.safetyPledge || "" : "",
         };
       });
@@ -5348,7 +5369,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderPledgeManager() {
       const rows = pledgeDashboardRows();
-      const completed = rows.filter((row) => row.done).length;
+      const completed = rows.filter((row) => pledgeRowStatus(row) === "완료").length;
       const pending = Math.max(rows.length - completed, 0);
       const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
       const week = pledgeWeekStats();
@@ -5385,7 +5406,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
                 <span>${esc(row.team)}</span>
                 <span><strong>${esc(row.shipNo)}</strong></span>
                 <span>${esc(row.time)}</span>
-                <span>${statusChip(row.done ? "완료" : "미완료")}</span>
+                <span>${statusChip(pledgeRowStatus(row))}</span>
               </div>`).join("") : `<div class="empty">오늘 표시할 작업자 정보가 없습니다.</div>`}
             </div>
           </section>
