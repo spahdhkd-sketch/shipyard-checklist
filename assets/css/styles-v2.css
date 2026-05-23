@@ -8625,8 +8625,8 @@
       transform: translateY(4px);
     }
 
-    body.screen-mobile .ops-status-grid .stat-pill[data-history-scope="delivery"] .stat-foot,
-    body.preview-mobile .ops-status-grid .stat-pill[data-history-scope="delivery"] .stat-foot {
+    body.screen-mobile .ops-status-grid .stat-pill[data-stat-scope="delivery"] .stat-foot,
+    body.preview-mobile .ops-status-grid .stat-pill[data-stat-scope="delivery"] .stat-foot {
       font-size: 75%;
       line-height: 1;
     }

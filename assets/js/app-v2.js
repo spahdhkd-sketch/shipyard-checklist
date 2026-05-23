@@ -2219,6 +2219,8 @@
         ? `data-stat-scope="unsafe" data-action="view-unsafe-list"`
         : scope === "materials"
           ? `data-stat-scope="materials" data-action="view-material-list"`
+        : scope === "delivery"
+          ? `data-stat-scope="delivery" data-view="ships"`
         : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
       const alertClass = scope === "unsafe" && Number(value) > 0 ? " is-alert" : "";
       const focusClass = ["today", "unsafe"].includes(scope) ? " is-focus" : "";
