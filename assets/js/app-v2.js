@@ -7,6 +7,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
     const UNSAFE_PUSH_TARGET_WORKER_NAMES = ["허지원", "김준혁", "김경제"];
     const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date.parse("2026-05-26T11:59:00+09:00");
+    const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = {
+      pledgePending: {
+        title: "안전 서약 미완료",
+        body: "오늘 작업 전 안전 서약을 완료해주세요.",
+      },
+      unsafeIssue: {
+        title: "불안전요소 등록",
+        body: "{호선} · {등록자} · {내용}",
+      },
+    };
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
@@ -1491,6 +1501,74 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return workerIdsForNames(UNSAFE_PUSH_TARGET_WORKER_NAMES);
     }
 
+    function normalizePushTemplateKind(kind) {
+      return Object.prototype.hasOwnProperty.call(DEFAULT_PUSH_NOTIFICATION_TEMPLATES, kind) ? kind : "";
+    }
+
+    function normalizePushTemplate(template, fallback) {
+      const source = template && typeof template === "object" ? template : {};
+      const title = String(source.title || "").trim() || fallback.title;
+      const body = String(source.body || "").trim() || fallback.body;
+      return { title, body };
+    }
+
+    function pushNotificationTemplates() {
+      const saved = loadJson("pushNotificationTemplates", {});
+      return Object.keys(DEFAULT_PUSH_NOTIFICATION_TEMPLATES).reduce((templates, kind) => {
+        templates[kind] = normalizePushTemplate(saved?.[kind], DEFAULT_PUSH_NOTIFICATION_TEMPLATES[kind]);
+        return templates;
+      }, {});
+    }
+
+    function pushNotificationTemplate(kind) {
+      const templateKind = normalizePushTemplateKind(kind);
+      if (!templateKind) return { title: "", body: "" };
+      return pushNotificationTemplates()[templateKind];
+    }
+
+    function savePushNotificationTemplate(kind, template) {
+      const templateKind = normalizePushTemplateKind(kind);
+      if (!templateKind) return false;
+      const templates = pushNotificationTemplates();
+      templates[templateKind] = normalizePushTemplate(template, DEFAULT_PUSH_NOTIFICATION_TEMPLATES[templateKind]);
+      return saveJson("pushNotificationTemplates", templates);
+    }
+
+    function replacePushTemplateTokens(text, context = {}) {
+      return String(text || "").replace(/\{([^{}]+)\}/g, (match, key) => {
+        const value = context[String(key || "").trim()];
+        return value === undefined || value === null || value === "" ? match : String(value);
+      });
+    }
+
+    function pushNotificationFromTemplate(kind, context = {}) {
+      const templateKind = normalizePushTemplateKind(kind);
+      const fallback = DEFAULT_PUSH_NOTIFICATION_TEMPLATES[templateKind] || { title: "", body: "" };
+      const template = pushNotificationTemplate(templateKind);
+      return {
+        title: replacePushTemplateTokens(template.title, context).trim() || fallback.title,
+        body: replacePushTemplateTokens(template.body, context).trim() || fallback.body,
+      };
+    }
+
+    function pushTemplateMeta(kind) {
+      const meta = {
+        pledgePending: {
+          heading: "미완료자 알림 푸시 문구",
+          description: "오늘 서약 현황에서 상태가 미완료인 작업자에게 발송됩니다.",
+          tokens: ["{날짜}", "{인원}"],
+          previewContext: { 날짜: today().replace(/-/g, "."), 인원: pledgePendingRows().length || 1 },
+        },
+        unsafeIssue: {
+          heading: "불안전요소 푸시 문구",
+          description: "불안전요소가 등록되면 허지원, 김준혁, 김경제 작업자에게 발송됩니다.",
+          tokens: ["{호선}", "{등록자}", "{내용}"],
+          previewContext: { 호선: "호선 101", 등록자: "김준혁", 내용: "가스 호스 정리 필요" },
+        },
+      };
+      return meta[normalizePushTemplateKind(kind)] || null;
+    }
+
     function pledgeRowStatus(row) {
       return row?.status || (row?.done ? "완료" : "미완료");
     }
@@ -1507,9 +1585,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       const names = pendingRows.map((row) => row.name).filter(Boolean);
       const workerIds = pendingRows.map((row) => row.workerId).filter(Boolean);
+      const notification = pushNotificationFromTemplate("pledgePending", {
+        날짜: today().replace(/-/g, "."),
+        인원: pendingRows.length,
+      });
       const result = await sendWorkerPushNotification(workerIds, {
-        title: "안전 서약 미완료",
-        body: "오늘 작업 전 안전 서약을 완료해주세요.",
+        ...notification,
         tag: `pledge-pending-${today()}`,
         url: "/pledge.html",
       });
@@ -1520,14 +1601,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function notifyUnsafeIssueRegistered(row) {
       if (!row) return;
-      const body = [
-        row.shipNo ? `호선 ${row.shipNo}` : "호선 미지정",
-        row.workerNameSnapshot || "작업자",
-        shortUnsafeTitle(row.content || "불안전요소"),
-      ].filter(Boolean).join(" · ");
+      const notification = pushNotificationFromTemplate("unsafeIssue", {
+        호선: row.shipNo ? `호선 ${row.shipNo}` : "호선 미지정",
+        등록자: row.workerNameSnapshot || "작업자",
+        내용: shortUnsafeTitle(row.content || "불안전요소"),
+      });
       await sendWorkerPushNotification(unsafePushTargetWorkerIds(), {
-        title: "불안전요소 등록",
-        body,
+        ...notification,
         tag: `unsafe-${row.id || Date.now()}`,
         url: "/unsafe.html",
       }, { silent: true });
@@ -1660,6 +1740,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       lastInspectionId: "",
       inspectionSubmitting: false,
       unsafeSubmitting: false,
+      pushTemplateEditorKind: "",
       pledgeTemplateEditing: false,
     };
     let cachedSupabaseClient = null;
@@ -2220,6 +2301,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         pledgeComplete: renderPledgeComplete,
       }[state.view]();
       page.insertAdjacentHTML("beforeend", renderPhotoViewer());
+      page.insertAdjacentHTML("beforeend", renderPushTemplateEditor());
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
@@ -5060,6 +5142,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div class="admin-board-actions">
             <button class="btn-light" data-export-records="unsafe" type="button">내보내기</button>
             <button class="btn-danger" data-action="reset-unsafe-records" ${state.adminMode ? "" : "disabled"} type="button">이력 초기화</button>
+            <button class="btn-light" data-action="edit-push-template" data-push-template-kind="unsafeIssue" type="button">푸시 문구 수정</button>
             <button class="btn" data-view="unsafe" type="button">+ 신규</button>
           </div>
         </div>
@@ -5160,6 +5243,43 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <img src="${esc(viewer.src)}" alt="${esc(label)} 원본" />
           <figcaption>${esc(label)}</figcaption>
         </figure>
+      </div>`;
+    }
+
+    function renderPushTemplateEditor() {
+      const kind = normalizePushTemplateKind(state.pushTemplateEditorKind);
+      if (!kind) return "";
+      const meta = pushTemplateMeta(kind);
+      const template = pushNotificationTemplate(kind);
+      const preview = pushNotificationFromTemplate(kind, meta?.previewContext || {});
+      return `<div class="push-template-overlay" role="dialog" aria-modal="true" aria-labelledby="pushTemplateTitleText">
+        <button class="push-template-backdrop" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기"></button>
+        <section class="push-template-panel">
+          <div class="push-template-head">
+            <div>
+              <strong id="pushTemplateTitleText">${esc(meta?.heading || "푸시 문구 수정")}</strong>
+              <span>${esc(meta?.description || "브라우저 푸시 알림에 표시될 문구입니다.")}</span>
+            </div>
+            <button class="push-template-close" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기">닫기</button>
+          </div>
+          <div class="push-template-form">
+            <label for="pushTemplateTitleInput">제목</label>
+            <input id="pushTemplateTitleInput" class="input" value="${esc(template.title)}" autocomplete="off" />
+            <label for="pushTemplateBodyInput">내용</label>
+            <textarea id="pushTemplateBodyInput" class="textarea">${esc(template.body)}</textarea>
+            <p>사용 가능 변수: ${esc((meta?.tokens || []).join(" "))}</p>
+          </div>
+          <div class="push-template-preview">
+            <span>미리보기</span>
+            <strong>${esc(preview.title)}</strong>
+            <p>${esc(preview.body)}</p>
+          </div>
+          <div class="push-template-actions">
+            <button class="btn-light" data-action="reset-push-template" type="button">기본값</button>
+            <button class="btn-light" data-action="cancel-push-template" type="button">취소</button>
+            <button class="btn" data-action="save-push-template" type="button">저장</button>
+          </div>
+        </section>
       </div>`;
     }
 
@@ -5397,7 +5517,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <section class="pledge-table-card">
             <div class="material-table-head">
               <div><strong>오늘 서약 현황</strong><span>${today().replace(/-/g, ".")} · ${rows.length}명</span></div>
-              <button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>
+              <div class="material-table-actions pledge-notify-actions">
+                <button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>
+                <button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>
+              </div>
             </div>
             <div class="pledge-table">
               <div class="pledge-row pledge-row-head"><span>작업자</span><span>팀</span><span>호선</span><span>서약 시각</span><span>상태</span></div>
@@ -7044,6 +7167,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
         "notify-pledge-pending": notifyPledgePendingWorkers,
+        "edit-push-template": openPushTemplateEditor,
+        "save-push-template": savePushTemplateEditor,
+        "cancel-push-template": closePushTemplateEditor,
+        "reset-push-template": resetPushTemplateEditor,
         "register-push-notifications": registerWorkerPushNotifications,
         "test-push-notification": testCurrentWorkerPushNotification,
         "open-work-prep-register": openWorkPrepRegister,
@@ -7545,6 +7672,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.pushTemplateEditorKind) {
+        event.preventDefault();
+        closePushTemplateEditor();
+        return;
+      }
       if (event.key === "Escape" && state.photoViewer) {
         event.preventDefault();
         closePhotoViewer();
@@ -7626,6 +7758,43 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function closePhotoViewer() {
       state.photoViewer = null;
       renderPreservingScroll();
+    }
+
+    function openPushTemplateEditor(event) {
+      if (!requireAdminWrite()) return;
+      const button = event?.target?.closest("[data-push-template-kind]");
+      const kind = normalizePushTemplateKind(button?.dataset?.pushTemplateKind || "");
+      if (!kind) return toast("푸시 문구 종류를 확인할 수 없습니다.");
+      state.pushTemplateEditorKind = kind;
+      renderPreservingScroll();
+      requestAnimationFrame(() => $("pushTemplateTitleInput")?.focus());
+    }
+
+    function closePushTemplateEditor() {
+      state.pushTemplateEditorKind = "";
+      renderPreservingScroll();
+    }
+
+    function savePushTemplateEditor() {
+      if (!requireAdminWrite()) return;
+      const kind = normalizePushTemplateKind(state.pushTemplateEditorKind);
+      if (!kind) return toast("푸시 문구 종류를 확인할 수 없습니다.");
+      const title = $("pushTemplateTitleInput")?.value?.trim() || "";
+      const body = $("pushTemplateBodyInput")?.value?.trim() || "";
+      if (!title || !body) return toast("제목과 내용을 입력하세요.");
+      savePushNotificationTemplate(kind, { title, body });
+      state.pushTemplateEditorKind = "";
+      renderPreservingScroll();
+      toast("푸시 문구를 저장했습니다.");
+    }
+
+    function resetPushTemplateEditor() {
+      if (!requireAdminWrite()) return;
+      const kind = normalizePushTemplateKind(state.pushTemplateEditorKind);
+      if (!kind) return toast("푸시 문구 종류를 확인할 수 없습니다.");
+      savePushNotificationTemplate(kind, DEFAULT_PUSH_NOTIFICATION_TEMPLATES[kind]);
+      renderPreservingScroll();
+      toast("기본 푸시 문구로 되돌렸습니다.");
     }
 
     function openMaterialDetail(id) {

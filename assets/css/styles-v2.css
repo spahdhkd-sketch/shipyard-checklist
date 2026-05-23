@@ -4049,6 +4049,10 @@
       flex-wrap: wrap;
     }
 
+    .pledge-notify-actions {
+      min-width: 0;
+    }
+
     .material-table,
     .pledge-table,
     .analytics-table {
@@ -4422,6 +4426,142 @@
       color: #fff;
       background: rgba(15, 23, 42, .78);
       font-weight: 900;
+    }
+
+    .push-template-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1010;
+      display: grid;
+      place-items: center;
+      padding: max(18px, var(--safe-area-top)) 12px max(22px, var(--safe-area-bottom));
+      background: rgba(5, 13, 28, .34);
+    }
+
+    .push-template-backdrop {
+      position: absolute;
+      inset: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .push-template-panel {
+      position: relative;
+      z-index: 1;
+      width: min(560px, calc(100vw - 24px));
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border: 1px solid #d7e1ec;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, .22);
+    }
+
+    .push-template-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px;
+      border-bottom: 1px solid #dbe4ee;
+    }
+
+    .push-template-head strong {
+      display: block;
+      color: #07162f;
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .push-template-head span {
+      display: block;
+      margin-top: 6px;
+      color: #607084;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .push-template-close {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid #cbd6e4;
+      border-radius: 6px;
+      color: #07162f;
+      background: #f8fafc;
+      font-weight: 900;
+    }
+
+    .push-template-form {
+      display: grid;
+      gap: 8px;
+      padding: 16px 18px 10px;
+    }
+
+    .push-template-form label {
+      color: #07162f;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .push-template-form .input,
+    .push-template-form .textarea {
+      width: 100%;
+      color: #07162f;
+      background: #fff;
+      border-color: #cbd6e4;
+      font-weight: 800;
+    }
+
+    .push-template-form .textarea {
+      min-height: 118px;
+      line-height: 1.55;
+    }
+
+    .push-template-form p {
+      margin: 2px 0 0;
+      color: #607084;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .push-template-preview {
+      margin: 4px 18px 18px;
+      padding: 12px;
+      border: 1px solid #d7e1ec;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .push-template-preview span {
+      display: block;
+      color: #607084;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .push-template-preview strong {
+      display: block;
+      margin-top: 6px;
+      color: #07162f;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .push-template-preview p {
+      margin: 4px 0 0;
+      color: #34465d;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .push-template-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 14px 18px 18px;
+      border-top: 1px solid #dbe4ee;
     }
 
     .analytics-row[data-analytics-record-id] {
