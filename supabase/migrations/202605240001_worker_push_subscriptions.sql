@@ -37,3 +37,21 @@ $$;
 
 revoke all on function public.get_worker_push_secret(text) from public, anon, authenticated;
 grant execute on function public.get_worker_push_secret(text) to service_role;
+
+create or replace function public.worker_push_subscription_status(p_worker_id text)
+returns table(worker_id text, registered boolean, subscription_count integer)
+language sql
+security definer
+set search_path = 'public'
+as $$
+  select
+    p_worker_id as worker_id,
+    count(*) > 0 as registered,
+    count(*)::integer as subscription_count
+  from public.worker_push_subscriptions
+  where worker_id = p_worker_id
+    and enabled is true;
+$$;
+
+revoke all on function public.worker_push_subscription_status(text) from public;
+grant execute on function public.worker_push_subscription_status(text) to anon, authenticated, service_role;

@@ -143,8 +143,12 @@ assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
 assert.match(app, /const PUSH_VAPID_PUBLIC_KEY = "/);
 assert.match(app, /function pushNotificationsSupported\(\)/);
 assert.match(app, /async function registerWorkerPushNotifications\(\)/);
+assert.match(app, /async function fetchWorkerPushSubscriptionStatus\(workerId\)/);
+assert.match(app, /async function refreshWorkerPushSubscriptionStatus\(options = \{\}\)/);
 assert.match(app, /async function sendWorkerPushNotification\(workerIds, notification, options = \{\}\)/);
 assert.match(app, /function unsafePushTargetWorkerIds\(\)/);
+assert.match(app, /pushSubscriptionStatus: loadJson\("pushSubscriptionStatus", \{\}\)/);
+assert.match(app, /worker_push_subscription_status/);
 assert.match(app, /data-action="notify-pledge-pending"/);
 assert.match(app, /data-action="register-push-notifications"/);
 assert.match(app, /"notify-pledge-pending": notifyPledgePendingWorkers/);
@@ -365,6 +369,7 @@ const pushMigration = read("supabase/migrations/202605240001_worker_push_subscri
 assert.match(pushMigration, /create table if not exists public\.worker_push_subscriptions/);
 assert.match(pushMigration, /alter table public\.worker_push_subscriptions enable row level security/);
 assert.match(pushMigration, /create index if not exists worker_push_subscriptions_worker_idx/);
+assert.match(pushMigration, /create or replace function public\.worker_push_subscription_status/);
 
 const pushFunction = read("supabase/functions/worker-push/index.ts");
 assert.match(pushFunction, /import webpush from "npm:web-push@3\.6\.7"/);
