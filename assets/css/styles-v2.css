@@ -463,6 +463,22 @@
       font-weight: 900;
     }
 
+    .sidebar-push-btn {
+      width: 100%;
+      min-height: 30px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 6px;
+      background: rgba(20,184,166,.18);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .sidebar-push-btn:disabled {
+      opacity: .55;
+    }
+
     .sync-dot {
       width: 8px;
       height: 8px;
@@ -8312,7 +8328,8 @@
       white-space: nowrap;
     }
 
-    .mobile-logout-btn {
+    .mobile-logout-btn,
+    .mobile-push-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -8328,7 +8345,16 @@
       box-shadow: 0 10px 24px rgba(0, 0, 0, .12);
     }
 
-    .mobile-logout-btn[hidden] {
+    .mobile-push-btn {
+      background: rgba(20,184,166,.22);
+    }
+
+    .mobile-push-btn:disabled {
+      opacity: .55;
+    }
+
+    .mobile-logout-btn[hidden],
+    .mobile-push-btn[hidden] {
       display: none;
     }
 

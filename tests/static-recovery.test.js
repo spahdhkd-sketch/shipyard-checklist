@@ -13,6 +13,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/js/app-v2.js",
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
+  "supabase/migrations/202605240001_worker_push_subscriptions.sql",
+  "supabase/functions/worker-push/index.ts",
+  "supabase/functions/worker-push/deno.json",
 ].forEach((file) => {
   assert.ok(fs.existsSync(path.join(root, file)), `${file} should exist`);
 });
@@ -137,8 +140,15 @@ assert.match(app, /async function ensureBrowserNotificationPermission\(\)/);
 assert.match(app, /function showBrowserNotification\(title, options = \{\}\)/);
 assert.match(app, /async function notifyPledgePendingWorkers\(\)/);
 assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
+assert.match(app, /const PUSH_VAPID_PUBLIC_KEY = "/);
+assert.match(app, /function pushNotificationsSupported\(\)/);
+assert.match(app, /async function registerWorkerPushNotifications\(\)/);
+assert.match(app, /async function sendWorkerPushNotification\(workerIds, notification, options = \{\}\)/);
+assert.match(app, /function unsafePushTargetWorkerIds\(\)/);
 assert.match(app, /data-action="notify-pledge-pending"/);
+assert.match(app, /data-action="register-push-notifications"/);
 assert.match(app, /"notify-pledge-pending": notifyPledgePendingWorkers/);
+assert.match(app, /"register-push-notifications": registerWorkerPushNotifications/);
 assert.match(app, /notifyUnsafeIssueRegistered\(row\);/);
 assert.match(app, /workerFallbackOpen: false/);
 assert.match(app, /function workerMatchesCategoryNature\(worker, categoryNature\)/);
@@ -345,8 +355,23 @@ const sw = read("sw.js");
 assert.match(sw, /const CACHE = "gs-safety-v6-20260524"/);
 assert.match(sw, /styles-v2\.css\?v=20260522-nav-font-14/);
 assert.match(sw, /app-v2\.js\?v=20260522-nav-font-14/);
+assert.match(sw, /self\.addEventListener\("push"/);
+assert.match(sw, /self\.registration\.showNotification/);
+assert.match(sw, /self\.addEventListener\("notificationclick"/);
 assert.match(sw, /if \(\s*\/\\\.\(css\|js\)\$\/\.test\(requestUrl\.pathname\)\s*\)/);
 assert.match(sw, /fetch\(event\.request\)[\s\S]+cache\.put\(event\.request, copy\)/);
+
+const pushMigration = read("supabase/migrations/202605240001_worker_push_subscriptions.sql");
+assert.match(pushMigration, /create table if not exists public\.worker_push_subscriptions/);
+assert.match(pushMigration, /alter table public\.worker_push_subscriptions enable row level security/);
+assert.match(pushMigration, /create index if not exists worker_push_subscriptions_worker_idx/);
+
+const pushFunction = read("supabase/functions/worker-push/index.ts");
+assert.match(pushFunction, /import webpush from "npm:web-push@3\.6\.7"/);
+assert.match(pushFunction, /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/);
+assert.match(pushFunction, /action === "register"/);
+assert.match(pushFunction, /action === "send"/);
+assert.match(pushFunction, /sendNotification/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);

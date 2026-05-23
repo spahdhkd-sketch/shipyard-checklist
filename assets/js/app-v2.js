@@ -4,6 +4,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const APP_VERSION = "0.4-20260523";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
+    const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
@@ -1142,6 +1143,43 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return typeof window !== "undefined" && "Notification" in window;
     }
 
+    function pushNotificationsSupported() {
+      return Boolean(
+        browserNotificationsAvailable() &&
+        "serviceWorker" in navigator &&
+        "PushManager" in window &&
+        window.isSecureContext
+      );
+    }
+
+    function pushSubscriptionState() {
+      return loadJson("pushSubscriptionState", {});
+    }
+
+    function savePushSubscriptionState(value) {
+      saveJson("pushSubscriptionState", value && typeof value === "object" ? value : {});
+    }
+
+    function pushRegisteredForCurrentWorker() {
+      const saved = pushSubscriptionState();
+      return Boolean(saved.workerId && saved.workerId === state.workerSession?.workerId && saved.permission === "granted");
+    }
+
+    function base64UrlToUint8Array(value) {
+      const padding = "=".repeat((4 - value.length % 4) % 4);
+      const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+      const raw = window.atob(base64);
+      return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
+    }
+
+    async function pushServiceWorkerRegistration() {
+      if (!("serviceWorker" in navigator)) return null;
+      if (!navigator.serviceWorker.controller) {
+        await navigator.serviceWorker.register("/sw.js");
+      }
+      return navigator.serviceWorker.ready;
+    }
+
     async function ensureBrowserNotificationPermission() {
       if (!browserNotificationsAvailable()) {
         toast("이 브라우저는 알림을 지원하지 않습니다.");
@@ -1180,30 +1218,117 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
+    async function registerWorkerPushNotifications() {
+      const worker = currentWorkerSessionWorker();
+      if (!worker?.id) return toast("작업자 로그인 후 휴대폰 알림을 등록하세요.");
+      if (!pushNotificationsSupported()) return toast("이 브라우저는 휴대폰 Push 알림을 지원하지 않습니다.");
+      const client = supabaseClient();
+      if (!client) return toast("서버 동기화 연결이 필요합니다.");
+
+      const employeeNo = normalizeEmployeeNo(window.prompt("휴대폰 알림 등록을 위해 사번을 다시 입력하세요.") || "");
+      if (!employeeNo) return toast("사번 입력이 취소되었습니다.");
+      if (!(await ensureBrowserNotificationPermission())) return;
+
+      try {
+        const registration = await pushServiceWorkerRegistration();
+        if (!registration) return toast("서비스워커를 준비하지 못했습니다.");
+        const subscription = await registration.pushManager.getSubscription()
+          || await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64UrlToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+          });
+        const { data, error } = await client.functions.invoke("worker-push", {
+          body: {
+            action: "register",
+            workerId: worker.id,
+            employeeNo,
+            subscription: subscription.toJSON(),
+            userAgent: navigator.userAgent,
+            deviceLabel: `${worker.name || currentWorkerSessionLabel()} 휴대폰`,
+          },
+        });
+        if (error || data?.error) throw new Error(error?.message || data.error);
+        savePushSubscriptionState({
+          workerId: worker.id,
+          endpoint: subscription.endpoint,
+          permission: Notification.permission,
+          registeredAt: serverNow().toISOString(),
+        });
+        updatePushRegistrationControls();
+        toast("이 휴대폰으로 브라우저 알림을 받을 수 있습니다.");
+      } catch (error) {
+        console.error(error);
+        toast("휴대폰 알림 등록에 실패했습니다.");
+      }
+    }
+
+    async function sendWorkerPushNotification(workerIds, notification, options = {}) {
+      const ids = [...new Set((Array.isArray(workerIds) ? workerIds : []).map((id) => String(id || "").trim()).filter(Boolean))];
+      if (!ids.length) return { ok: true, sent: 0, failed: 0, targetWorkers: 0 };
+      const client = supabaseClient();
+      if (!client) {
+        if (!options.silent) toast("서버 동기화 연결이 필요합니다.");
+        return null;
+      }
+      try {
+        const { data, error } = await client.functions.invoke("worker-push", {
+          body: {
+            action: "send",
+            workerIds: ids,
+            notification,
+          },
+        });
+        if (error || data?.error) throw new Error(error?.message || data.error);
+        return data;
+      } catch (error) {
+        console.error(error);
+        if (!options.silent) toast("휴대폰 알림 발송에 실패했습니다.");
+        return null;
+      }
+    }
+
+    function unsafePushTargetWorkerIds() {
+      return state.workers
+        .filter((worker) => {
+          const team = String(worker.team || "").trim();
+          return team.includes("관리") || team.includes("총무") || team.includes("안전");
+        })
+        .map((worker) => worker.id)
+        .filter(Boolean);
+    }
+
     async function notifyPledgePendingWorkers() {
       const pendingRows = pledgeDashboardRows().filter((row) => !row.done);
       if (!pendingRows.length) {
         toast("서약 미완료자가 없습니다.");
         return;
       }
-      if (!(await ensureBrowserNotificationPermission())) return;
       const names = pendingRows.map((row) => row.name).filter(Boolean);
-      const preview = names.slice(0, 5).join(", ");
-      const extra = names.length > 5 ? ` 외 ${names.length - 5}명` : "";
-      const body = `${pendingRows.length}명 미완료: ${preview}${extra}`;
-      if (showBrowserNotification("안전 서약 미완료자", { body, tag: `pledge-pending-${today()}`, renotify: true })) {
-        toast("미완료자 브라우저 알림을 보냈습니다.");
-      }
+      const workerIds = pendingRows.map((row) => row.workerId).filter(Boolean);
+      const result = await sendWorkerPushNotification(workerIds, {
+        title: "안전 서약 미완료",
+        body: "오늘 작업 전 안전 서약을 완료해주세요.",
+        tag: `pledge-pending-${today()}`,
+        url: "/pledge.html",
+      });
+      if (!result) return;
+      const targetText = result.sent ? `${result.sent}대 휴대폰` : `${names.length}명`;
+      toast(result.sent ? `미완료자 알림을 ${targetText}으로 보냈습니다.` : "등록된 휴대폰 알림 구독이 없습니다.");
     }
 
     async function notifyUnsafeIssueRegistered(row) {
-      if (!row || !(await ensureBrowserNotificationPermission())) return;
+      if (!row) return;
       const body = [
         row.shipNo ? `호선 ${row.shipNo}` : "호선 미지정",
         row.workerNameSnapshot || "작업자",
         shortUnsafeTitle(row.content || "불안전요소"),
       ].filter(Boolean).join(" · ");
-      showBrowserNotification("불안전요소 등록", { body, tag: `unsafe-${row.id || Date.now()}`, renotify: true });
+      await sendWorkerPushNotification(unsafePushTargetWorkerIds(), {
+        title: "불안전요소 등록",
+        body,
+        tag: `unsafe-${row.id || Date.now()}`,
+        url: "/unsafe.html",
+      }, { silent: true });
     }
 
     function createUnsafeDraft(overrides = {}) {
@@ -2064,10 +2189,36 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const greeting = $("desktopWorkerGreeting");
       if (logout) logout.hidden = !loggedIn;
       if (session) session.hidden = !loggedIn;
-      if (!loggedIn) return;
+      if (!loggedIn) {
+        updatePushRegistrationControls();
+        return;
+      }
+      if (session && !$("desktopPushButton")) {
+        session.insertAdjacentHTML("beforeend", `<button id="desktopPushButton" class="sidebar-push-btn" data-action="register-push-notifications" type="button">휴대폰 알림 등록</button>`);
+      }
       const label = currentWorkerSessionLabel();
       if (name) name.textContent = label;
       if (greeting) greeting.textContent = `${label}님 안전한 하루 되세요!`;
+      updatePushRegistrationControls();
+    }
+
+    function updatePushRegistrationControls() {
+      const loggedIn = isWorkerLoggedIn();
+      const mobileLogout = $("mobileLogoutButton");
+      if (mobileLogout && !$("mobilePushButton")) {
+        mobileLogout.insertAdjacentHTML("beforebegin", `<button id="mobilePushButton" class="mobile-push-btn" data-action="register-push-notifications" type="button">휴대폰 알림 등록</button>`);
+      }
+      const registered = pushRegisteredForCurrentWorker();
+      const supported = pushNotificationsSupported();
+      [
+        $("desktopPushButton"),
+        $("mobilePushButton"),
+      ].filter(Boolean).forEach((button) => {
+        button.hidden = !loggedIn;
+        button.disabled = loggedIn && !supported;
+        button.textContent = registered ? "알림 등록됨" : "휴대폰 알림 등록";
+        button.title = supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
+      });
     }
 
     function renderAppHeader() {
@@ -4935,6 +5086,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const workerRows = visiblePledgeAnalyticsWorkers().map((worker) => {
         const row = byWorker.get(worker.name);
         return {
+          workerId: worker.id,
           name: worker.name,
           team: worker.team || "-",
           shipNo: row ? row.shipNo || "-" : "-",
@@ -6646,6 +6798,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
         "notify-pledge-pending": notifyPledgePendingWorkers,
+        "register-push-notifications": registerWorkerPushNotifications,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,
