@@ -8609,7 +8609,7 @@
       margin-top: 0;
       font-size: 28px;
       line-height: 1;
-      transform: translateY(4px);
+      transform: translateY(10px);
     }
 
     body.screen-mobile .ops-status-grid .stat-foot,
@@ -8623,6 +8623,12 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       transform: translateY(4px);
+    }
+
+    body.screen-mobile .ops-status-grid .stat-pill[data-history-scope="delivery"] .stat-foot,
+    body.preview-mobile .ops-status-grid .stat-pill[data-history-scope="delivery"] .stat-foot {
+      font-size: 75%;
+      line-height: 1;
     }
 
     .stat-foot {

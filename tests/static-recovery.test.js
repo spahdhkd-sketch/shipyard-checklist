@@ -198,6 +198,7 @@ assert.match(app, /function openAnalyticsRecord\(kind, id\)/);
 assert.match(app, /data-stat-scope="unsafe" data-action="view-unsafe-list"/);
 assert.match(app, /unsafeCount \? "즉시 확인" : ""/);
 assert.doesNotMatch(app, /unsafeCount \? "즉시 확인" : "접수 없음"/);
+assert.match(app, /statPill\(".*?", deliverySoon, ".*?", "#f97316", "clock", deliverySoon \? ".*?" : "", "delivery"\)/);
 assert.match(app, /data-stat-scope="materials" data-action="view-material-list"/);
 assert.doesNotMatch(app, /data-stat-scope="unsafe" data-view="unsafe"/);
 assert.doesNotMatch(app, /data-stat-scope="materials" data-view="materials"/);
@@ -291,6 +292,8 @@ assert.match(css, /body\.screen-mobile \.ops-status-grid \.stat-pill[\s\S]*min-h
 assert.match(css, /"icon foot"/);
 assert.match(css, /body\.screen-mobile \.ops-status-grid \.stat-label[\s\S]*white-space: nowrap/);
 assert.match(css, /body\.screen-mobile \.ops-status-grid \.stat-label[\s\S]*transform: translateY\(4px\)/);
+assert.match(css, /body\.screen-mobile \.ops-status-grid \.stat-value[\s\S]*transform: translateY\(10px\)/);
+assert.match(css, /data-history-scope="delivery"\] \.stat-foot[\s\S]*font-size: 75%/);
 assert.match(css, /\.ops-status-grid \.stat-foot\.is-empty[\s\S]*visibility: hidden/);
 assert.match(css, /\.ops-status-grid \.stat-pill \.stat-icon,[\s\S]*width: 54px/);
 assert.match(css, /\.ops-status-grid \.stat-pill \.stat-icon svg,[\s\S]*width: 30px/);

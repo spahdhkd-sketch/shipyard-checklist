@@ -2149,7 +2149,7 @@
         ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", "", "today")}
         ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "", "unsafe")}
         ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", "", "materials")}
-        ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", "7일 이내", "delivery")}
+        ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", deliverySoon ? "7일 이내" : "", "delivery")}
       </section>
       <section class="ops-grid" aria-labelledby="dashboardProcessHeading">
         ${sectionHeading("dashboardProcessHeading", "공정 현황")}
