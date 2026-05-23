@@ -25,7 +25,10 @@
       <div class="brand">
         <div class="brand-title">(주)지에스<br />안전 체크리스트</div>
         <div class="brand-sub">조선소 현장 작업 전 위험 확인과 점검 이력을 관리합니다.</div>
-        <div id="syncBadge" class="sync-badge"><span class="sync-dot"></span><span id="syncText">로컬 저장</span></div>
+        <div class="sidebar-session-panel">
+          <div id="syncBadge" class="sync-badge"><span class="sync-status-copy"><span class="sync-dot"></span><span id="syncText">로컬 저장</span></span><button id="desktopLogoutButton" class="sidebar-logout-btn" data-action="worker-logout" type="button" hidden>로그아웃</button></div>
+          <div id="desktopWorkerSession" class="sidebar-worker-session" hidden><strong id="desktopWorkerName">작업자</strong><span id="desktopWorkerGreeting">작업자님 안전한 하루 되세요!</span></div>
+        </div>
       </div>
       <nav id="desktopNav" class="nav"></nav>
     </aside>
