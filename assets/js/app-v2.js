@@ -1,4 +1,4 @@
-﻿const STORAGE_PREFIX = "shipyardSafetyV1.";
+const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
     const RECORD_RESET_PASSWORD = "gsfire820062!";
     const APP_VERSION = "0.4-20260523";
@@ -8930,7 +8930,7 @@
       toast("섹션명을 수정했습니다.");
     }
 
-    function deleteSection(id) {
+    async function deleteSection(id) {
       if (!requireAdmin()) return;
       const section = state.sections.find((row) => row.id === id);
       if (!section) return;
@@ -8938,7 +8938,10 @@
       if (!confirm(`${section.title} 섹션과 항목 ${count}개를 삭제할까요?`)) return;
       state.sections = state.sections.filter((row) => row.id !== id);
       state.items = state.items.map((row) => row.sectionId === id ? { ...row, active: false } : row);
-      persistAndSync(["sections", "items"]);
+      persistAndSync("items");
+      if (isSyncConfigured()) {
+        await deleteRemoteRows("sections", [id]);
+      }
       render();
     }
 
