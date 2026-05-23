@@ -1278,8 +1278,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       if (!client) return toast("서버 동기화 연결이 필요합니다.");
 
-      const employeeNo = normalizeEmployeeNo(window.prompt("휴대폰 알림 등록을 위해 사번을 다시 입력하세요.") || "");
-      if (!employeeNo) return toast("사번 입력이 취소되었습니다.");
+      const employeeNo = normalizeEmployeeNo(state.workerSession?.employeeNo || "");
+      if (!employeeNo) return toast("휴대폰 알림 등록은 다시 로그인한 뒤 사용할 수 있습니다.");
       if (!(await ensureBrowserNotificationPermission())) return;
 
       try {
@@ -2273,14 +2273,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const registered = pushRegisteredForCurrentWorker();
       const supported = pushNotificationsSupported();
       const checking = Boolean(state.pushSubscriptionStatusChecking);
+      const needsFreshLogin = loggedIn && !normalizeEmployeeNo(state.workerSession?.employeeNo || "");
       [
         $("desktopPushButton"),
         $("mobilePushButton"),
       ].filter(Boolean).forEach((button) => {
         button.hidden = !loggedIn;
-        button.disabled = loggedIn && (registered || checking || !supported);
-        button.textContent = checking ? "알림 상태 확인 중" : registered ? "알림 등록됨" : "휴대폰 알림 등록";
-        button.title = supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
+        button.disabled = loggedIn && (registered || checking || !supported || needsFreshLogin);
+        button.textContent = checking ? "알림 상태 확인 중" : registered ? "알림 등록됨" : needsFreshLogin ? "다시 로그인 필요" : "휴대폰 알림 등록";
+        button.title = needsFreshLogin
+          ? "휴대폰 알림 등록은 로그아웃 후 다시 로그인하면 사용할 수 있습니다"
+          : supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
       });
     }
 
@@ -7885,6 +7888,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.workerSession = {
         workerId: worker.id,
         workerName: worker.name,
+        employeeNo,
         loggedInAt: serverNow().toISOString(),
       };
       state.loginWorkerPickerOpen = false;
