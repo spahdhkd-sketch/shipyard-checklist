@@ -1,4 +1,4 @@
-const CACHE = "gs-safety-v5-20260522-nav-font-14";
+const CACHE = "gs-safety-v6-20260524";
 const SHELL = [
   "/",
   "/index.html",
