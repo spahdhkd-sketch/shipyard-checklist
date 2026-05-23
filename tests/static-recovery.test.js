@@ -13,6 +13,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/js/app-v2.js",
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
+  "assets/icons/icon-512.png",
   "supabase/migrations/202605240001_worker_push_subscriptions.sql",
   "supabase/functions/worker-push/index.ts",
   "supabase/functions/worker-push/deno.json",
@@ -142,10 +143,18 @@ assert.match(app, /async function notifyPledgePendingWorkers\(\)/);
 assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
 assert.match(app, /const PUSH_VAPID_PUBLIC_KEY = "/);
 assert.match(app, /function pushNotificationsSupported\(\)/);
+assert.match(app, /function timeoutAfter\(ms\)/);
+assert.match(app, /function rejectAfter\(ms, message\)/);
+assert.match(app, /Promise\.race\(\[navigator\.serviceWorker\.ready, timeoutAfter\(5000\)\]\)/);
+assert.match(app, /async function createBrowserPushSubscription\(registration\)/);
+assert.match(app, /pushRegistrationSubmitting: false/);
 assert.match(app, /async function registerWorkerPushNotifications\(\)/);
 assert.doesNotMatch(app, /휴대폰 알림 등록을 위해 사번을 다시 입력하세요/);
 assert.match(app, /normalizeEmployeeNo\(state\.workerSession\?\.employeeNo \|\| ""\)/);
-assert.match(app, /needsFreshLogin \? "다시 로그인 필요"/);
+assert.match(app, /pushEmployeeNoPromptOpen: false/);
+assert.match(app, /data-push-employee-no-form/);
+assert.match(app, /needsEmployeeNo \? "사번 확인 후 등록"/);
+assert.match(app, /registering \? "알림 등록 중"/);
 assert.match(app, /async function fetchWorkerPushSubscriptionStatus\(workerId\)/);
 assert.match(app, /async function refreshWorkerPushSubscriptionStatus\(options = \{\}\)/);
 assert.match(app, /async function sendWorkerPushNotification\(workerIds, notification, options = \{\}\)/);
@@ -368,6 +377,13 @@ assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);
 assert.match(sw, /if \(\s*\/\\\.\(css\|js\)\$\/\.test\(requestUrl\.pathname\)\s*\)/);
 assert.match(sw, /fetch\(event\.request\)[\s\S]+cache\.put\(event\.request, copy\)/);
+const swShellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
+  .map((match) => match[1])
+  .filter((asset) => asset.startsWith("/assets/"))
+  .map((asset) => asset.split("?")[0].replace(/^\//, ""));
+swShellAssets.forEach((asset) => {
+  assert.ok(fs.existsSync(path.join(root, asset)), `service worker shell asset should exist: ${asset}`);
+});
 
 const pushMigration = read("supabase/migrations/202605240001_worker_push_subscriptions.sql");
 assert.match(pushMigration, /create table if not exists public\.worker_push_subscriptions/);
