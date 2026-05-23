@@ -355,6 +355,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           completion: row.completion || 0,
           tools: Array.isArray(row.tools) ? row.tools : [],
           safety_pledge: row.safetyPledge || "",
+          work_prep_record_id: row.workPrepRecordId || "",
+          work_prep_worker_id: row.workPrepWorkerId || "",
           created_at: row.createdAt || serverNow().toISOString(),
         }),
         fromDb: (row) => ({
@@ -369,6 +371,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           completion: row.completion || 0,
           tools: Array.isArray(row.tools) ? row.tools : [],
           safetyPledge: row.safety_pledge || "",
+          workPrepRecordId: row.work_prep_record_id || "",
+          workPrepWorkerId: row.work_prep_worker_id || "",
           createdAt: row.created_at,
         }),
       },
@@ -500,6 +504,40 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           storagePath: row.storage_path,
           sortOrder: row.sort_order || 0,
           createdAt: row.created_at,
+        }),
+      },
+      {
+        table: "work_prep_records",
+        key: "workPrepRecords",
+        toDb: (row) => ({
+          id: row.id,
+          work_date: row.workDate || "",
+          appearance_time: row.appearanceTime || "",
+          team: row.team || "",
+          ship_no: row.shipNo || "",
+          category_id: row.categoryId || "",
+          leader_worker_id: row.leaderWorkerId || "",
+          worker_ids: Array.isArray(row.workerIds) ? row.workerIds : [],
+          other_team_worker_ids: Array.isArray(row.otherTeamWorkerIds) ? row.otherTeamWorkerIds : [],
+          tool_ids: sanitizeToolIds(row.toolIds),
+          status: normalizeWorkPrepStatus(row.status || "preparing"),
+          created_at: row.createdAt || serverNow().toISOString(),
+          updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
+        }),
+        fromDb: (row) => ({
+          id: row.id,
+          workDate: row.work_date || "",
+          appearanceTime: row.appearance_time || "",
+          team: row.team || "",
+          shipNo: row.ship_no || "",
+          categoryId: row.category_id || "",
+          leaderWorkerId: row.leader_worker_id || "",
+          workerIds: Array.isArray(row.worker_ids) ? row.worker_ids : [],
+          otherTeamWorkerIds: Array.isArray(row.other_team_worker_ids) ? row.other_team_worker_ids : [],
+          toolIds: sanitizeToolIds(row.tool_ids),
+          status: normalizeWorkPrepStatus(row.status || "preparing"),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
         }),
       },
     ];
@@ -960,6 +998,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (index >= 0) state.workPrepRecords[index] = { ...state.workPrepRecords[index], ...record };
       else state.workPrepRecords = [record, ...state.workPrepRecords];
       saveWorkPrepRecords();
+      if (isSyncConfigured()) {
+        enqueueSyncRows("workPrepRecords", [record]);
+        flushPendingSyncQueue();
+      }
       return record;
     }
 
@@ -976,7 +1018,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         updated = { ...row, status: normalized, updatedAt: now };
         return updated;
       });
-      if (updated) saveWorkPrepRecords();
+      if (updated) {
+        saveWorkPrepRecords();
+        if (isSyncConfigured()) {
+          enqueueSyncRows("workPrepRecords", [updated]);
+          flushPendingSyncQueue();
+        }
+      }
       return updated;
     }
 
