@@ -52,6 +52,19 @@ assert.match(html, /id="homeVersionLabel"/);
   assert.doesNotMatch(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, `${file} should not use remote Supabase CDN`);
 });
 
+const notFound = read("404.html");
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260522-nav-font-14/);
+assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
+[
+  "assets/css/styles.css",
+  "assets/js/app.js",
+  "index.original.html",
+  "tools/security-regression.mjs",
+  "tools/split-static-html.ps1",
+].forEach((file) => {
+  assert.ok(!fs.existsSync(path.join(root, file)), `${file} should not remain after v2 cleanup`);
+});
+
 const app = read("assets/js/app-v2.js");
 const styles = read("assets/css/styles-v2.css");
 assert.match(app, /const APP_VERSION = "0\.4-20260523"/);
