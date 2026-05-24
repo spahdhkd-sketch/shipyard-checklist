@@ -1442,6 +1442,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </form>`;
     }
 
+    function pushSenderPayload() {
+      return {
+        senderWorkerId: state.workerSession?.workerId || "",
+        senderEmployeeNo: normalizeEmployeeNo(state.workerSession?.employeeNo || ""),
+      };
+    }
+
     async function sendWorkerPushNotification(workerIds, notification, options = {}) {
       const ids = [...new Set((Array.isArray(workerIds) ? workerIds : []).map((id) => String(id || "").trim()).filter(Boolean))];
       if (!ids.length) return { ok: true, sent: 0, failed: 0, targetWorkers: 0 };
@@ -1456,13 +1463,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             action: "send",
             workerIds: ids,
             notification,
+            sendKind: options.kind || "",
+            ...pushSenderPayload(),
           },
         });
         if (error || data?.error) throw new Error(error?.message || data.error);
         return data;
       } catch (error) {
         console.error(error);
-        if (!options.silent) toast("브라우저 알림 발송에 실패했습니다.");
+        if (!options.silent) {
+          if (/sender_|forbidden|403/i.test(String(error?.message || ""))) {
+            toast("알림 발송 권한 또는 작업자 로그인을 확인하세요.");
+          } else {
+            toast("브라우저 알림 발송에 실패했습니다.");
+          }
+        }
         return null;
       }
     }
@@ -1476,7 +1491,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         body: `${currentWorkerSessionLabel()}님 ${pushDeviceName()} 브라우저 알림 테스트입니다.`,
         tag: `push-test-${worker.id}-${Date.now()}`,
         url: `/${currentPageName() || "index.html"}`,
-      });
+      }, { kind: "test" });
       if (!result) return;
       if (result.sent) {
         toast(`테스트 알림을 ${result.sent}대 기기로 보냈습니다.`);
@@ -1577,7 +1592,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return pledgeDashboardRows().filter((row) => pledgeRowStatus(row) === "미완료");
     }
 
+    function canSendPledgeNotifications() {
+      const worker = currentWorkerSessionWorker();
+      const team = String(worker?.team || "").trim();
+      return Boolean(isLeaderWorker(worker) || team === "관리" || team === "총무");
+    }
+
     async function notifyPledgePendingWorkers() {
+      if (!canSendPledgeNotifications()) {
+        toast("조장 또는 관리 담당자만 미완료자 알림을 발송할 수 있습니다.");
+        return;
+      }
       const pendingRows = pledgePendingRows();
       if (!pendingRows.length) {
         toast("서약 미완료자가 없습니다.");
@@ -1593,7 +1618,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ...notification,
         tag: `pledge-pending-${today()}`,
         url: "/pledge.html",
-      });
+      }, { kind: "pledgePending" });
       if (!result) return;
       const targetText = result.sent ? `${result.sent}대 휴대폰` : `${names.length}명`;
       toast(result.sent ? `미완료자 알림을 ${targetText}으로 보냈습니다.` : "등록된 브라우저 알림 구독이 없습니다.");
@@ -1610,7 +1635,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ...notification,
         tag: `unsafe-${row.id || Date.now()}`,
         url: "/unsafe.html",
-      }, { silent: true });
+      }, { silent: true, kind: "unsafeIssue" });
     }
 
     function createUnsafeDraft(overrides = {}) {
@@ -5496,6 +5521,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const weekTotal = week.reduce((sum, row) => sum + row.done, 0);
       const rules = pledgeRules();
       const editing = Boolean(state.pledgeTemplateEditing);
+      const canNotifyPledge = canSendPledgeNotifications();
       return `<section class="admin-board pledge-board">
         <div class="admin-board-top">
           <div>
@@ -5517,10 +5543,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <section class="pledge-table-card">
             <div class="material-table-head">
               <div><strong>오늘 서약 현황</strong><span>${today().replace(/-/g, ".")} · ${rows.length}명</span></div>
-              <div class="material-table-actions pledge-notify-actions">
-                <button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>
-                <button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>
-              </div>
+              ${canNotifyPledge || state.adminMode ? `<div class="material-table-actions pledge-notify-actions">
+                ${state.adminMode ? `<button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>` : ""}
+                ${canNotifyPledge ? `<button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>` : ""}
+              </div>` : ""}
             </div>
             <div class="pledge-table">
               <div class="pledge-row pledge-row-head"><span>작업자</span><span>팀</span><span>호선</span><span>서약 시각</span><span>상태</span></div>

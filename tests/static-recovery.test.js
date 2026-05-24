@@ -23,11 +23,13 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const html = read("index.html");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css\?v=20260522-nav-font-14/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/js\/app-v2\.js\?v=20260522-nav-font-14/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260524-push-auth-1/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
+assert.match(html, /version 0\.4/);
+assert.doesNotMatch(html, /version 0\.3/);
 
 [
   "check.html",
@@ -42,19 +44,25 @@ assert.match(html, /id="homeVersionLabel"/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260522-nav-font-14/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js\?v=20260522-nav-font-14/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260524-push-auth-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
+  assert.match(page, /version 0\.4/, `${file} should use the current static fallback version label`);
   assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
   assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
-  assert.doesNotMatch(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js/, `${file} should not use remote Supabase CDN`);
+  assert.doesNotMatch(page, /version 0\.3/, `${file} should not use the stale static fallback version label`);
+  assert.doesNotMatch(page, /cdn\.jsdelivr\.net/, `${file} should not use remote CDN assets`);
+  assert.doesNotMatch(page, /psatbyktzladtymdygwh\.supabase\.co/, `${file} should not reference the old Supabase project`);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260522-nav-font-14/);
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
+const redesignPreview = read("redesign-v2.html");
+assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
+assert.doesNotMatch(redesignPreview, /cdn\.jsdelivr\.net/);
 [
   "assets/css/styles.css",
   "assets/js/app.js",
@@ -196,10 +204,15 @@ assert.match(app, /pushNotificationFromTemplate\("unsafeIssue", \{/);
 assert.match(app, /workerIdsForNames\(UNSAFE_PUSH_TARGET_WORKER_NAMES\)/);
 assert.match(app, /function pledgeRowStatus\(row\)/);
 assert.match(app, /function pledgePendingRows\(\)/);
+assert.match(app, /function canSendPledgeNotifications\(\)/);
+assert.match(app, /조장 또는 관리 담당자만 미완료자 알림을 발송할 수 있습니다/);
 assert.match(app, /pledgeDashboardRows\(\)\.filter\(\(row\) => pledgeRowStatus\(row\) === "미완료"\)/);
 assert.match(app, /status: done \? "완료" : "미완료"/);
 assert.match(app, /pushSubscriptionStatus: loadJson\("pushSubscriptionStatus", \{\}\)/);
 assert.match(app, /worker_push_subscription_status/);
+assert.match(app, /senderWorkerId/);
+assert.match(app, /senderEmployeeNo/);
+assert.match(app, /sendKind: options\.kind \|\| ""/);
 assert.match(app, /data-action="notify-pledge-pending"/);
 assert.match(app, /data-action="edit-push-template" data-push-template-kind="pledgePending"/);
 assert.match(app, /data-action="edit-push-template" data-push-template-kind="unsafeIssue"/);
@@ -419,9 +432,9 @@ assert.match(css, /\.monthly-worker-cell\.rest/);
 assert.match(css, /\.monthly-worker-cell\.excluded/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v6-20260524"/);
-assert.match(sw, /styles-v2\.css\?v=20260522-nav-font-14/);
-assert.match(sw, /app-v2\.js\?v=20260522-nav-font-14/);
+assert.match(sw, /const CACHE = "gs-safety-v7-20260524-push-auth"/);
+assert.match(sw, /styles-v2\.css\?v=20260524-push-auth-1/);
+assert.match(sw, /app-v2\.js\?v=20260524-push-auth-1/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);
@@ -447,6 +460,14 @@ assert.match(pushFunction, /Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/);
 assert.match(pushFunction, /action === "register"/);
 assert.match(pushFunction, /action === "send"/);
 assert.match(pushFunction, /sendNotification/);
+assert.match(pushFunction, /UNSAFE_PUSH_TARGET_WORKER_NAMES = \["허지원", "김준혁", "김경제"\]/);
+assert.match(pushFunction, /function canSendPledgeNotifications/);
+assert.match(pushFunction, /async function verifiedSender/);
+assert.match(pushFunction, /async function authorizeSendRequest/);
+assert.match(pushFunction, /senderWorkerId/);
+assert.match(pushFunction, /senderEmployeeNo/);
+assert.match(pushFunction, /sendKind/);
+assert.match(pushFunction, /forbidden_send_kind/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);
@@ -457,5 +478,8 @@ const headerSources = vercel.headers.map((row) => row.source);
 assert.ok(headerSources.includes("/sw.js"), "sw.js should have an explicit no-cache header");
 assert.ok(headerSources.includes("/index.html"), "index.html should have an explicit no-cache header");
 assert.ok(JSON.stringify(vercel.headers).includes("no-cache, no-store, must-revalidate"), "HTML and service worker should bypass stale HTTP caches");
+assert.ok(JSON.stringify(vercel.headers).includes("yuuroocvxvzgmsdeeiws.supabase.co"), "CSP should reference the active Supabase project");
+assert.ok(!JSON.stringify(vercel.headers).includes("psatbyktzladtymdygwh.supabase.co"), "CSP should not reference the old Supabase project");
+assert.ok(!JSON.stringify(vercel.headers).includes("cdn.jsdelivr.net"), "CSP should not allow the removed Supabase CDN host");
 
 console.log("static recovery tests passed");

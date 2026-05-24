@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-x0fQSh1LElpFmubyEqn3nDnMd21xMaP1ea8p+T7HiGE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; connect-src 'self' https://psatbyktzladtymdygwh.supabase.co https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-x0fQSh1LElpFmubyEqn3nDnMd21xMaP1ea8p+T7HiGE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://yuuroocvxvzgmsdeeiws.supabase.co; connect-src 'self' https://yuuroocvxvzgmsdeeiws.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'" />
   <meta name="theme-color" content="#07162f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="GS안전" />
@@ -11,7 +11,7 @@
   <title>조선소 안전 체크리스트</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
-  <link rel="stylesheet" href="assets/css/styles-v2.css?v=20260522-nav-font-14" />
+  <link rel="stylesheet" href="assets/css/styles-v2.css?v=20260524-push-auth-1" />
 </head>
 <body data-initial-view="unsafe">
   <div class="desktop-preview-toggle" aria-label="데스크탑 미리보기 전환">
@@ -36,7 +36,7 @@
     <header class="mobile-header">
       <div class="phone-status">
         <span id="phoneTime">--:--</span>
-        <span class="home-version-badge" id="homeVersionLabel">version 0.3</span>
+        <span class="home-version-badge" id="homeVersionLabel">version 0.4</span>
       </div>
       <div class="appbar">
         <div class="appbar-title" id="appbarTitle">홈</div>
@@ -65,9 +65,9 @@
   </div>
   <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
   <script src="assets/js/vendor/supabase-js-2.105.3.min.js" defer></script>
-  <script src="assets/js/checklist-rules.js?v=20260522-nav-font-14" defer></script>
-  <script src="assets/js/issue-material-rules.js?v=20260522-nav-font-14" defer></script>
-  <script src="assets/js/app-v2.js?v=20260522-nav-font-14" defer></script>
+  <script src="assets/js/checklist-rules.js?v=20260524-push-auth-1" defer></script>
+  <script src="assets/js/issue-material-rules.js?v=20260524-push-auth-1" defer></script>
+  <script src="assets/js/app-v2.js?v=20260524-push-auth-1" defer></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));

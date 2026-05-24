@@ -8,6 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const UNSAFE_PUSH_TARGET_WORKER_NAMES = ["허지원", "김준혁", "김경제"];
+const LEADER_WORKER_POSITION = "조장";
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") || "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
@@ -59,6 +62,20 @@ function jsonResponse(body: unknown, status = 200) {
 
 function cleanText(value: unknown, max = 180) {
   return String(value || "").trim().slice(0, max);
+}
+
+function normalizeEmployeeNo(value: unknown) {
+  return String(value || "").trim();
+}
+
+function normalizedWorkerName(value: unknown) {
+  return String(value || "").trim().replace(/\s+/g, "");
+}
+
+function canSendPledgeNotifications(worker: Record<string, unknown>) {
+  const team = cleanText(worker.team, 40);
+  const position = cleanText(worker.position, 40);
+  return position === LEADER_WORKER_POSITION || team === "관리" || team === "총무";
 }
 
 function validSubscription(value: unknown) {
@@ -125,13 +142,84 @@ async function markSubscriptionError(id: string, message: string, disabled = fal
     .eq("id", id);
 }
 
+async function verifiedSender(payload: Record<string, unknown>) {
+  const senderWorkerId = cleanText(payload.senderWorkerId, 80);
+  const senderEmployeeNo = normalizeEmployeeNo(payload.senderEmployeeNo);
+  if (!senderWorkerId || !senderEmployeeNo) {
+    return { error: jsonResponse({ error: "sender_required" }, 403) };
+  }
+
+  const { data: worker, error } = await supabase
+    .from("workers")
+    .select("id,name,team,position,active,employee_no")
+    .eq("id", senderWorkerId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) return { error: jsonResponse({ error: error.message }, 500) };
+  if (!worker || normalizeEmployeeNo(worker.employee_no) !== senderEmployeeNo) {
+    return { error: jsonResponse({ error: "sender_verification_failed" }, 403) };
+  }
+  return { worker: worker as Record<string, unknown> };
+}
+
+async function unsafeTargetWorkerIds() {
+  const targetNames = new Set(UNSAFE_PUSH_TARGET_WORKER_NAMES.map(normalizedWorkerName));
+  const { data, error } = await supabase
+    .from("workers")
+    .select("id,name,active")
+    .eq("active", true);
+
+  if (error) throw error;
+  return new Set((data || [])
+    .filter((worker) => targetNames.has(normalizedWorkerName(worker.name)))
+    .map((worker) => cleanText(worker.id, 80))
+    .filter(Boolean));
+}
+
+async function authorizeSendRequest(payload: Record<string, unknown>, workerIds: string[]) {
+  const sendKind = cleanText(payload.sendKind, 40);
+  const { worker, error } = await verifiedSender(payload);
+  if (error) return error;
+  if (!worker) return jsonResponse({ error: "sender_verification_failed" }, 403);
+
+  if (sendKind === "test") {
+    return workerIds.length === 1 && workerIds[0] === cleanText(worker.id, 80)
+      ? null
+      : jsonResponse({ error: "forbidden_target" }, 403);
+  }
+
+  if (sendKind === "unsafeIssue") {
+    try {
+      const allowedIds = await unsafeTargetWorkerIds();
+      return workerIds.every((id) => allowedIds.has(id))
+        ? null
+        : jsonResponse({ error: "forbidden_target" }, 403);
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  }
+
+  if (sendKind === "pledgePending") {
+    return canSendPledgeNotifications(worker)
+      ? null
+      : jsonResponse({ error: "forbidden_sender" }, 403);
+  }
+
+  return jsonResponse({ error: "forbidden_send_kind" }, 403);
+}
+
 async function sendNotification(payload: Record<string, unknown>) {
-  const config = await vapidConfig();
-  if (!config.publicKey || !config.privateKey) return jsonResponse({ error: "vapid_not_configured" }, 500);
   const workerIds = Array.isArray(payload.workerIds)
     ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
     : [];
   if (!workerIds.length) return jsonResponse({ ok: true, sent: 0, failed: 0, reason: "no_targets" });
+
+  const authorizationError = await authorizeSendRequest(payload, workerIds);
+  if (authorizationError) return authorizationError;
+
+  const config = await vapidConfig();
+  if (!config.publicKey || !config.privateKey) return jsonResponse({ error: "vapid_not_configured" }, 500);
 
   const notificationRaw = payload.notification && typeof payload.notification === "object"
     ? payload.notification as Record<string, unknown>

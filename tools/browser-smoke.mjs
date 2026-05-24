@@ -127,7 +127,7 @@ try {
       window.fetch = (...args) => {
         const input = args[0];
         const url = typeof input === 'string' ? input : (input?.url || String(input || ''));
-        if (url.includes('psatbyktzladtymdygwh.supabase.co')) {
+        if (url.includes('yuuroocvxvzgmsdeeiws.supabase.co')) {
           return Promise.reject(new Error('smoke-blocked-supabase'));
         }
         return originalFetch(...args);
@@ -139,7 +139,7 @@ try {
       };
       const originalXhrSend = XMLHttpRequest.prototype.send;
       XMLHttpRequest.prototype.send = function(...args) {
-        if (this.__smokeBlockedUrl?.includes('psatbyktzladtymdygwh.supabase.co')) {
+        if (this.__smokeBlockedUrl?.includes('yuuroocvxvzgmsdeeiws.supabase.co')) {
           setTimeout(() => this.dispatchEvent(new Event('error')), 0);
           return undefined;
         }

@@ -379,7 +379,7 @@ function assertCheck(name, condition) {
     await client.send("Runtime.enable");
     await client.send("Network.enable");
     await client.send("Network.setBlockedURLs", {
-      urls: ["https://cdn.jsdelivr.net/*", "https://psatbyktzladtymdygwh.supabase.co/*", "https://*.supabase.co/*"],
+      urls: ["https://cdn.jsdelivr.net/*", "https://yuuroocvxvzgmsdeeiws.supabase.co/*", "https://*.supabase.co/*"],
     });
     await setViewport(client, 1280, 900);
 
