@@ -64,6 +64,11 @@ assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 ].forEach((file) => {
   assert.ok(!fs.existsSync(path.join(root, file)), `${file} should not remain after v2 cleanup`);
 });
+const unusedIllustrationDir = path.join(root, "assets/icons/shipyard/illustrations");
+const unusedIllustrations = fs.existsSync(unusedIllustrationDir)
+  ? fs.readdirSync(unusedIllustrationDir).filter((file) => file.endsWith(".png"))
+  : [];
+assert.deepStrictEqual(unusedIllustrations, [], "unused shipyard illustration PNGs should not remain");
 
 const app = read("assets/js/app-v2.js");
 const styles = read("assets/css/styles-v2.css");
