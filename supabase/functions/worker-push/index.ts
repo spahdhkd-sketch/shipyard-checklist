@@ -209,6 +209,54 @@ async function authorizeSendRequest(payload: Record<string, unknown>, workerIds:
   return jsonResponse({ error: "forbidden_send_kind" }, 403);
 }
 
+async function authorizeStatusRequest(payload: Record<string, unknown>, workerIds: string[]) {
+  const { worker, error } = await verifiedSender(payload);
+  if (error) return { error };
+  if (!worker) return { error: jsonResponse({ error: "sender_verification_failed" }, 403) };
+
+  const senderWorkerId = cleanText(worker.id, 80);
+  if (workerIds.length === 1 && workerIds[0] === senderWorkerId) return { worker };
+  if (canSendPledgeNotifications(worker)) return { worker };
+  return { error: jsonResponse({ error: "forbidden_target" }, 403) };
+}
+
+async function subscriptionStatus(payload: Record<string, unknown>) {
+  const workerIds = Array.isArray(payload.workerIds)
+    ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
+    : [];
+  if (!workerIds.length) return jsonResponse({ ok: true, statuses: [], targetWorkers: 0 });
+
+  const authorization = await authorizeStatusRequest(payload, workerIds);
+  if (authorization.error) return authorization.error;
+
+  const { data, error } = await supabase
+    .from("worker_push_subscriptions")
+    .select("worker_id")
+    .in("worker_id", workerIds)
+    .eq("enabled", true);
+
+  if (error) return jsonResponse({ error: error.message }, 500);
+
+  const counts = new Map<string, number>();
+  for (const row of data || []) {
+    const workerId = cleanText(row.worker_id, 80);
+    counts.set(workerId, (counts.get(workerId) || 0) + 1);
+  }
+
+  return jsonResponse({
+    ok: true,
+    targetWorkers: workerIds.length,
+    statuses: workerIds.map((workerId) => {
+      const subscriptionCount = counts.get(workerId) || 0;
+      return {
+        workerId,
+        registered: subscriptionCount > 0,
+        subscriptionCount,
+      };
+    }),
+  });
+}
+
 async function sendNotification(payload: Record<string, unknown>) {
   const workerIds = Array.isArray(payload.workerIds)
     ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
@@ -279,6 +327,7 @@ Deno.serve(async (req) => {
 
   const action = cleanText(payload.action, 40);
   if (action === "register") return registerSubscription(payload);
+  if (action === "status") return subscriptionStatus(payload);
   if (action === "send") return sendNotification(payload);
   return jsonResponse({ error: "unknown_action" }, 400);
 });

@@ -1312,20 +1312,44 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
+    function normalizeWorkerPushSubscriptionStatus(workerId, row) {
+      const source = row && typeof row === "object" ? row : {};
+      return {
+        workerId: String(source.workerId || source.worker_id || workerId || "").trim(),
+        registered: Boolean(source.registered),
+        subscriptionCount: Number(source.subscriptionCount || source.subscription_count || 0),
+        checkedAt: serverNow().toISOString(),
+      };
+    }
+
     async function fetchWorkerPushSubscriptionStatus(workerId) {
       const client = supabaseClient();
       if (!client || !workerId) return null;
+      const sender = pushSenderPayload();
+      if (sender.senderWorkerId && sender.senderEmployeeNo) {
+        try {
+          const { data, error } = await client.functions.invoke("worker-push", {
+            body: {
+              action: "status",
+              workerIds: [workerId],
+              ...sender,
+            },
+          });
+          if (!error && !data?.error) {
+            const row = Array.isArray(data?.statuses) ? data.statuses[0] : null;
+            return normalizeWorkerPushSubscriptionStatus(workerId, row);
+          }
+          console.warn("worker push status function failed", error || data?.error);
+        } catch (error) {
+          console.warn("worker push status function failed", error);
+        }
+      }
       const { data, error } = await client.rpc("worker_push_subscription_status", {
         p_worker_id: workerId,
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : data;
-      return {
-        workerId,
-        registered: Boolean(row?.registered),
-        subscriptionCount: Number(row?.subscription_count || row?.subscriptionCount || 0),
-        checkedAt: serverNow().toISOString(),
-      };
+      return normalizeWorkerPushSubscriptionStatus(workerId, row);
     }
 
     async function refreshWorkerPushSubscriptionStatus(options = {}) {
@@ -1354,7 +1378,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!worker?.id) return toast("작업자 로그인 후 이 기기 알림을 등록하세요.");
       if (!pushNotificationsSupported()) return toast("이 브라우저는 휴대폰 Push 알림을 지원하지 않습니다.");
       if (state.pushRegistrationSubmitting) return;
-      if (pushRegisteredForCurrentDevice()) return toast(`${pushDeviceName()} 알림은 이미 등록되어 있습니다.`);
+      if (pushRegisteredForCurrentWorker()) return toast("이미 등록된 휴대폰 알림 구독이 있습니다.");
       const client = supabaseClient();
       if (!client) return toast("서버 동기화 연결이 필요합니다.");
 
@@ -1365,6 +1389,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         focusPushEmployeeNoInput();
         return toast("사번을 입력하고 등록을 눌러주세요.");
       }
+      const remoteStatus = await refreshWorkerPushSubscriptionStatus({ force: true });
+      if (remoteStatus?.registered) return toast("Supabase에 이미 등록된 휴대폰 알림 구독이 있습니다.");
       if (!(await ensureBrowserNotificationPermission())) return;
 
       state.pushRegistrationSubmitting = true;
@@ -2563,20 +2589,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         $("mobilePushEmployeeNoForm").insertAdjacentHTML("afterend", `<button id="mobilePushTestButton" class="mobile-push-test-btn" data-action="test-push-notification" type="button" hidden>테스트 알림</button>`);
       }
       const registered = pushRegisteredForCurrentWorker();
-      const currentDeviceRegistered = pushRegisteredForCurrentDevice();
+      const remoteStatus = pushStatusForCurrentWorker();
+      const subscriptionCount = Number(remoteStatus.subscriptionCount || 0);
+      const registeredDeviceCount = subscriptionCount || (registered ? 1 : 0);
       const supported = pushNotificationsSupported();
       const checking = Boolean(state.pushSubscriptionStatusChecking);
       const registering = Boolean(state.pushRegistrationSubmitting);
       const needsEmployeeNo = loggedIn && !normalizeEmployeeNo(state.workerSession?.employeeNo || "");
-      const showEmployeeNoForm = Boolean(state.pushEmployeeNoPromptOpen && needsEmployeeNo && supported && !currentDeviceRegistered);
+      const showEmployeeNoForm = Boolean(state.pushEmployeeNoPromptOpen && needsEmployeeNo && supported && !registered);
+      const registeredLabel = registeredDeviceCount > 1
+        ? `휴대폰 알림 등록됨 (${registeredDeviceCount}대)`
+        : "휴대폰 알림 등록됨";
       [
         $("desktopPushButton"),
         $("mobilePushButton"),
       ].filter(Boolean).forEach((button) => {
         button.hidden = !loggedIn;
-        button.disabled = loggedIn && (currentDeviceRegistered || checking || registering || !supported);
-        button.textContent = registering ? "알림 등록 중" : checking ? "알림 상태 확인 중" : currentDeviceRegistered ? `${pushDeviceName()} 알림 등록됨` : needsEmployeeNo ? "사번 확인 후 등록" : `${pushDeviceName()} 알림 등록`;
-        button.title = needsEmployeeNo
+        button.disabled = loggedIn && (registered || checking || registering || !supported);
+        button.textContent = registering ? "알림 등록 중" : checking ? "알림 상태 확인 중" : registered ? registeredLabel : needsEmployeeNo ? "사번 확인 후 등록" : `${pushDeviceName()} 알림 등록`;
+        button.title = registered
+          ? `Supabase에 등록된 알림 구독 ${registeredDeviceCount}건이 확인되어 등록 버튼을 비활성화했습니다`
+          : needsEmployeeNo
           ? "사번을 한 번 더 확인한 뒤 이 기기에 Push 알림을 등록합니다"
           : supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
       });
