@@ -1,15 +1,15 @@
-const CACHE = "gs-safety-v9-20260525-push-status";
+const CACHE = "gs-safety-v10-20260525-worker-push-badges";
 const SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
-  "/assets/css/styles-v2.css?v=20260525-push-status-1",
+  "/assets/css/styles-v2.css?v=20260525-worker-push-badges-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260525-push-status-1",
-  "/assets/js/issue-material-rules.js?v=20260525-push-status-1",
-  "/assets/js/app-v2.js?v=20260525-push-status-1"
+  "/assets/js/checklist-rules.js?v=20260525-worker-push-badges-1",
+  "/assets/js/issue-material-rules.js?v=20260525-worker-push-badges-1",
+  "/assets/js/app-v2.js?v=20260525-worker-push-badges-1"
 ];
 
 self.addEventListener("install", (event) => {

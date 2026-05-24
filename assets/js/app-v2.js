@@ -1193,13 +1193,52 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function savePushSubscriptionStatus(value) {
-      state.pushSubscriptionStatus = value && typeof value === "object" ? value : {};
+      const status = value && typeof value === "object" ? value : {};
+      state.pushSubscriptionStatus = status;
       saveJson("pushSubscriptionStatus", state.pushSubscriptionStatus);
+      if (status.workerId) saveWorkerPushSubscriptionStatuses([status]);
+    }
+
+    function workerPushSubscriptionStatuses() {
+      return state?.workerPushSubscriptionStatuses && typeof state.workerPushSubscriptionStatuses === "object"
+        ? state.workerPushSubscriptionStatuses
+        : {};
+    }
+
+    function saveWorkerPushSubscriptionStatuses(rows) {
+      const next = { ...workerPushSubscriptionStatuses() };
+      (Array.isArray(rows) ? rows : [rows]).filter(Boolean).forEach((row) => {
+        const status = normalizeWorkerPushSubscriptionStatus(row.workerId || row.worker_id, row);
+        if (status.workerId) next[status.workerId] = status;
+      });
+      state.workerPushSubscriptionStatuses = next;
+      saveJson("workerPushSubscriptionStatuses", next);
+    }
+
+    function workerPushSubscriptionStatusFor(workerId) {
+      const id = String(workerId || "").trim();
+      if (!id) return {};
+      const status = workerPushSubscriptionStatuses()[id];
+      if (status && typeof status === "object") return status;
+      const current = pushSubscriptionStatus();
+      return current.workerId === id ? current : {};
+    }
+
+    function workerPushSubscriptionStatusRefreshNeeded(workerIds, maxAgeMs = 60 * 1000) {
+      const ids = [...new Set((Array.isArray(workerIds) ? workerIds : []).map((id) => String(id || "").trim()).filter(Boolean))];
+      if (!ids.length) return false;
+      return ids.some((id) => {
+        const checkedAt = Date.parse(workerPushSubscriptionStatusFor(id).checkedAt || "");
+        return !Number.isFinite(checkedAt) || Date.now() - checkedAt > maxAgeMs;
+      });
     }
 
     function pushStatusForCurrentWorker() {
+      const workerId = state.workerSession?.workerId || "";
+      const workerStatus = workerPushSubscriptionStatusFor(workerId);
+      if (workerStatus.workerId) return workerStatus;
       const status = pushSubscriptionStatus();
-      return status.workerId && status.workerId === state.workerSession?.workerId ? status : {};
+      return status.workerId && status.workerId === workerId ? status : {};
     }
 
     function pushRegisteredForCurrentDevice() {
@@ -1322,34 +1361,50 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       };
     }
 
-    async function fetchWorkerPushSubscriptionStatus(workerId) {
+    async function fetchWorkerPushSubscriptionStatusFromRpc(workerId) {
       const client = supabaseClient();
       if (!client || !workerId) return null;
-      const sender = pushSenderPayload();
-      if (sender.senderWorkerId && sender.senderEmployeeNo) {
-        try {
-          const { data, error } = await client.functions.invoke("worker-push", {
-            body: {
-              action: "status",
-              workerIds: [workerId],
-              ...sender,
-            },
-          });
-          if (!error && !data?.error) {
-            const row = Array.isArray(data?.statuses) ? data.statuses[0] : null;
-            return normalizeWorkerPushSubscriptionStatus(workerId, row);
-          }
-          console.warn("worker push status function failed", error || data?.error);
-        } catch (error) {
-          console.warn("worker push status function failed", error);
-        }
-      }
       const { data, error } = await client.rpc("worker_push_subscription_status", {
         p_worker_id: workerId,
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : data;
       return normalizeWorkerPushSubscriptionStatus(workerId, row);
+    }
+
+    async function fetchWorkerPushSubscriptionStatuses(workerIds) {
+      const ids = [...new Set((Array.isArray(workerIds) ? workerIds : []).map((id) => String(id || "").trim()).filter(Boolean))];
+      const client = supabaseClient();
+      if (!client || !ids.length) return [];
+      const sender = pushSenderPayload();
+      if (sender.senderWorkerId && sender.senderEmployeeNo) {
+        try {
+          const { data, error } = await client.functions.invoke("worker-push", {
+            body: {
+              action: "status",
+              workerIds: ids,
+              ...sender,
+            },
+          });
+          if (!error && !data?.error) {
+            const rows = Array.isArray(data?.statuses) ? data.statuses : [];
+            return ids.map((id) => normalizeWorkerPushSubscriptionStatus(id, rows.find((row) => row?.workerId === id || row?.worker_id === id)));
+          }
+          console.warn("worker push status function failed", error || data?.error);
+        } catch (error) {
+          console.warn("worker push status function failed", error);
+        }
+      }
+      const results = await Promise.all(ids.map((id) => fetchWorkerPushSubscriptionStatusFromRpc(id).catch((error) => {
+        console.warn("worker push status rpc failed", id, error);
+        return null;
+      })));
+      return results.filter(Boolean);
+    }
+
+    async function fetchWorkerPushSubscriptionStatus(workerId) {
+      const statuses = await fetchWorkerPushSubscriptionStatuses([workerId]);
+      return statuses[0] || null;
     }
 
     async function refreshWorkerPushSubscriptionStatus(options = {}) {
@@ -1371,6 +1426,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.pushSubscriptionStatusChecking = false;
         updatePushRegistrationControls();
       }
+    }
+
+    async function refreshWorkerPushSubscriptionStatuses(options = {}) {
+      const workerIds = state.workers.map((worker) => worker.id).filter(Boolean);
+      if (!workerIds.length || state.workerPushSubscriptionStatusesChecking) return workerPushSubscriptionStatuses();
+      if (!options.force && !workerPushSubscriptionStatusRefreshNeeded(workerIds)) return workerPushSubscriptionStatuses();
+      state.workerPushSubscriptionStatusesChecking = true;
+      renderWorkerPushSubscriptionStatusBadges();
+      try {
+        const statuses = await fetchWorkerPushSubscriptionStatuses(workerIds);
+        saveWorkerPushSubscriptionStatuses(statuses);
+        return workerPushSubscriptionStatuses();
+      } catch (error) {
+        console.warn("worker push statuses refresh failed", error);
+        return workerPushSubscriptionStatuses();
+      } finally {
+        state.workerPushSubscriptionStatusesChecking = false;
+        if (state.view === "manage" && state.manageTab === "workers") {
+          renderPreservingScroll();
+        }
+      }
+    }
+
+    function scheduleWorkerPushSubscriptionStatusRefresh(options = {}) {
+      if (state.view !== "manage" || state.manageTab !== "workers" || !state.adminMode) return;
+      const workerIds = state.workers.map((worker) => worker.id).filter(Boolean);
+      if (!options.force && !workerPushSubscriptionStatusRefreshNeeded(workerIds)) return;
+      if (state.workerPushSubscriptionStatusesChecking || state.workerPushSubscriptionStatusTimer) return;
+      state.workerPushSubscriptionStatusTimer = window.setTimeout(() => {
+        state.workerPushSubscriptionStatusTimer = null;
+        refreshWorkerPushSubscriptionStatuses(options).catch((error) => console.warn("worker push statuses refresh failed", error));
+      }, 0);
     }
 
     async function registerWorkerPushNotifications() {
@@ -1796,7 +1883,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       lastRemoteChangeAt: 0,
       workerSession: loadWorkerSession(),
       pushSubscriptionStatus: loadJson("pushSubscriptionStatus", {}),
+      workerPushSubscriptionStatuses: loadJson("workerPushSubscriptionStatuses", {}),
       pushSubscriptionStatusChecking: false,
+      workerPushSubscriptionStatusesChecking: false,
+      workerPushSubscriptionStatusTimer: null,
       pushEmployeeNoPromptOpen: false,
       pushRegistrationSubmitting: false,
       loginSubmitting: false,
@@ -2385,6 +2475,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       applyClientSearchFilters();
       setupSignaturePad();
       ensureRenderedAccessibility();
+      scheduleWorkerPushSubscriptionStatusRefresh();
     }
 
     function renderPreservingScroll() {
@@ -5148,13 +5239,65 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return WORKER_POSITIONS.map((position) => `<option value="${esc(position)}" ${position === selected ? "selected" : ""}>${esc(position)}</option>`).join("");
     }
 
+    function workerPushSubscriptionBadgeMeta(workerId) {
+      const status = workerPushSubscriptionStatusFor(workerId);
+      const checked = Boolean(status.checkedAt);
+      const count = Number(status.subscriptionCount || 0);
+      if (state.workerPushSubscriptionStatusesChecking && !checked) {
+        return {
+          className: "is-checking",
+          text: "알림 확인 중",
+          title: "Supabase 구독 상태를 확인하고 있습니다",
+        };
+      }
+      if (status.registered) {
+        const registeredCount = count || 1;
+        return {
+          className: "is-registered",
+          text: `알림 ${registeredCount}대`,
+          title: `Supabase에 등록된 브라우저 알림 구독 ${registeredCount}건`,
+        };
+      }
+      if (checked) {
+        return {
+          className: "is-empty",
+          text: "알림 없음",
+          title: "Supabase에 등록된 브라우저 알림 구독이 없습니다",
+        };
+      }
+      return {
+        className: "is-unknown",
+        text: "알림 확인 전",
+        title: "아직 Supabase 구독 상태를 확인하지 않았습니다",
+      };
+    }
+
+    function workerPushSubscriptionBadgeHtml(workerId) {
+      const meta = workerPushSubscriptionBadgeMeta(workerId);
+      return `<span class="worker-push-badge ${esc(meta.className)}" data-worker-push-badge="${esc(workerId)}" title="${esc(meta.title)}">${esc(meta.text)}</span>`;
+    }
+
+    function renderWorkerPushSubscriptionStatusBadges() {
+      document.querySelectorAll("[data-worker-push-badge]").forEach((node) => {
+        const workerId = node.dataset.workerPushBadge || "";
+        const meta = workerPushSubscriptionBadgeMeta(workerId);
+        node.className = `worker-push-badge ${meta.className}`;
+        node.title = meta.title;
+        node.textContent = meta.text;
+      });
+    }
+
     function renderWorkerRow(worker) {
       const position = normalizeWorkerPosition(worker.position);
       const positionAction = isLeaderWorker(worker) ? "작업자로 변경" : "조장 지정";
       return `<div class="item-row worker-row">
         <div class="item-main">
           <div class="item-name">${esc(worker.name)}</div>
-          <div class="small muted">${esc(worker.team || "소속/팀 없음")} · <span class="worker-position-badge ${isLeaderWorker(worker) ? "is-leader" : ""}">${esc(position)}</span></div>
+          <div class="small muted worker-meta-line">
+            <span>${esc(worker.team || "소속/팀 없음")}</span>
+            <span class="worker-position-badge ${isLeaderWorker(worker) ? "is-leader" : ""}">${esc(position)}</span>
+            ${workerPushSubscriptionBadgeHtml(worker.id)}
+          </div>
         </div>
         <div class="item-actions">
           <button class="btn-light" data-toggle-worker-position="${esc(worker.id)}" type="button">${esc(positionAction)}</button>

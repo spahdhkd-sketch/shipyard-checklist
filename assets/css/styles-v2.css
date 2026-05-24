@@ -9731,6 +9731,14 @@
       min-width: 0;
     }
 
+    .worker-meta-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
     .worker-position-badge {
       display: inline-flex;
       align-items: center;
@@ -9749,6 +9757,39 @@
       border-color: var(--color-brand-secondary-border);
       background: var(--color-brand-secondary);
       color: var(--color-brand-secondary-text);
+    }
+
+    .worker-push-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    .worker-push-badge.is-registered {
+      border-color: #9DD6C5;
+      background: #EAF7F2;
+      color: #0F766E;
+    }
+
+    .worker-push-badge.is-empty {
+      border-color: #e7c6c9;
+      background: #fff1f2;
+      color: #9E4A4F;
+    }
+
+    .worker-push-badge.is-checking {
+      border-color: #d8c7a6;
+      background: #fff8e6;
+      color: #8A5A16;
     }
 
     .issue-form .form-actions,
