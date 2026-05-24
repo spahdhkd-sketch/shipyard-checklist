@@ -23,9 +23,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const html = read("index.html");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260525-sync-live-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/js\/app-v2\.js\?v=20260524-push-auth-1/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260525-sync-live-1/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
 assert.match(html, /version 0\.4/);
@@ -44,9 +44,9 @@ assert.doesNotMatch(html, /version 0\.3/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260525-sync-live-1/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js\?v=20260524-push-auth-1/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260525-sync-live-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
   assert.match(page, /version 0\.4/, `${file} should use the current static fallback version label`);
@@ -58,7 +58,7 @@ assert.doesNotMatch(html, /version 0\.3/);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260524-push-auth-1/);
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260525-sync-live-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 const redesignPreview = read("redesign-v2.html");
 assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
@@ -81,7 +81,9 @@ assert.deepStrictEqual(unusedIllustrations, [], "unused shipyard illustration PN
 const app = read("assets/js/app-v2.js");
 const styles = read("assets/css/styles-v2.css");
 assert.match(app, /const APP_VERSION = "0\.4-20260523"/);
-assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 60 \* 1000/);
+assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 10 \* 1000/);
+assert.match(app, /const REMOTE_POLL_INTERVAL_MS = 15 \* 1000/);
+assert.match(app, /const REMOTE_REACTIVE_PULL_DELAY_MS = 700/);
 assert.match(app, /const SYNC_RETRY_DELAY_MS = 8 \* 1000/);
 assert.match(app, /const STORAGE_WARNING_KB = 4600/);
 assert.match(app, /const STORAGE_COMPACT_KB = 3800/);
@@ -90,13 +92,37 @@ assert.match(app, /function pendingPhotoDataUrlForStorage\(value\)/);
 assert.match(app, /function compactStoragePayloadsIfNeeded\(\)/);
 assert.match(app, /dataUrl: pendingPhotoDataUrlForStorage\(row\.dataUrl\)/);
 assert.match(app, /file\.size <= PENDING_PHOTO_RETRY_MAX_BYTES/);
-assert.match(app, /const REMOTE_AUTHORITATIVE_KEYS = new Set\(\["categories", "sections", "items", "tools", "workers", "ships", "inspections", "unsafeIssues", "missingMaterials"\]\)/);
+[
+  "categories",
+  "sections",
+  "items",
+  "tools",
+  "pictograms",
+  "workers",
+  "ships",
+  "inspections",
+  "inspectionItems",
+  "unsafeIssues",
+  "missingMaterials",
+  "issuePhotos",
+  "workPrepRecords",
+].forEach((key) => {
+  assert.match(app, new RegExp(`"${key}"`), `${key} should be remote-authoritative or synced`);
+});
 assert.match(app, /function pendingSyncRowsForKey\(key\)/);
 assert.match(app, /function authoritativeRemoteRows\(key, remoteRows\)/);
 assert.match(app, /function applyRemoteTableRows\(key, rows\)/);
 assert.match(app, /REMOTE_AUTHORITATIVE_KEYS\.has\(key\)/);
 assert.match(app, /results\.forEach\(\(\{ key, rows \}\) => applyRemoteTableRows\(key, rows\)\)/);
 assert.match(app, /pullRemote\(\{ force: true \}\)/);
+assert.match(app, /function startRemoteRealtime\(\)/);
+assert.match(app, /\.channel\("gs-safety-remote-sync"\)/);
+assert.match(app, /"postgres_changes"/);
+assert.match(app, /function startRemotePolling\(\)/);
+assert.match(app, /setInterval\(\(\) => \{/);
+assert.match(app, /function scheduleRemoteRefresh\(reason = "change"/);
+assert.match(app, /window\.addEventListener\("visibilitychange"/);
+assert.match(app, /window\.addEventListener\("storage", handleStorageSyncWake\)/);
 assert.match(app, /function appVersionLabel\(\)/);
 assert.match(app, /version \$\{String\(APP_VERSION\)\.split\("-"\)\[0\]\}/);
 assert.match(app, /pendingSyncQueue: normalizePendingSyncQueue\(loadJson\("pendingSyncQueue", \[\]\)\)/);
@@ -432,9 +458,9 @@ assert.match(css, /\.monthly-worker-cell\.rest/);
 assert.match(css, /\.monthly-worker-cell\.excluded/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v7-20260524-push-auth"/);
-assert.match(sw, /styles-v2\.css\?v=20260524-push-auth-1/);
-assert.match(sw, /app-v2\.js\?v=20260524-push-auth-1/);
+assert.match(sw, /const CACHE = "gs-safety-v8-20260525-sync-live"/);
+assert.match(sw, /styles-v2\.css\?v=20260525-sync-live-1/);
+assert.match(sw, /app-v2\.js\?v=20260525-sync-live-1/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);

@@ -18,7 +18,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
     };
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
-    const REMOTE_PULL_THROTTLE_MS = 60 * 1000;
+    const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
+    const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
+    const REMOTE_REACTIVE_PULL_DELAY_MS = 700;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
     const MAX_SYNC_ATTEMPTS = 5;
     const STORAGE_WARNING_KB = 4600;
@@ -554,7 +556,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }),
       },
     ];
-    const REMOTE_AUTHORITATIVE_KEYS = new Set(["categories", "sections", "items", "tools", "workers", "ships", "inspections", "unsafeIssues", "missingMaterials"]);
+    const REMOTE_AUTHORITATIVE_KEYS = new Set([
+      "categories",
+      "sections",
+      "items",
+      "tools",
+      "pictograms",
+      "workers",
+      "ships",
+      "inspections",
+      "inspectionItems",
+      "unsafeIssues",
+      "missingMaterials",
+      "issuePhotos",
+      "workPrepRecords",
+    ]);
 
     const starterCategories = [
       { id: "welding", label: "용접/절단 작업", icon: "welding", color: "#b8323b", toolNature: "선행/후행", order: 1 },
@@ -1746,6 +1762,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
+      remotePullInFlight: false,
+      remoteRefreshTimer: null,
+      remotePollTimer: null,
+      remoteRealtimeChannel: null,
+      remoteRealtimeStatus: "",
+      lastRemoteChangeAt: 0,
       workerSession: loadWorkerSession(),
       pushSubscriptionStatus: loadJson("pushSubscriptionStatus", {}),
       pushSubscriptionStatusChecking: false,
@@ -1841,13 +1863,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       setInterval(syncServerClock, SERVER_CLOCK_REFRESH_MS);
       setInterval(flushPendingSyncQueue, SYNC_RETRY_DELAY_MS);
       window.addEventListener("resize", applyScreenMode);
-      window.addEventListener("online", flushPendingSyncQueue);
+      window.addEventListener("online", handleSyncWake);
+      window.addEventListener("focus", handleSyncWake);
+      window.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") handleSyncWake();
+      });
+      window.addEventListener("storage", handleStorageSyncWake);
       window.addEventListener("popstate", restoreRouteState);
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
         syncServerClock();
         pullRemote({ force: true });
         flushPendingSyncQueue();
+        startRemoteSync();
       }
     }
 
@@ -10194,14 +10222,79 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return true;
     }
 
+    function shouldRefreshRemote() {
+      return isSyncConfigured() && document.visibilityState !== "hidden";
+    }
+
+    function scheduleRemoteRefresh(reason = "change", delay = REMOTE_REACTIVE_PULL_DELAY_MS) {
+      if (!shouldRefreshRemote()) return;
+      if (state.remoteRefreshTimer) clearTimeout(state.remoteRefreshTimer);
+      state.remoteRefreshTimer = setTimeout(() => {
+        state.remoteRefreshTimer = null;
+        pullRemote({ force: true, silent: true, reason });
+      }, Math.max(0, delay));
+    }
+
+    function handleSyncWake() {
+      if (!isSyncConfigured()) return;
+      flushPendingSyncQueue();
+      scheduleRemoteRefresh("wake", 0);
+    }
+
+    function handleStorageSyncWake(event) {
+      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
+      const key = event.key.slice(STORAGE_PREFIX.length);
+      if (!remoteConfigByKey(key)) return;
+      scheduleRemoteRefresh("storage", 0);
+    }
+
+    function startRemotePolling() {
+      if (!isSyncConfigured() || state.remotePollTimer) return;
+      state.remotePollTimer = setInterval(() => {
+        if (!shouldRefreshRemote()) return;
+        pullRemote({ silent: true, reason: "poll" });
+      }, REMOTE_POLL_INTERVAL_MS);
+    }
+
+    function startRemoteRealtime() {
+      const client = supabaseClient();
+      if (!client || state.remoteRealtimeChannel || typeof client.channel !== "function") return;
+
+      let channel = client.channel("gs-safety-remote-sync");
+      REMOTE_TABLES.forEach((config) => {
+        channel = channel.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: config.table },
+          () => {
+            state.lastRemoteChangeAt = Date.now();
+            scheduleRemoteRefresh(`realtime:${config.key}`);
+          },
+        );
+      });
+
+      state.remoteRealtimeChannel = channel.subscribe((status) => {
+        state.remoteRealtimeStatus = status;
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          scheduleRemoteRefresh("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS);
+        }
+      });
+    }
+
+    function startRemoteSync() {
+      startRemoteRealtime();
+      startRemotePolling();
+    }
+
     async function pullRemote(options = {}) {
       const client = supabaseClient();
       if (!client) return setSyncStatus("로컬 저장", "offline");
+      if (state.remotePullInFlight) return;
       if (!options.force && state.lastRemotePullAt && Date.now() - state.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS) {
         flushPendingSyncQueue();
         return;
       }
-      setSyncStatus("서버 확인 중", "pending");
+      state.remotePullInFlight = true;
+      if (!options.silent) setSyncStatus("서버 확인 중", "pending");
       try {
         const results = await Promise.all(REMOTE_TABLES.map((config) => selectTable(client, config)));
         results.forEach(({ key, rows }) => applyRemoteTableRows(key, rows));
@@ -10217,7 +10310,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("서버 데이터를 가져오지 못했습니다.");
+        if (!options.silent) toast("서버 데이터를 가져오지 못했습니다.");
+      } finally {
+        state.remotePullInFlight = false;
       }
     }
 

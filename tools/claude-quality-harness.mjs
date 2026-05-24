@@ -149,8 +149,8 @@ try {
 
   for (const page of pages) {
     const html = read(page);
-    add(`${page} uses app-v2`, html.includes("assets/js/app-v2.js?v=20260524-push-auth-1"));
-    add(`${page} uses styles-v2`, html.includes("assets/css/styles-v2.css?v=20260524-push-auth-1"));
+    add(`${page} uses app-v2`, html.includes("assets/js/app-v2.js?v=20260525-sync-live-1"));
+    add(`${page} uses styles-v2`, html.includes("assets/css/styles-v2.css?v=20260525-sync-live-1"));
     add(`${page} does not use legacy app.js`, !html.includes("assets/js/app.js"));
     add(`${page} does not use legacy styles.css`, !html.includes("assets/css/styles.css"));
     add(`${page} uses static fallback version 0.4`, html.includes("version 0.4"));
@@ -171,11 +171,19 @@ try {
   assertContains(app, "senderWorkerId", "push send includes sender worker id");
   assertContains(app, "senderEmployeeNo", "push send includes sender employee number");
   assertContains(app, "sendKind: options.kind || \"\"", "push send includes server authorization kind");
+  assertContains(app, "const REMOTE_PULL_THROTTLE_MS = 10 * 1000", "remote pull throttle supports near-live sync");
+  assertContains(app, "const REMOTE_POLL_INTERVAL_MS = 15 * 1000", "remote polling fallback exists");
+  assertContains(app, "function startRemoteRealtime()", "Supabase realtime sync starter exists");
+  assertContains(app, ".channel(\"gs-safety-remote-sync\")", "Supabase realtime channel is configured");
+  assertContains(app, "\"postgres_changes\"", "Supabase realtime listens for Postgres changes");
+  assertContains(app, "function startRemotePolling()", "polling fallback starter exists");
+  assertContains(app, "window.addEventListener(\"visibilitychange\"", "visibility wake sync exists");
+  assertContains(app, "window.addEventListener(\"storage\", handleStorageSyncWake)", "cross-tab storage wake sync exists");
 
   assertContains(styles, ".push-template-overlay", "push template modal CSS exists");
   assertContains(styles, ".pledge-notify-actions", "pledge notify action CSS exists");
-  assertContains(sw, 'const CACHE = "gs-safety-v7-20260524-push-auth"', "service worker cache is current");
-  assertContains(notFound, "assets/css/styles-v2.css?v=20260524-push-auth-1", "404 uses v2 styles");
+  assertContains(sw, 'const CACHE = "gs-safety-v8-20260525-sync-live"', "service worker cache is current");
+  assertContains(notFound, "assets/css/styles-v2.css?v=20260525-sync-live-1", "404 uses v2 styles");
   assertContains(redesignPreview, "assets/js/vendor/supabase-js-2.105.3.min.js", "redesign preview uses local Supabase vendor bundle");
   add("redesign preview does not use removed CDN", !redesignPreview.includes("cdn.jsdelivr.net"));
 
@@ -217,8 +225,8 @@ try {
       const notFoundLive = await fetchText(`${base}/404.html`);
       const removedLive = await fetch(`${base}/assets/icons/shipyard/illustrations/anchorInstallation.png`, { cache: "no-store" });
       add("live index responds 200", indexLive.status === 200, String(indexLive.status));
-      add("live index uses app-v2", indexLive.text.includes("assets/js/app-v2.js?v=20260524-push-auth-1"));
-      add("live 404 page uses v2 styles", notFoundLive.text.includes("assets/css/styles-v2.css?v=20260524-push-auth-1"));
+      add("live index uses app-v2", indexLive.text.includes("assets/js/app-v2.js?v=20260525-sync-live-1"));
+      add("live 404 page uses v2 styles", notFoundLive.text.includes("assets/css/styles-v2.css?v=20260525-sync-live-1"));
       add("live removed illustration returns 404", removedLive.status === 404, String(removedLive.status));
     } catch (error) {
       warn("live fetch skipped", error && error.message ? error.message : String(error));
