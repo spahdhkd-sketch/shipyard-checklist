@@ -72,6 +72,10 @@ function normalizedWorkerName(value: unknown) {
   return String(value || "").trim().replace(/\s+/g, "");
 }
 
+function booleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function canSendPledgeNotifications(worker: Record<string, unknown>) {
   const team = cleanText(worker.team, 40);
   const position = cleanText(worker.position, 40);
@@ -220,6 +224,21 @@ async function authorizeStatusRequest(payload: Record<string, unknown>, workerId
   return { error: jsonResponse({ error: "forbidden_target" }, 403) };
 }
 
+function serializeSubscriptionDevice(row: Record<string, unknown>) {
+  return {
+    id: cleanText(row.id, 80),
+    workerId: cleanText(row.worker_id, 80),
+    deviceLabel: cleanText(row.device_label, 120) || "알림 기기",
+    userAgent: cleanText(row.user_agent, 500),
+    enabled: row.enabled === true,
+    lastSeenAt: cleanText(row.last_seen_at, 80),
+    lastSentAt: cleanText(row.last_sent_at, 80),
+    lastError: cleanText(row.last_error, 220),
+    lastErrorAt: cleanText(row.last_error_at, 80),
+    updatedAt: cleanText(row.updated_at, 80),
+  };
+}
+
 async function subscriptionStatus(payload: Record<string, unknown>) {
   const workerIds = Array.isArray(payload.workerIds)
     ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
@@ -257,6 +276,74 @@ async function subscriptionStatus(payload: Record<string, unknown>) {
   });
 }
 
+async function subscriptionDevices(payload: Record<string, unknown>) {
+  const workerId = cleanText(payload.workerId, 80);
+  if (!workerId) return jsonResponse({ error: "invalid_worker" }, 400);
+
+  const authorization = await authorizeStatusRequest(payload, [workerId]);
+  if (authorization.error) return authorization.error;
+
+  const { data, error } = await supabase
+    .from("worker_push_subscriptions")
+    .select("id,worker_id,device_label,user_agent,enabled,last_seen_at,last_sent_at,last_error,last_error_at,updated_at")
+    .eq("worker_id", workerId)
+    .order("updated_at", { ascending: false });
+
+  if (error) return jsonResponse({ error: error.message }, 500);
+  return jsonResponse({
+    ok: true,
+    workerId,
+    devices: (data || []).map((row) => serializeSubscriptionDevice(row as Record<string, unknown>)),
+  });
+}
+
+async function updateSubscriptionDevice(payload: Record<string, unknown>) {
+  const workerId = cleanText(payload.workerId, 80);
+  const subscriptionId = cleanText(payload.subscriptionId, 80);
+  if (!workerId || !subscriptionId) return jsonResponse({ error: "invalid_request" }, 400);
+
+  const authorization = await authorizeStatusRequest(payload, [workerId]);
+  if (authorization.error) return authorization.error;
+
+  const patch = {
+    device_label: cleanText(payload.deviceLabel, 120) || "알림 기기",
+    enabled: booleanValue(payload.enabled, true),
+    updated_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("worker_push_subscriptions")
+    .update(patch)
+    .eq("id", subscriptionId)
+    .eq("worker_id", workerId)
+    .select("id,worker_id,device_label,user_agent,enabled,last_seen_at,last_sent_at,last_error,last_error_at,updated_at")
+    .maybeSingle();
+
+  if (error) return jsonResponse({ error: error.message }, 500);
+  if (!data) return jsonResponse({ error: "device_not_found" }, 404);
+  return jsonResponse({ ok: true, device: serializeSubscriptionDevice(data as Record<string, unknown>) });
+}
+
+async function deleteSubscriptionDevice(payload: Record<string, unknown>) {
+  const workerId = cleanText(payload.workerId, 80);
+  const subscriptionId = cleanText(payload.subscriptionId, 80);
+  if (!workerId || !subscriptionId) return jsonResponse({ error: "invalid_request" }, 400);
+
+  const authorization = await authorizeStatusRequest(payload, [workerId]);
+  if (authorization.error) return authorization.error;
+
+  const { error, count } = await supabase
+    .from("worker_push_subscriptions")
+    .delete({ count: "exact" })
+    .eq("id", subscriptionId)
+    .eq("worker_id", workerId);
+
+  if (error) return jsonResponse({ error: error.message }, 500);
+  if (!count) return jsonResponse({ error: "device_not_found" }, 404);
+  return jsonResponse({ ok: true, workerId, deleted: subscriptionId });
+}
+
 async function sendNotification(payload: Record<string, unknown>) {
   const workerIds = Array.isArray(payload.workerIds)
     ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
@@ -278,7 +365,7 @@ async function sendNotification(payload: Record<string, unknown>) {
     tag: cleanText(notificationRaw.tag, 120) || `gs-${Date.now()}`,
     url: cleanText(notificationRaw.url, 240) || "/",
     icon: "/assets/icons/icon-192.png",
-    badge: "/assets/icons/icon-192.png",
+    badge: "/assets/icons/notification-badge.png",
   };
 
   const { data: subscriptions, error } = await supabase
@@ -328,6 +415,9 @@ Deno.serve(async (req) => {
   const action = cleanText(payload.action, 40);
   if (action === "register") return registerSubscription(payload);
   if (action === "status") return subscriptionStatus(payload);
+  if (action === "devices") return subscriptionDevices(payload);
+  if (action === "updateDevice") return updateSubscriptionDevice(payload);
+  if (action === "deleteDevice") return deleteSubscriptionDevice(payload);
   if (action === "send") return sendNotification(payload);
   return jsonResponse({ error: "unknown_action" }, 400);
 });

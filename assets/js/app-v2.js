@@ -1339,7 +1339,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       try {
         const notification = new Notification(title, {
           icon: "/assets/icons/icon-192.png",
-          badge: "/assets/icons/icon-192.png",
+          badge: "/assets/icons/notification-badge.png",
           ...options,
         });
         window.setTimeout(() => notification.close?.(), 8000);
@@ -1458,6 +1458,167 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workerPushSubscriptionStatusTimer = null;
         refreshWorkerPushSubscriptionStatuses(options).catch((error) => console.warn("worker push statuses refresh failed", error));
       }, 0);
+    }
+
+    function normalizeWorkerPushDevice(row) {
+      const source = row && typeof row === "object" ? row : {};
+      return {
+        id: String(source.id || "").trim(),
+        workerId: String(source.workerId || source.worker_id || "").trim(),
+        deviceLabel: String(source.deviceLabel || source.device_label || "알림 기기").trim() || "알림 기기",
+        userAgent: String(source.userAgent || source.user_agent || "").trim(),
+        enabled: source.enabled !== false,
+        lastSeenAt: source.lastSeenAt || source.last_seen_at || "",
+        lastSentAt: source.lastSentAt || source.last_sent_at || "",
+        lastError: String(source.lastError || source.last_error || "").trim(),
+        lastErrorAt: source.lastErrorAt || source.last_error_at || "",
+        updatedAt: source.updatedAt || source.updated_at || "",
+      };
+    }
+
+    function currentWorkerPushDeviceWorker() {
+      return state.workers.find((worker) => worker.id === state.workerPushDeviceWorkerId) || null;
+    }
+
+    function updateWorkerPushStatusFromDevices(workerId, devices) {
+      const enabledCount = (Array.isArray(devices) ? devices : []).filter((device) => device.enabled !== false).length;
+      saveWorkerPushSubscriptionStatuses([{
+        workerId,
+        registered: enabledCount > 0,
+        subscriptionCount: enabledCount,
+        checkedAt: serverNow().toISOString(),
+      }]);
+      renderWorkerPushSubscriptionStatusBadges();
+    }
+
+    async function invokeWorkerPushDeviceAction(body) {
+      const client = supabaseClient();
+      if (!client) throw new Error("server_required");
+      const sender = pushSenderPayload();
+      if (!sender.senderWorkerId || !sender.senderEmployeeNo) throw new Error("sender_required");
+      const { data, error } = await client.functions.invoke("worker-push", {
+        body: {
+          ...body,
+          ...sender,
+        },
+      });
+      if (error || data?.error) throw new Error(error?.message || data.error);
+      return data;
+    }
+
+    async function fetchWorkerPushDevices(workerId) {
+      const data = await invokeWorkerPushDeviceAction({
+        action: "devices",
+        workerId,
+      });
+      return Array.isArray(data?.devices) ? data.devices.map(normalizeWorkerPushDevice) : [];
+    }
+
+    function renderWorkerPushDeviceManagerLoading() {
+      state.workerPushDeviceLoading = true;
+      renderPreservingScroll();
+    }
+
+    async function refreshWorkerPushDevices(workerId = state.workerPushDeviceWorkerId) {
+      if (!workerId) return [];
+      state.workerPushDeviceLoading = true;
+      renderPreservingScroll();
+      try {
+        const devices = await fetchWorkerPushDevices(workerId);
+        if (state.workerPushDeviceWorkerId === workerId) {
+          state.workerPushDevices = devices;
+          updateWorkerPushStatusFromDevices(workerId, devices);
+        }
+        return devices;
+      } catch (error) {
+        console.error(error);
+        toast("알림 기기 목록을 불러오지 못했습니다.");
+        return [];
+      } finally {
+        state.workerPushDeviceLoading = false;
+        renderPreservingScroll();
+      }
+    }
+
+    function openWorkerPushDeviceManager(event) {
+      if (!state.adminMode) return toast("관리자 모드에서 알림 기기를 수정할 수 있습니다.");
+      const button = event?.target?.closest("[data-worker-push-manage]");
+      const workerId = button?.dataset.workerPushManage || "";
+      const worker = state.workers.find((row) => row.id === workerId);
+      if (!worker) return toast("작업자를 찾을 수 없습니다.");
+      state.workerPushDeviceWorkerId = workerId;
+      state.workerPushDevices = [];
+      renderWorkerPushDeviceManagerLoading();
+      refreshWorkerPushDevices(workerId).catch((error) => console.warn("worker push devices refresh failed", error));
+    }
+
+    function closeWorkerPushDeviceManager() {
+      state.workerPushDeviceWorkerId = "";
+      state.workerPushDeviceLoading = false;
+      state.workerPushDeviceSavingId = "";
+      state.workerPushDevices = [];
+      renderPreservingScroll();
+    }
+
+    function workerPushDeviceInput(deviceId, selector) {
+      return Array.from(document.querySelectorAll(selector))
+        .find((node) => node.dataset.workerPushDeviceId === deviceId);
+    }
+
+    async function saveWorkerPushDevice(event) {
+      const button = event?.target?.closest("[data-worker-push-device-save]");
+      const deviceId = button?.dataset.workerPushDeviceSave || "";
+      const workerId = state.workerPushDeviceWorkerId;
+      if (!workerId || !deviceId) return;
+      const labelInput = workerPushDeviceInput(deviceId, "[data-worker-push-device-label]");
+      const enabledInput = workerPushDeviceInput(deviceId, "[data-worker-push-device-enabled]");
+      state.workerPushDeviceSavingId = deviceId;
+      renderPreservingScroll();
+      try {
+        await invokeWorkerPushDeviceAction({
+          action: "updateDevice",
+          workerId,
+          subscriptionId: deviceId,
+          deviceLabel: labelInput?.value || "알림 기기",
+          enabled: Boolean(enabledInput?.checked),
+        });
+        toast("알림 기기 설정을 저장했습니다.");
+        await refreshWorkerPushDevices(workerId);
+        await refreshWorkerPushSubscriptionStatuses({ force: true });
+      } catch (error) {
+        console.error(error);
+        toast(/sender_required|forbidden|403/i.test(String(error?.message || "")) ? "알림 기기 수정 권한을 확인하세요." : "알림 기기 설정 저장에 실패했습니다.");
+      } finally {
+        state.workerPushDeviceSavingId = "";
+        renderPreservingScroll();
+      }
+    }
+
+    async function deleteWorkerPushDevice(event) {
+      const button = event?.target?.closest("[data-worker-push-device-delete]");
+      const deviceId = button?.dataset.workerPushDeviceDelete || "";
+      const workerId = state.workerPushDeviceWorkerId;
+      if (!workerId || !deviceId) return;
+      const device = state.workerPushDevices.find((row) => row.id === deviceId);
+      if (!confirm(`${device?.deviceLabel || "알림 기기"} 구독을 삭제할까요?`)) return;
+      state.workerPushDeviceSavingId = deviceId;
+      renderPreservingScroll();
+      try {
+        await invokeWorkerPushDeviceAction({
+          action: "deleteDevice",
+          workerId,
+          subscriptionId: deviceId,
+        });
+        toast("알림 기기를 삭제했습니다.");
+        await refreshWorkerPushDevices(workerId);
+        await refreshWorkerPushSubscriptionStatuses({ force: true });
+      } catch (error) {
+        console.error(error);
+        toast(/sender_required|forbidden|403/i.test(String(error?.message || "")) ? "알림 기기 삭제 권한을 확인하세요." : "알림 기기 삭제에 실패했습니다.");
+      } finally {
+        state.workerPushDeviceSavingId = "";
+        renderPreservingScroll();
+      }
     }
 
     async function registerWorkerPushNotifications() {
@@ -1887,6 +2048,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pushSubscriptionStatusChecking: false,
       workerPushSubscriptionStatusesChecking: false,
       workerPushSubscriptionStatusTimer: null,
+      workerPushDeviceWorkerId: "",
+      workerPushDevices: [],
+      workerPushDeviceLoading: false,
+      workerPushDeviceSavingId: "",
       pushEmployeeNoPromptOpen: false,
       pushRegistrationSubmitting: false,
       loginSubmitting: false,
@@ -2471,6 +2636,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }[state.view]();
       page.insertAdjacentHTML("beforeend", renderPhotoViewer());
       page.insertAdjacentHTML("beforeend", renderPushTemplateEditor());
+      page.insertAdjacentHTML("beforeend", renderWorkerPushDeviceManager());
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
@@ -5287,6 +5453,72 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function workerPushDeviceBrowserLabel(userAgent) {
+      const ua = String(userAgent || "");
+      if (/Whale/i.test(ua)) return "웨일";
+      if (/Edg\//i.test(ua)) return "Edge";
+      if (/Chrome/i.test(ua)) return "Chrome";
+      if (/Safari/i.test(ua)) return "Safari";
+      return "브라우저";
+    }
+
+    function workerPushDevicePlatformLabel(userAgent) {
+      const ua = String(userAgent || "");
+      if (/Android/i.test(ua)) return "Android";
+      if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
+      if (/Windows/i.test(ua)) return "Windows";
+      if (/Macintosh|Mac OS/i.test(ua)) return "macOS";
+      return "기기";
+    }
+
+    function renderWorkerPushDeviceRow(device) {
+      const saving = state.workerPushDeviceSavingId === device.id;
+      const lastSeen = formatDateTime(device.lastSeenAt);
+      const lastSent = formatDateTime(device.lastSentAt);
+      const deviceMeta = `${workerPushDevicePlatformLabel(device.userAgent)} · ${workerPushDeviceBrowserLabel(device.userAgent)}`;
+      return `<article class="push-device-row ${device.enabled ? "" : "is-disabled"}">
+        <label class="push-device-toggle">
+          <input type="checkbox" data-worker-push-device-enabled data-worker-push-device-id="${esc(device.id)}" ${device.enabled ? "checked" : ""} ${saving ? "disabled" : ""} />
+          <span>수신</span>
+        </label>
+        <div class="push-device-main">
+          <label class="sr-only" for="pushDeviceLabel_${esc(device.id)}">기기 이름</label>
+          <input id="pushDeviceLabel_${esc(device.id)}" class="input push-device-label-input" data-worker-push-device-label data-worker-push-device-id="${esc(device.id)}" value="${esc(device.deviceLabel)}" ${saving ? "disabled" : ""} />
+          <div class="small muted push-device-meta">${esc(deviceMeta)} · 최근 확인 ${esc(lastSeen)}</div>
+          ${device.lastSentAt ? `<div class="small muted push-device-meta">최근 발송 ${esc(lastSent)}</div>` : ""}
+          ${device.lastError ? `<div class="small danger push-device-error">최근 오류 ${esc(device.lastError)}</div>` : ""}
+        </div>
+        <div class="push-device-actions">
+          <button class="btn-light" data-action="save-worker-push-device" data-worker-push-device-save="${esc(device.id)}" ${saving ? "disabled" : ""} type="button">${saving ? "저장 중" : "저장"}</button>
+          <button class="btn-danger" data-action="delete-worker-push-device" data-worker-push-device-delete="${esc(device.id)}" ${saving ? "disabled" : ""} type="button">삭제</button>
+        </div>
+      </article>`;
+    }
+
+    function renderWorkerPushDeviceManager() {
+      const worker = currentWorkerPushDeviceWorker();
+      if (!worker) return "";
+      const loading = Boolean(state.workerPushDeviceLoading);
+      const devices = Array.isArray(state.workerPushDevices) ? state.workerPushDevices : [];
+      const enabledCount = devices.filter((device) => device.enabled !== false).length;
+      return `<div class="push-device-overlay" role="dialog" aria-modal="true" aria-labelledby="pushDeviceTitle">
+        <button class="push-device-backdrop" data-action="close-worker-push-devices" type="button" aria-label="알림 기기 관리 닫기"></button>
+        <section class="push-device-panel">
+          <div class="push-device-head">
+            <div>
+              <strong id="pushDeviceTitle">${esc(worker.name)} 알림 기기</strong>
+              <span>${devices.length}대 등록 · 수신 ${enabledCount}대</span>
+            </div>
+            <button class="push-device-close" data-action="close-worker-push-devices" type="button" aria-label="닫기">×</button>
+          </div>
+          <p class="push-device-description">수신을 켠 기기에만 서약 미완료와 불안전요소 브라우저 알림이 발송됩니다.</p>
+          <div class="push-device-list">
+            ${loading ? `<div class="empty">알림 기기 상태를 확인하고 있습니다.</div>` : devices.length ? devices.map(renderWorkerPushDeviceRow).join("") : `<div class="empty">등록된 알림 기기가 없습니다.</div>`}
+          </div>
+        </section>
+      </div>`;
+    }
+
     function renderWorkerRow(worker) {
       const position = normalizeWorkerPosition(worker.position);
       const positionAction = isLeaderWorker(worker) ? "작업자로 변경" : "조장 지정";
@@ -5300,6 +5532,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           </div>
         </div>
         <div class="item-actions">
+          <button class="btn-light" data-action="edit-worker-push-devices" data-worker-push-manage="${esc(worker.id)}" ${state.adminMode ? "" : "disabled"} type="button">알림수정</button>
           <button class="btn-light" data-toggle-worker-position="${esc(worker.id)}" type="button">${esc(positionAction)}</button>
           <button class="btn-light" data-edit-worker="${esc(worker.id)}" type="button">수정</button>
           <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
@@ -7403,6 +7636,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "reset-push-template": resetPushTemplateEditor,
         "register-push-notifications": registerWorkerPushNotifications,
         "test-push-notification": testCurrentWorkerPushNotification,
+        "edit-worker-push-devices": openWorkerPushDeviceManager,
+        "close-worker-push-devices": closeWorkerPushDeviceManager,
+        "save-worker-push-device": saveWorkerPushDevice,
+        "delete-worker-push-device": deleteWorkerPushDevice,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,
