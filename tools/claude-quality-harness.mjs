@@ -16,7 +16,7 @@ const result = {
     expectedCommit,
     productionAlias: "https://gs-safety-checklist.vercel.app",
     supabaseProjectRef: "yuuroocvxvzgmsdeeiws",
-    appVersion: "0.4-20260523",
+    appVersion: "0.5-20260525",
   },
   checks: [],
   warnings: [],
@@ -149,17 +149,17 @@ try {
 
   for (const page of pages) {
     const html = read(page);
-    add(`${page} uses app-v2`, html.includes("assets/js/app-v2.js?v=20260525-push-icon-1"));
-    add(`${page} uses styles-v2`, html.includes("assets/css/styles-v2.css?v=20260525-push-icon-1"));
+    add(`${page} uses app-v2`, html.includes("assets/js/app-v2.js?v=20260525-admin-push-1"));
+    add(`${page} uses styles-v2`, html.includes("assets/css/styles-v2.css?v=20260525-admin-push-1"));
     add(`${page} does not use legacy app.js`, !html.includes("assets/js/app.js"));
     add(`${page} does not use legacy styles.css`, !html.includes("assets/css/styles.css"));
-    add(`${page} uses static fallback version 0.4`, html.includes("version 0.4"));
+    add(`${page} uses static fallback version 0.5`, html.includes("version 0.5"));
     add(`${page} does not use stale static fallback version 0.3`, !html.includes("version 0.3"));
     add(`${page} does not reference removed CDN`, !html.includes("cdn.jsdelivr.net"));
     add(`${page} does not reference old Supabase project`, !html.includes("psatbyktzladtymdygwh.supabase.co"));
   }
 
-  assertContains(app, 'const APP_VERSION = "0.4-20260523"', "APP_VERSION unchanged");
+  assertContains(app, 'const APP_VERSION = "0.5-20260525"', "APP_VERSION unchanged");
   assertContains(app, "https://yuuroocvxvzgmsdeeiws.supabase.co", "Supabase project ref is active target");
   add("Supabase anon key is not printed by harness", true, "intentionally redacted");
   assertContains(app, "DEFAULT_PUSH_NOTIFICATION_TEMPLATES", "push template defaults exist");
@@ -182,8 +182,8 @@ try {
 
   assertContains(styles, ".push-template-overlay", "push template modal CSS exists");
   assertContains(styles, ".pledge-notify-actions", "pledge notify action CSS exists");
-  assertContains(sw, 'const CACHE = "gs-safety-v12-20260525-push-icon"', "service worker cache is current");
-  assertContains(notFound, "assets/css/styles-v2.css?v=20260525-push-icon-1", "404 uses v2 styles");
+  assertContains(sw, 'const CACHE = "gs-safety-v14-20260525-admin-push"', "service worker cache is current");
+  assertContains(notFound, "assets/css/styles-v2.css?v=20260525-admin-push-1", "404 uses v2 styles");
   assertContains(redesignPreview, "assets/js/vendor/supabase-js-2.105.3.min.js", "redesign preview uses local Supabase vendor bundle");
   add("redesign preview does not use removed CDN", !redesignPreview.includes("cdn.jsdelivr.net"));
 
@@ -210,7 +210,8 @@ try {
   const illustrationPngs = existsSync(illustrationDir)
     ? readdirSync(illustrationDir).filter((file) => file.endsWith(".png"))
     : [];
-  add("unused shipyard illustration PNGs absent", illustrationPngs.length === 0, `${illustrationPngs.length} png files`);
+  add("shipyard illustration PNGs generated", illustrationPngs.length >= 40, `${illustrationPngs.length} png files`);
+  add("shipyard illustration source sheet exists", exists("assets/icons/shipyard/shipyard-illustration-sheet.png"));
 
   const shellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
     .map((match) => match[1])
@@ -223,11 +224,11 @@ try {
       const base = result.baseline.productionAlias;
       const indexLive = await fetchText(`${base}/index.html`);
       const notFoundLive = await fetchText(`${base}/404.html`);
-      const removedLive = await fetch(`${base}/assets/icons/shipyard/illustrations/anchorInstallation.png`, { cache: "no-store" });
+      const workIconLive = await fetch(`${base}/assets/icons/shipyard/illustrations/dpInstallation.png`, { cache: "no-store" });
       add("live index responds 200", indexLive.status === 200, String(indexLive.status));
-      add("live index uses app-v2", indexLive.text.includes("assets/js/app-v2.js?v=20260525-push-icon-1"));
-      add("live 404 page uses v2 styles", notFoundLive.text.includes("assets/css/styles-v2.css?v=20260525-push-icon-1"));
-      add("live removed illustration returns 404", removedLive.status === 404, String(removedLive.status));
+      add("live index uses app-v2", indexLive.text.includes("assets/js/app-v2.js?v=20260525-admin-push-1"));
+      add("live 404 page uses v2 styles", notFoundLive.text.includes("assets/css/styles-v2.css?v=20260525-admin-push-1"));
+      add("live shipyard illustration responds 200", workIconLive.status === 200, String(workIconLive.status));
     } catch (error) {
       warn("live fetch skipped", error && error.message ? error.message : String(error));
     }

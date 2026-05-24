@@ -23,12 +23,12 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const html = read("index.html");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css\?v=20260525-push-icon-1/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/js\/app-v2\.js\?v=20260525-push-icon-1/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260525-admin-push-1/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
-assert.match(html, /version 0\.4/);
+assert.match(html, /version 0\.5/);
 assert.doesNotMatch(html, /version 0\.3/);
 
 [
@@ -44,12 +44,12 @@ assert.doesNotMatch(html, /version 0\.3/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260525-push-icon-1/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js\?v=20260525-push-icon-1/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260525-admin-push-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
-  assert.match(page, /version 0\.4/, `${file} should use the current static fallback version label`);
+  assert.match(page, /version 0\.5/, `${file} should use the current static fallback version label`);
   assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
   assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
   assert.doesNotMatch(page, /version 0\.3/, `${file} should not use the stale static fallback version label`);
@@ -58,7 +58,7 @@ assert.doesNotMatch(html, /version 0\.3/);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260525-push-icon-1/);
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 const redesignPreview = read("redesign-v2.html");
 assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
@@ -72,21 +72,30 @@ assert.doesNotMatch(redesignPreview, /cdn\.jsdelivr\.net/);
 ].forEach((file) => {
   assert.ok(!fs.existsSync(path.join(root, file)), `${file} should not remain after v2 cleanup`);
 });
-const unusedIllustrationDir = path.join(root, "assets/icons/shipyard/illustrations");
-const unusedIllustrations = fs.existsSync(unusedIllustrationDir)
-  ? fs.readdirSync(unusedIllustrationDir).filter((file) => file.endsWith(".png"))
+const illustrationDir = path.join(root, "assets/icons/shipyard/illustrations");
+const illustrations = fs.existsSync(illustrationDir)
+  ? fs.readdirSync(illustrationDir).filter((file) => file.endsWith(".png"))
   : [];
-assert.deepStrictEqual(unusedIllustrations, [], "unused shipyard illustration PNGs should not remain");
+assert.ok(illustrations.length >= 40, "shipyard illustration PNGs should be generated from the source sheet");
+["blockAssembly.png", "dpInstallation.png", "safetyGear.png"].forEach((file) => {
+  assert.ok(fs.existsSync(path.join(illustrationDir, file)), `${file} should exist`);
+});
+assert.ok(fs.existsSync(path.join(root, "assets/icons/shipyard/shipyard-illustration-sheet.png")));
 
 const app = read("assets/js/app-v2.js");
 const styles = read("assets/css/styles-v2.css");
-assert.match(app, /const APP_VERSION = "0\.4-20260523"/);
+assert.match(app, /const APP_VERSION = "0\.5-20260525"/);
 assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 10 \* 1000/);
 assert.match(app, /const REMOTE_POLL_INTERVAL_MS = 15 \* 1000/);
 assert.match(app, /const REMOTE_REACTIVE_PULL_DELAY_MS = 700/);
 assert.match(app, /const SYNC_RETRY_DELAY_MS = 8 \* 1000/);
 assert.match(app, /const STORAGE_WARNING_KB = 4600/);
 assert.match(app, /const STORAGE_COMPACT_KB = 3800/);
+assert.match(app, /function issueSelectableShips\(\)/);
+assert.match(app, /function visibleShipOptionsForIssues\(selectedNo = ""\) \{\s*return `<option value="">호선 선택<\/option>\$\{issueSelectableShips\(\)/);
+assert.match(app, /function renderUnsafeShipStep\(\) \{\s*const ships = issueSelectableShips\(\)/);
+assert.match(app, /function renderMaterialShipStep\(\) \{\s*const ships = issueSelectableShips\(\)/);
+assert.match(app, /등록된 호선이 없습니다\. 호선 관리에서 먼저 호선을 추가하세요\./);
 assert.match(app, /const PENDING_PHOTO_RETRY_MAX_BYTES = 240 \* 1024/);
 assert.match(app, /function pendingPhotoDataUrlForStorage\(value\)/);
 assert.match(app, /function compactStoragePayloadsIfNeeded\(\)/);
@@ -199,6 +208,8 @@ assert.match(app, /const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date\.parse\("2026-
 assert.match(app, /const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = \{/);
 assert.match(app, /pledgePending: \{[\s\S]*title: "안전 서약 미완료"/);
 assert.match(app, /unsafeIssue: \{[\s\S]*body: "\{호선\} · \{등록자\} · \{내용\}"/);
+assert.match(app, /adminManual: \{[\s\S]*title: "GS 안전 체크리스트 안내"/);
+assert.match(app, /const ADMIN_PUSH_STYLES = \[/);
 assert.match(app, /function pushNotificationsSupported\(\)/);
 assert.match(app, /function pushRegisteredForCurrentDevice\(\)/);
 assert.match(app, /function pushDeviceName\(\)/);
@@ -210,14 +221,23 @@ assert.match(app, /async function refreshWorkerPushSubscriptionStatuses\(options
 assert.match(app, /function scheduleWorkerPushSubscriptionStatusRefresh\(options = \{\}\)/);
 assert.match(app, /function renderWorkerPushDeviceManager\(\)/);
 assert.match(app, /function renderWorkerPushDeviceRow\(device\)/);
+assert.match(app, /function renderPushManager\(\)/);
+assert.match(app, /function adminPushTargetWorkers\(\)/);
+assert.match(app, /async function sendAdminPush\(\)/);
 assert.match(app, /async function saveWorkerPushDevice\(event\)/);
 assert.match(app, /async function deleteWorkerPushDevice\(event\)/);
 assert.match(app, /data-worker-push-badge/);
 assert.match(app, /data-worker-push-manage/);
+assert.match(app, /\["push", "푸시"\]/);
+assert.match(app, /data-action="send-admin-push"/);
+assert.match(app, /sendKind: options\.kind \|\| ""/);
+assert.match(app, /\{ kind: "adminManual" \}/);
 assert.match(app, /action: "status"/);
 assert.match(app, /button\.disabled = loggedIn && \(registered \|\| checking \|\| registering \|\| !supported\)/);
 assert.match(app, /Supabase에 등록된 알림 구독/);
-assert.match(app, /notification-badge\.png/);
+assert.match(app, /notification-icon\.png/);
+assert.match(app, /function setupPictogramImageFallbacks\(\)/);
+assert.match(app, /data-fallback-icon/);
 assert.match(app, /function timeoutAfter\(ms\)/);
 assert.match(app, /function rejectAfter\(ms, message\)/);
 assert.match(app, /Promise\.race\(\[navigator\.serviceWorker\.ready, timeoutAfter\(5000\)\]\)/);
@@ -300,6 +320,16 @@ assert.match(app, /data-work-prep-tool/);
 assert.match(styles, /\.work-prep-entry-card/);
 assert.match(styles, /\.work-prep-register-flow/);
 assert.match(styles, /\.work-prep-status-strip/);
+assert.match(styles, /\.work-prep-date-section/);
+assert.match(styles, /\.work-prep-record-card/);
+assert.match(styles, /\.work-prep-record-meta/);
+assert.match(styles, /\.work-prep-order-strip/);
+assert.match(styles, /\.worker-badge-row/);
+assert.match(styles, /\.worker-team-badge/);
+assert.match(styles, /\.push-manager-panel/);
+assert.match(styles, /\.push-style-option/);
+assert.match(styles, /\.push-worker-card/);
+assert.match(styles, /\.push-send-bar/);
 assert.match(app, /function inspectionActualDate\(row\) \{[\s\S]*if \(row\?\.date\) return dateOnly\(row\.date\);[\s\S]*return Number\.isNaN\(createdAt\.getTime\(\)\) \? dateOnly\(row\.createdAt\) : localDate\(createdAt\);/);
 assert.match(app, /id="unsafePhotoCamera" data-unsafe-photo-input="camera" type="file" accept="image\/\*" capture="environment"/);
 assert.match(app, /id="unsafePhotoGallery" data-unsafe-photo-input="gallery" type="file" accept="image\/\*" multiple/);
@@ -478,14 +508,19 @@ assert.match(css, /\.monthly-worker-cell\.partial/);
 assert.match(css, /\.monthly-worker-cell\.missing/);
 assert.match(css, /\.monthly-worker-cell\.rest/);
 assert.match(css, /\.monthly-worker-cell\.excluded/);
+assert.match(css, /\.pictogram-image-fallback/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v12-20260525-push-icon"/);
-assert.match(sw, /styles-v2\.css\?v=20260525-push-icon-1/);
-assert.match(sw, /app-v2\.js\?v=20260525-push-icon-1/);
+assert.match(sw, /const CACHE = "gs-safety-v14-20260525-admin-push"/);
+assert.match(sw, /styles-v2\.css\?v=20260525-admin-push-1/);
+assert.match(sw, /app-v2\.js\?v=20260525-admin-push-1/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);
+assert.match(sw, /renotify: data\.renotify !== false/);
+assert.match(sw, /requireInteraction: Boolean\(data\.requireInteraction\)/);
+assert.match(sw, /Array\.isArray\(data\.vibrate\)/);
+assert.match(sw, /style: data\.style \|\| "notice"/);
 assert.match(sw, /if \(\s*\/\\\.\(css\|js\)\$\/\.test\(requestUrl\.pathname\)\s*\)/);
 assert.match(sw, /fetch\(event\.request\)[\s\S]+cache\.put\(event\.request, copy\)/);
 const swShellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
@@ -523,7 +558,12 @@ assert.match(pushFunction, /async function authorizeSendRequest/);
 assert.match(pushFunction, /senderWorkerId/);
 assert.match(pushFunction, /senderEmployeeNo/);
 assert.match(pushFunction, /sendKind/);
+assert.match(pushFunction, /sendKind === "pledgePending" \|\| sendKind === "adminManual"/);
 assert.match(pushFunction, /forbidden_send_kind/);
+assert.match(pushFunction, /style: cleanText\(notificationRaw\.style, 40\)/);
+assert.match(pushFunction, /requireInteraction: booleanValue\(notificationRaw\.requireInteraction, false\)/);
+assert.match(pushFunction, /renotify: booleanValue\(notificationRaw\.renotify, true\)/);
+assert.match(pushFunction, /vibrate: Array\.isArray\(notificationRaw\.vibrate\)/);
 
 const vercel = JSON.parse(read("vercel.json"));
 const rewrites = vercel.rewrites.map((row) => row.source);

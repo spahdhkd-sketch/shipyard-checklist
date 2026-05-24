@@ -1,7 +1,7 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
     const RECORD_RESET_PASSWORD = "gsfire820062!";
-    const APP_VERSION = "0.4-20260523";
+    const APP_VERSION = "0.5-20260525";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -16,7 +16,49 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         title: "불안전요소 등록",
         body: "{호선} · {등록자} · {내용}",
       },
+      adminManual: {
+        title: "GS 안전 체크리스트 안내",
+        body: "현장 안전 알림을 확인해주세요.",
+      },
     };
+    const ADMIN_PUSH_STYLES = [
+      {
+        id: "notice",
+        label: "일반",
+        tone: "teal",
+        titlePrefix: "",
+        requireInteraction: false,
+        renotify: true,
+        vibrate: [80, 40, 80],
+      },
+      {
+        id: "warning",
+        label: "주의",
+        tone: "orange",
+        titlePrefix: "[주의] ",
+        requireInteraction: true,
+        renotify: true,
+        vibrate: [120, 60, 120],
+      },
+      {
+        id: "urgent",
+        label: "긴급",
+        tone: "red",
+        titlePrefix: "[긴급] ",
+        requireInteraction: true,
+        renotify: true,
+        vibrate: [180, 80, 180, 80, 180],
+      },
+      {
+        id: "done",
+        label: "완료",
+        tone: "green",
+        titlePrefix: "[확인] ",
+        requireInteraction: false,
+        renotify: false,
+        vibrate: [80],
+      },
+    ];
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
     const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
@@ -127,35 +169,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       namingCeremony: illustration("namingCeremony"),
       gasCutting: illustration("gasCutting"),
       anchorInstallation: illustration("anchorInstallation"),
-      hullGrinding: illustration("gasCutting"),
+      hullGrinding: illustration("hullGrinding"),
       insulationWork: illustration("insulationWork"),
       wasteDisposal: illustration("wasteDisposal"),
       safetyTraining: illustration("safetyTraining"),
       remoteInspection: illustration("remoteInspection"),
       ecoPainting: illustration("ecoPainting"),
-      launchPrep: illustration("yardTransfer"),
-      launchInspection: illustration("namingCeremony"),
-      seaTrial: illustration("yardTransfer"),
+      launchPrep: illustration("launchPrep"),
+      launchInspection: illustration("launchInspection"),
+      seaTrial: illustration("seaTrial"),
       controlRoom: illustration("controlRoom"),
-      sonarInstallation: illustration("controlRoom"),
-      blockTransport: illustration("materialTransport"),
-      weldingRobot: illustration("weldingWork"),
-      smartLogistics: illustration("materialTransport"),
-      environmentalProtection: illustration("ecoPainting"),
-      safetyGear: illustration("safetyTraining"),
-      pressureTest: illustration("qualityInspection"),
-      dpInstallation: illustration("controlRoom"),
-      dpInspection: illustration("qualityInspection"),
-      classSurvey: illustration("qualityInspection"),
-      demoCheck: illustration("cutInspection"),
-      lcWork: illustration("blockAssembly"),
-      stInspection: illustration("qualityInspection"),
-      dlWork: illustration("yardTransfer"),
+      sonarInstallation: illustration("sonarInstallation"),
+      blockTransport: illustration("blockTransport"),
+      weldingRobot: illustration("weldingRobot"),
+      smartLogistics: illustration("smartLogistics"),
+      environmentalProtection: illustration("environmentalProtection"),
+      safetyGear: illustration("safetyGear"),
+      pressureTest: illustration("pressureTest"),
+      dpInstallation: illustration("dpInstallation"),
+      dpInspection: illustration("dpInspection"),
+      classSurvey: illustration("classSurvey"),
+      demoCheck: illustration("demoCheck"),
+      lcWork: illustration("lcWork"),
+      stInspection: illustration("stInspection"),
+      dlWork: illustration("dlWork"),
       welding: illustration("weldingWork"),
       workAtHeights: illustration("scaffolding"),
       erection: illustration("blockAssembly"),
-      confinedSpace: illustration("boardingWork"),
-      confined: illustration("boardingWork"),
+      confinedSpace: illustration("confinedSpace"),
+      confined: illustration("confined"),
     };
     const BUILT_IN_PICTOGRAMS = PICTOGRAMS.map((icon, index) => ({
       id: icon.key,
@@ -1339,7 +1381,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       try {
         const notification = new Notification(title, {
           icon: "/assets/icons/notification-icon.png",
-          badge: "/assets/icons/notification-badge.png",
+      badge: "/assets/icons/notification-icon.png",
           ...options,
         });
         window.setTimeout(() => notification.close?.(), 8000);
@@ -1443,14 +1485,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return workerPushSubscriptionStatuses();
       } finally {
         state.workerPushSubscriptionStatusesChecking = false;
-        if (state.view === "manage" && state.manageTab === "workers") {
+        if (state.view === "manage" && ["workers", "push"].includes(state.manageTab)) {
           renderPreservingScroll();
         }
       }
     }
 
     function scheduleWorkerPushSubscriptionStatusRefresh(options = {}) {
-      if (state.view !== "manage" || state.manageTab !== "workers" || !state.adminMode) return;
+      if (state.view !== "manage" || !["workers", "push"].includes(state.manageTab) || !state.adminMode) return;
       const workerIds = state.workers.map((worker) => worker.id).filter(Boolean);
       if (!options.force && !workerPushSubscriptionStatusRefreshNeeded(workerIds)) return;
       if (state.workerPushSubscriptionStatusesChecking || state.workerPushSubscriptionStatusTimer) return;
@@ -1772,6 +1814,70 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
+    function updateAdminPushDraftField(field, value) {
+      const draft = createAdminPushDraft(state.adminPushDraft);
+      if (field === "title") draft.title = String(value || "").slice(0, 80);
+      if (field === "body") draft.body = String(value || "").slice(0, 220);
+      if (field === "url") draft.url = String(value || "").trim() || "/index.html";
+      state.adminPushDraft = draft;
+      saveAdminPushDraft();
+    }
+
+    function setAdminPushStyle(styleId) {
+      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, style: adminPushStyleMeta(styleId).id });
+      saveAdminPushDraft();
+      renderPreservingScroll();
+    }
+
+    function setAdminPushTargetMode(mode) {
+      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, targetMode: normalizeAdminPushTargetMode(mode) });
+      saveAdminPushDraft();
+      renderPreservingScroll();
+    }
+
+    function toggleAdminPushWorker(workerId, checked) {
+      const id = String(workerId || "").trim();
+      if (!id) return;
+      const selected = new Set(normalizeAdminPushWorkerIds(state.adminPushDraft.selectedWorkerIds));
+      if (checked) selected.add(id);
+      else selected.delete(id);
+      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, targetMode: "selected", selectedWorkerIds: [...selected] });
+      saveAdminPushDraft();
+      renderPreservingScroll();
+    }
+
+    async function refreshPushManagerStatuses() {
+      await refreshWorkerPushSubscriptionStatuses({ force: true });
+      toast("푸시 구독 상태를 새로 확인했습니다.");
+    }
+
+    async function sendAdminPush() {
+      if (state.adminPushSending) return;
+      if (!state.adminMode) return toast("관리자 모드가 필요합니다.");
+      if (!canSendPledgeNotifications()) return toast("조장, 관리, 총무 작업자 로그인에서 발송할 수 있습니다.");
+      const targets = adminPushTargetWorkers();
+      if (!targets.length) return toast("발송 대상 작업자를 선택하세요.");
+      const preview = adminPushNotificationPreview();
+      state.adminPushSending = true;
+      renderPreservingScroll();
+      try {
+        const result = await sendWorkerPushNotification(targets.map((worker) => worker.id), {
+          title: preview.title,
+          body: preview.body,
+          tag: `admin-${preview.style.id}-${Date.now()}`,
+          url: preview.url,
+          style: preview.style.id,
+          requireInteraction: Boolean(preview.style.requireInteraction),
+          renotify: Boolean(preview.style.renotify),
+          vibrate: preview.style.vibrate,
+        }, { kind: "adminManual" });
+        if (result) toast(`푸시 발송 완료: ${result.sent || 0}건 전송, ${result.failed || 0}건 실패`);
+      } finally {
+        state.adminPushSending = false;
+        renderPreservingScroll();
+      }
+    }
+
     async function testCurrentWorkerPushNotification() {
       if (!pushTestNotificationEnabled()) return toast("테스트 알림은 비활성화되었습니다.");
       const worker = currentWorkerSessionWorker();
@@ -1870,8 +1976,47 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           tokens: ["{호선}", "{등록자}", "{내용}"],
           previewContext: { 호선: "호선 101", 등록자: "김준혁", 내용: "가스 호스 정리 필요" },
         },
+        adminManual: {
+          heading: "관리자 수동 푸시 문구",
+          description: "관리 메뉴의 푸시 탭에서 전체 또는 선택 작업자에게 즉시 발송됩니다.",
+          tokens: ["{날짜}", "{발신자}", "{대상수}"],
+          previewContext: { 날짜: today().replace(/-/g, "."), 발신자: currentWorkerSessionWorker()?.name || "관리자", 대상수: 1 },
+        },
       };
       return meta[normalizePushTemplateKind(kind)] || null;
+    }
+
+    function adminPushStyleMeta(styleId) {
+      return ADMIN_PUSH_STYLES.find((style) => style.id === styleId) || ADMIN_PUSH_STYLES[0];
+    }
+
+    function normalizeAdminPushTargetMode(value) {
+      return ["subscribed", "all", "selected"].includes(value) ? value : "subscribed";
+    }
+
+    function normalizeAdminPushWorkerIds(value) {
+      return [...new Set((Array.isArray(value) ? value : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean))];
+    }
+
+    function createAdminPushDraft(overrides = {}) {
+      const source = overrides && typeof overrides === "object" ? overrides : {};
+      const fallback = DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual;
+      const style = adminPushStyleMeta(source.style);
+      return {
+        targetMode: normalizeAdminPushTargetMode(source.targetMode),
+        selectedWorkerIds: normalizeAdminPushWorkerIds(source.selectedWorkerIds),
+        title: String(source.title || "").trim() || fallback.title,
+        body: String(source.body || "").trim() || fallback.body,
+        url: String(source.url || "").trim() || "/index.html",
+        style: style.id,
+      };
+    }
+
+    function saveAdminPushDraft() {
+      state.adminPushDraft = createAdminPushDraft(state.adminPushDraft);
+      saveJson("adminPushDraft", state.adminPushDraft);
     }
 
     function pledgeRowStatus(row) {
@@ -2062,6 +2207,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
       materialFilters: loadJson("materialFilters", { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" }),
       manageTab: loadJson("manageTab", "workers"),
+      adminPushDraft: createAdminPushDraft(loadJson("adminPushDraft", {})),
+      adminPushSending: false,
       unsafeDetailId: "",
       lastUnsafeIssueId: "",
       lastMaterialId: "",
@@ -2270,7 +2417,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.materialDraft = createMaterialDraft(state.materialDraft);
       state.unsafeFilters = { shipNo: "", status: "", workerId: "", sort: "status", ...state.unsafeFilters };
       state.materialFilters = { shipNo: "", status: "", workerId: "", materialName: "", sort: "status", ...state.materialFilters };
-      if (!["workers", "unsafe", "materials"].includes(state.manageTab)) state.manageTab = "workers";
+      if (!["workers", "push", "unsafe", "materials"].includes(state.manageTab)) state.manageTab = "workers";
     }
 
     function normalizeStatusRecords(records, statuses) {
@@ -2640,6 +2787,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
+      setupPictogramImageFallbacks();
       ensureRenderedAccessibility();
       scheduleWorkerPushSubscriptionStatusRefresh();
     }
@@ -3450,10 +3598,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function workVisual(id, fallbackIcon) {
       const src = pictogramAssetSrc(id);
+      const iconName = lineIconName(id, fallbackIcon);
       if (src) {
-        return `<img class="pictogram-image" src="${esc(src)}" alt="" loading="lazy" decoding="async" aria-hidden="true" />`;
+        return `<img class="pictogram-image" src="${esc(src)}" alt="" loading="lazy" decoding="async" aria-hidden="true" data-fallback-icon="${esc(iconName)}" />`;
       }
-      return lineIcon(lineIconName(id, fallbackIcon));
+      return lineIcon(iconName);
+    }
+
+    function setupPictogramImageFallbacks() {
+      document.querySelectorAll("img.pictogram-image[data-fallback-icon]").forEach((img) => {
+        if (img.dataset.fallbackReady === "true") return;
+        img.dataset.fallbackReady = "true";
+        img.addEventListener("error", () => {
+          const fallback = document.createElement("span");
+          fallback.className = "pictogram-image pictogram-image-fallback";
+          fallback.setAttribute("aria-hidden", "true");
+          fallback.innerHTML = lineIcon(img.dataset.fallbackIcon || "shieldCheck");
+          img.replaceWith(fallback);
+        }, { once: true });
+        if (img.complete && img.naturalWidth === 0) {
+          img.dispatchEvent(new Event("error"));
+        }
+      });
     }
 
     function categoryVisual(cat) {
@@ -4927,7 +5093,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderUnsafeShipStep() {
-      const ships = selectableShips();
+      const ships = issueSelectableShips();
       const selected = ships.find((ship) => ship.no === state.unsafeDraft.shipNo);
       const selectedMeta = selected ? effectiveShipStage(selected) : null;
       const body = `${ships.length ? `<div class="field material-flow-field">
@@ -4936,7 +5102,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${visibleShipOptionsForIssues(state.unsafeDraft.shipNo)}
         </select>
       </div>
-      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력하세요.</div>`}`;
+      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">등록된 호선이 없습니다. 호선 관리에서 먼저 호선을 추가하세요.</div>`}`;
       const label = selected ? `${selected.no} 선택 → 다음` : "호선 선택 후 다음";
       return unsafeFlowShell(1, "호선 선택", "불안전요소가 발생한 호선을 선택하세요", body, `<button class="material-flow-primary ${selected ? "" : "is-disabled"}" data-unsafe-next type="button" ${selected ? "" : "disabled"}>${esc(label)}</button>`);
     }
@@ -5147,7 +5313,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderMaterialShipStep() {
-      const ships = selectableShips();
+      const ships = issueSelectableShips();
       const selected = ships.find((ship) => ship.no === state.materialDraft.shipNo);
       const selectedMeta = selected ? effectiveShipStage(selected) : null;
       const body = `${ships.length ? `<div class="field material-flow-field">
@@ -5156,7 +5322,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${visibleShipOptionsForIssues(state.materialDraft.shipNo)}
         </select>
       </div>
-      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력하세요.</div>`}`;
+      ${selected ? `<div class="material-selected-note"><strong>${esc(selected.no)}</strong> ${esc(selected.type || "")} · ${esc(selectedMeta.label)} ${esc(selectedMeta.percent)}%</div>` : ""}` : `<div class="notice danger">등록된 호선이 없습니다. 호선 관리에서 먼저 호선을 추가하세요.</div>`}`;
       const label = selected ? `${selected.no} 선택 → 다음` : "호선 선택 후 다음";
       return materialFlowShell(1, "호선 선택", "자재가 없는 호선을 선택하세요", body, `<button class="material-flow-primary ${selected ? "" : "is-disabled"}" data-material-next type="button" ${selected ? "" : "disabled"}>${esc(label)}</button>`);
     }
@@ -5342,6 +5508,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderManage() {
       const tabs = [
         ["workers", "작업자"],
+        ["push", "푸시"],
         ["unsafe", "불안전요소"],
         ["materials", "자재누락"],
       ];
@@ -5358,6 +5525,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const materialOpen = state.missingMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
       const tabCounts = {
         workers: state.workers.length,
+        push: adminPushSubscribedWorkers().length,
         unsafe: unsafeOpen,
         materials: materialOpen,
       };
@@ -5369,6 +5537,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       <div class="manage-workspace">
         ${state.manageTab === "workers" ? renderWorkerManager() : ""}
+        ${state.manageTab === "push" ? renderPushManager() : ""}
         ${state.manageTab === "unsafe" ? renderUnsafeManager() : ""}
         ${state.manageTab === "materials" ? renderMaterialManager() : ""}
       </div>`;
@@ -5398,6 +5567,151 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${state.workers.length ? state.workers.map(renderWorkerRow).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
         </div>
       </section>`;
+    }
+
+    function adminPushWorkers() {
+      return state.workers
+        .filter((worker) => worker && worker.deleted !== true && worker.id)
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    }
+
+    function adminPushSubscribedWorkers() {
+      return adminPushWorkers().filter((worker) => Number(workerPushSubscriptionStatusFor(worker.id).subscriptionCount || 0) > 0);
+    }
+
+    function adminPushTargetWorkers() {
+      const mode = normalizeAdminPushTargetMode(state.adminPushDraft.targetMode);
+      if (mode === "all") return adminPushWorkers();
+      if (mode === "selected") {
+        const selected = new Set(normalizeAdminPushWorkerIds(state.adminPushDraft.selectedWorkerIds));
+        return adminPushWorkers().filter((worker) => selected.has(worker.id));
+      }
+      return adminPushSubscribedWorkers();
+    }
+
+    function adminPushNotificationPreview() {
+      const draft = createAdminPushDraft(state.adminPushDraft);
+      const style = adminPushStyleMeta(draft.style);
+      const context = {
+        날짜: today().replace(/-/g, "."),
+        발신자: currentWorkerSessionWorker()?.name || "관리자",
+        대상수: adminPushTargetWorkers().length,
+      };
+      const title = replacePushTemplateTokens(draft.title, context).trim() || DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual.title;
+      const body = replacePushTemplateTokens(draft.body, context).trim() || DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual.body;
+      return {
+        title: title.startsWith(style.titlePrefix) ? title : `${style.titlePrefix}${title}`,
+        body,
+        url: draft.url || "/index.html",
+        style,
+      };
+    }
+
+    function renderPushManager() {
+      const workers = adminPushWorkers();
+      const subscribedWorkers = adminPushSubscribedWorkers();
+      const targetWorkers = adminPushTargetWorkers();
+      const draft = createAdminPushDraft(state.adminPushDraft);
+      const preview = adminPushNotificationPreview();
+      const targetModes = [
+        ["subscribed", "구독 작업자", `${subscribedWorkers.length}명`],
+        ["all", "전체 작업자", `${workers.length}명`],
+        ["selected", "선택 작업자", `${targetWorkers.length}명`],
+      ];
+      const canSend = state.adminMode && canSendPledgeNotifications() && targetWorkers.length > 0 && draft.title.trim() && draft.body.trim() && !state.adminPushSending;
+      const disabledReason = !state.adminMode
+        ? "관리자 모드가 필요합니다."
+        : !canSendPledgeNotifications()
+          ? "조장, 관리, 총무 작업자 로그인에서 발송할 수 있습니다."
+          : !targetWorkers.length
+            ? "발송 대상 작업자를 선택하세요."
+            : !draft.title.trim() || !draft.body.trim()
+              ? "제목과 내용을 입력하세요."
+              : "";
+      return `<section class="panel panel-pad push-manager-panel">
+        <div class="push-manager-head">
+          <div>
+            <div class="section-title">푸시 발송 관리 <span class="small muted">${subscribedWorkers.length}/${workers.length}명 구독</span></div>
+            <p>브라우저 알림을 등록한 작업자 휴대폰으로 즉시 푸시를 발송합니다.</p>
+          </div>
+          <button class="btn-light" data-action="refresh-worker-push-statuses" ${state.workerPushSubscriptionStatusesChecking ? "disabled" : ""} type="button">${state.workerPushSubscriptionStatusesChecking ? "확인 중" : "구독 상태 새로고침"}</button>
+        </div>
+
+        <div class="push-manager-grid">
+          <div class="push-compose-card">
+            <div class="section-title compact">푸시 문구</div>
+            <div class="field">
+              <label for="adminPushTitle">제목</label>
+              <input id="adminPushTitle" class="input" data-admin-push-field="title" value="${esc(draft.title)}" maxlength="80" />
+            </div>
+            <div class="field">
+              <label for="adminPushBody">내용</label>
+              <textarea id="adminPushBody" class="textarea" data-admin-push-field="body" rows="4" maxlength="220">${esc(draft.body)}</textarea>
+            </div>
+            <div class="field">
+              <label for="adminPushUrl">클릭 시 이동 화면</label>
+              <select id="adminPushUrl" class="select" data-admin-push-field="url">
+                ${[["/index.html", "홈"], ["/check.html", "작업 전 점검"], ["/unsafe.html", "불안전요소"], ["/materials.html", "자재누락"], ["/history.html", "점검 이력"]]
+                  .map(([url, label]) => `<option value="${esc(url)}" ${draft.url === url ? "selected" : ""}>${esc(label)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="push-token-help">사용 가능 문구: <code>{날짜}</code> <code>{발신자}</code> <code>{대상수}</code></div>
+          </div>
+
+          <div class="push-style-card">
+            <div class="section-title compact">푸시 스타일</div>
+            <div class="push-style-grid">
+              ${ADMIN_PUSH_STYLES.map((style) => `<button class="push-style-option tone-${esc(style.tone)} ${draft.style === style.id ? "active" : ""}" data-action="set-admin-push-style" data-admin-push-style="${esc(style.id)}" type="button">
+                <strong>${esc(style.label)}</strong>
+                <span>${style.requireInteraction ? "확인 전까지 유지" : "일반 표시"}</span>
+              </button>`).join("")}
+            </div>
+            <article class="push-preview tone-${esc(preview.style.tone)}">
+              <span>미리보기</span>
+              <strong>${esc(preview.title)}</strong>
+              <p>${esc(preview.body)}</p>
+              <em>${esc(preview.url)}</em>
+            </article>
+          </div>
+        </div>
+
+        <div class="push-target-card">
+          <div class="push-target-head">
+            <div class="section-title compact">발송 대상 <span class="small muted">${targetWorkers.length}명</span></div>
+            <div class="push-target-modes" role="group" aria-label="푸시 대상 선택">
+              ${targetModes.map(([id, label, count]) => `<button class="seg-btn ${draft.targetMode === id ? "active" : ""}" data-action="set-admin-push-target-mode" data-admin-push-target-mode="${esc(id)}" type="button">${esc(label)} <span>${esc(count)}</span></button>`).join("")}
+            </div>
+          </div>
+          <div class="push-worker-grid">
+            ${workers.length ? workers.map((worker) => renderPushTargetWorker(worker, draft)).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
+          </div>
+        </div>
+
+        <div class="push-send-bar">
+          <div>
+            <strong>${esc(targetWorkers.length)}명 대상</strong>
+            <span>${esc(disabledReason || "선택한 작업자에게 즉시 푸시를 발송합니다.")}</span>
+          </div>
+          <button class="btn" data-action="send-admin-push" ${canSend ? "" : "disabled"} type="button">${state.adminPushSending ? "발송 중" : "즉시 발송"}</button>
+        </div>
+      </section>`;
+    }
+
+    function renderPushTargetWorker(worker, draft) {
+      const status = workerPushSubscriptionStatusFor(worker.id);
+      const count = Number(status.subscriptionCount || 0);
+      const checked = draft.targetMode === "all"
+        || draft.targetMode === "subscribed" && count > 0
+        || draft.targetMode === "selected" && normalizeAdminPushWorkerIds(draft.selectedWorkerIds).includes(worker.id);
+      const disabled = draft.targetMode !== "selected";
+      return `<label class="push-worker-card ${checked ? "checked" : ""} ${count ? "" : "is-empty"}">
+        <input type="checkbox" data-admin-push-worker="${esc(worker.id)}" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""} />
+        <span>
+          <strong>${esc(worker.name)}</strong>
+          <em>${esc(worker.team || "소속 없음")} · ${esc(normalizeWorkerPosition(worker.position))}</em>
+        </span>
+        ${workerPushSubscriptionBadgeHtml(worker.id)}
+      </label>`;
     }
 
     function renderWorkerPositionOptions(selectedPosition) {
@@ -6543,7 +6857,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return `<div class="record-filters">
         <select class="select" data-record-filter="${kind}:shipNo">
           <option value="">전체 호선</option>
-          ${selectableShips().map((ship) => `<option value="${esc(ship.no)}" ${filters.shipNo === ship.no ? "selected" : ""}>${esc(ship.no)}</option>`).join("")}
+          ${issueSelectableShips().map((ship) => `<option value="${esc(ship.no)}" ${filters.shipNo === ship.no ? "selected" : ""}>${esc(ship.no)}</option>`).join("")}
         </select>
         <select class="select" data-record-filter="${kind}:status">
           <option value="">전체 상태</option>
@@ -7196,6 +7510,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return visibleWorkerShips();
     }
 
+    function issueSelectableShips() {
+      return [...state.ships].sort((a, b) => String(a.no).localeCompare(String(b.no)));
+    }
+
     function visibleWorkerOptions(selectedId = "") {
       return `<option value="">등록자 선택</option>${state.workers
         .map((worker) => `<option value="${esc(worker.id)}" ${worker.id === selectedId ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` / ${esc(worker.team)}` : ""}</option>`)
@@ -7203,7 +7521,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function visibleShipOptionsForIssues(selectedNo = "") {
-      return `<option value="">호선 선택</option>${selectableShips()
+      return `<option value="">호선 선택</option>${issueSelectableShips()
         .map((ship) => `<option value="${esc(ship.no)}" ${ship.no === selectedNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` / ${esc(ship.type)}` : ""}</option>`)
         .join("")}`;
     }
@@ -7640,6 +7958,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "close-worker-push-devices": closeWorkerPushDeviceManager,
         "save-worker-push-device": saveWorkerPushDevice,
         "delete-worker-push-device": deleteWorkerPushDevice,
+        "refresh-worker-push-statuses": refreshPushManagerStatuses,
+        "set-admin-push-style": () => setAdminPushStyle(event.target.closest("[data-admin-push-style]")?.dataset.adminPushStyle),
+        "set-admin-push-target-mode": () => setAdminPushTargetMode(event.target.closest("[data-admin-push-target-mode]")?.dataset.adminPushTargetMode),
+        "send-admin-push": sendAdminPush,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,
@@ -8319,6 +8641,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     document.addEventListener("input", (event) => {
+      if (event.target.matches("[data-admin-push-field]")) {
+        updateAdminPushDraftField(event.target.dataset.adminPushField, event.target.value);
+      }
       if (event.target.id === "worker") {
         const previousWorker = state.draft.worker;
         state.draft.worker = event.target.value;
@@ -8386,6 +8711,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-admin-push-field]")) {
+        updateAdminPushDraftField(event.target.dataset.adminPushField, event.target.value);
+        renderPreservingScroll();
+        return;
+      }
+      if (event.target.matches("[data-admin-push-worker]")) {
+        toggleAdminPushWorker(event.target.dataset.adminPushWorker, event.target.checked);
+        return;
+      }
       if (event.target.matches("[data-work-prep-field]")) {
         updateWorkPrepDraftField(event.target.dataset.workPrepField, event.target.value);
         return;

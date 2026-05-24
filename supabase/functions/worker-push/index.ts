@@ -204,7 +204,7 @@ async function authorizeSendRequest(payload: Record<string, unknown>, workerIds:
     }
   }
 
-  if (sendKind === "pledgePending") {
+  if (sendKind === "pledgePending" || sendKind === "adminManual") {
     return canSendPledgeNotifications(worker)
       ? null
       : jsonResponse({ error: "forbidden_sender" }, 403);
@@ -364,8 +364,14 @@ async function sendNotification(payload: Record<string, unknown>) {
     body: cleanText(notificationRaw.body, 220),
     tag: cleanText(notificationRaw.tag, 120) || `gs-${Date.now()}`,
     url: cleanText(notificationRaw.url, 240) || "/",
+    style: cleanText(notificationRaw.style, 40),
+    requireInteraction: booleanValue(notificationRaw.requireInteraction, false),
+    renotify: booleanValue(notificationRaw.renotify, true),
+    vibrate: Array.isArray(notificationRaw.vibrate)
+      ? notificationRaw.vibrate.slice(0, 6).map((value) => Number(value) || 0).filter((value) => value >= 0 && value <= 1000)
+      : undefined,
     icon: "/assets/icons/notification-icon.png",
-    badge: "/assets/icons/notification-badge.png",
+    badge: "/assets/icons/notification-icon.png",
   };
 
   const { data: subscriptions, error } = await supabase
