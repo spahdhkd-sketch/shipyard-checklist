@@ -1338,7 +1338,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!browserNotificationsAvailable() || Notification.permission !== "granted") return null;
       try {
         const notification = new Notification(title, {
-          icon: "/assets/icons/icon-192.png",
+          icon: "/assets/icons/notification-icon.png",
           badge: "/assets/icons/notification-badge.png",
           ...options,
         });

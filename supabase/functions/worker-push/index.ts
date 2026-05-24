@@ -364,7 +364,7 @@ async function sendNotification(payload: Record<string, unknown>) {
     body: cleanText(notificationRaw.body, 220),
     tag: cleanText(notificationRaw.tag, 120) || `gs-${Date.now()}`,
     url: cleanText(notificationRaw.url, 240) || "/",
-    icon: "/assets/icons/icon-192.png",
+    icon: "/assets/icons/notification-icon.png",
     badge: "/assets/icons/notification-badge.png",
   };
 

@@ -1,16 +1,17 @@
-const CACHE = "gs-safety-v11-20260525-push-devices";
+const CACHE = "gs-safety-v12-20260525-push-icon";
 const SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
+  "/assets/icons/notification-icon.png",
   "/assets/icons/notification-badge.png",
-  "/assets/css/styles-v2.css?v=20260525-push-devices-1",
+  "/assets/css/styles-v2.css?v=20260525-push-icon-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260525-push-devices-1",
-  "/assets/js/issue-material-rules.js?v=20260525-push-devices-1",
-  "/assets/js/app-v2.js?v=20260525-push-devices-1"
+  "/assets/js/checklist-rules.js?v=20260525-push-icon-1",
+  "/assets/js/issue-material-rules.js?v=20260525-push-icon-1",
+  "/assets/js/app-v2.js?v=20260525-push-icon-1"
 ];
 
 self.addEventListener("install", (event) => {
@@ -40,7 +41,7 @@ self.addEventListener("push", (event) => {
   const title = data.title || "GS 안전 체크리스트";
   const options = {
     body: data.body || "",
-    icon: data.icon || "/assets/icons/icon-192.png",
+    icon: data.icon || "/assets/icons/notification-icon.png",
     badge: data.badge || "/assets/icons/notification-badge.png",
     tag: data.tag || "gs-safety-checklist",
     renotify: true,
