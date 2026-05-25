@@ -4928,11 +4928,30 @@
       font-size: 11px;
     }
 
-    .push-style-grid,
-    .push-target-modes {
+    .push-style-grid {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+    }
+
+    .push-target-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .push-target-summary span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid rgba(15, 118, 110, .18);
+      border-radius: 999px;
+      background: #f0fdfa;
+      color: #0f766e;
+      font-size: 12px;
+      font-weight: 900;
     }
 
     .push-style-option {

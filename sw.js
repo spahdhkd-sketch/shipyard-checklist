@@ -1,4 +1,4 @@
-const CACHE = "gs-safety-v14-20260525-admin-push";
+const CACHE = "gs-safety-v15-20260526-input-preserve";
 const SHELL = [
   "/",
   "/index.html",
@@ -6,11 +6,11 @@ const SHELL = [
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
   "/assets/icons/notification-icon.png",
-  "/assets/css/styles-v2.css?v=20260525-admin-push-1",
+  "/assets/css/styles-v2.css?v=20260526-input-preserve-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260525-admin-push-1",
-  "/assets/js/issue-material-rules.js?v=20260525-admin-push-1",
-  "/assets/js/app-v2.js?v=20260525-admin-push-1"
+  "/assets/js/checklist-rules.js?v=20260526-input-preserve-1",
+  "/assets/js/issue-material-rules.js?v=20260526-input-preserve-1",
+  "/assets/js/app-v2.js?v=20260526-input-preserve-1"
 ];
 
 self.addEventListener("install", (event) => {

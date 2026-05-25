@@ -24,7 +24,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PUSH_STYLES = [
       {
         id: "notice",
-        label: "일반",
+        label: "안내",
+        description: "일반 공지",
         tone: "teal",
         titlePrefix: "",
         requireInteraction: false,
@@ -33,7 +34,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
       {
         id: "warning",
-        label: "주의",
+        label: "확인 요청",
+        description: "확인할 때까지 유지",
         tone: "orange",
         titlePrefix: "[주의] ",
         requireInteraction: true,
@@ -42,7 +44,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
       {
         id: "urgent",
-        label: "긴급",
+        label: "긴급 호출",
+        description: "확인 유지 + 강한 진동",
         tone: "red",
         titlePrefix: "[긴급] ",
         requireInteraction: true,
@@ -51,7 +54,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
       {
         id: "done",
-        label: "완료",
+        label: "처리 완료",
+        description: "완료 안내",
         tone: "green",
         titlePrefix: "[확인] ",
         requireInteraction: false,
@@ -1829,19 +1833,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       renderPreservingScroll();
     }
 
-    function setAdminPushTargetMode(mode) {
-      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, targetMode: normalizeAdminPushTargetMode(mode) });
-      saveAdminPushDraft();
-      renderPreservingScroll();
-    }
-
     function toggleAdminPushWorker(workerId, checked) {
       const id = String(workerId || "").trim();
       if (!id) return;
       const selected = new Set(normalizeAdminPushWorkerIds(state.adminPushDraft.selectedWorkerIds));
       if (checked) selected.add(id);
       else selected.delete(id);
-      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, targetMode: "selected", selectedWorkerIds: [...selected] });
+      state.adminPushDraft = createAdminPushDraft({ ...state.adminPushDraft, selectedWorkerIds: [...selected] });
       saveAdminPushDraft();
       renderPreservingScroll();
     }
@@ -1978,7 +1976,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         },
         adminManual: {
           heading: "관리자 수동 푸시 문구",
-          description: "관리 메뉴의 푸시 탭에서 전체 또는 선택 작업자에게 즉시 발송됩니다.",
+          description: "관리 메뉴의 푸시 탭에서 직접 선택한 작업자에게 즉시 발송됩니다.",
           tokens: ["{날짜}", "{발신자}", "{대상수}"],
           previewContext: { 날짜: today().replace(/-/g, "."), 발신자: currentWorkerSessionWorker()?.name || "관리자", 대상수: 1 },
         },
@@ -1991,7 +1989,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeAdminPushTargetMode(value) {
-      return ["subscribed", "all", "selected"].includes(value) ? value : "subscribed";
+      return "selected";
     }
 
     function normalizeAdminPushWorkerIds(value) {
@@ -2005,7 +2003,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const fallback = DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual;
       const style = adminPushStyleMeta(source.style);
       return {
-        targetMode: normalizeAdminPushTargetMode(source.targetMode),
+        targetMode: "selected",
         selectedWorkerIds: normalizeAdminPushWorkerIds(source.selectedWorkerIds),
         title: String(source.title || "").trim() || fallback.title,
         body: String(source.body || "").trim() || fallback.body,
@@ -2148,6 +2146,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toolManagerOpen: false,
       categoryAddOpen: false,
       categoryToolAssignmentOpenIds: [],
+      categoryToolDrafts: {},
       openAddItemSectionIds: [],
       categoryVisualOpen: false,
       workerFallbackOpen: false,
@@ -2755,7 +2754,65 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }, { passive: true });
     }
 
+    function cssEscapeValue(value) {
+      if (window.CSS?.escape) return CSS.escape(String(value));
+      return String(value).replace(/["\\]/g, "\\$&");
+    }
+
+    function focusedFieldSelector(field) {
+      if (!field?.matches?.("input, textarea, select")) return "";
+      if (field.id) return `#${cssEscapeValue(field.id)}`;
+      if (field.name) return `${field.tagName.toLowerCase()}[name="${cssEscapeValue(field.name)}"]`;
+      return "";
+    }
+
+    function captureFocusedFieldState() {
+      const field = document.activeElement;
+      const selector = focusedFieldSelector(field);
+      if (!selector || field.type === "file") return null;
+      const captured = {
+        selector,
+        type: field.type || "",
+        value: field.value,
+        checked: Boolean(field.checked),
+        selectionStart: null,
+        selectionEnd: null,
+      };
+      try {
+        captured.selectionStart = field.selectionStart;
+        captured.selectionEnd = field.selectionEnd;
+      } catch {
+        captured.selectionStart = null;
+        captured.selectionEnd = null;
+      }
+      return captured;
+    }
+
+    function restoreFocusedFieldState(captured) {
+      if (!captured?.selector) return;
+      const field = document.querySelector(captured.selector);
+      if (!field || field.disabled || field.type === "file") return;
+      if (captured.type === "checkbox" || captured.type === "radio") {
+        field.checked = captured.checked;
+      } else if ("value" in field) {
+        field.value = captured.value;
+      }
+      field.focus({ preventScroll: true });
+      if (
+        typeof captured.selectionStart === "number" &&
+        typeof captured.selectionEnd === "number" &&
+        typeof field.setSelectionRange === "function"
+      ) {
+        try {
+          field.setSelectionRange(captured.selectionStart, captured.selectionEnd);
+        } catch {
+          // Some input types do not support text selection.
+        }
+      }
+    }
+
     function render() {
+      const focusedFieldState = captureFocusedFieldState();
       renderNav();
       renderAppHeader();
       const page = $("page");
@@ -2765,6 +2822,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         page.innerHTML = renderLogin();
         setSyncStatus(state.syncText, state.syncMode);
         ensureRenderedAccessibility();
+        restoreFocusedFieldState(focusedFieldState);
         return;
       }
       applyLoggedInWorkerToDrafts();
@@ -2789,6 +2847,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       setupSignaturePad();
       setupPictogramImageFallbacks();
       ensureRenderedAccessibility();
+      restoreFocusedFieldState(focusedFieldState);
       scheduleWorkerPushSubscriptionStatusRefresh();
     }
 
@@ -5580,13 +5639,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function adminPushTargetWorkers() {
-      const mode = normalizeAdminPushTargetMode(state.adminPushDraft.targetMode);
-      if (mode === "all") return adminPushWorkers();
-      if (mode === "selected") {
-        const selected = new Set(normalizeAdminPushWorkerIds(state.adminPushDraft.selectedWorkerIds));
-        return adminPushWorkers().filter((worker) => selected.has(worker.id));
-      }
-      return adminPushSubscribedWorkers();
+      const selected = new Set(normalizeAdminPushWorkerIds(state.adminPushDraft.selectedWorkerIds));
+      return adminPushWorkers().filter((worker) => selected.has(worker.id));
     }
 
     function adminPushNotificationPreview() {
@@ -5613,11 +5667,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const targetWorkers = adminPushTargetWorkers();
       const draft = createAdminPushDraft(state.adminPushDraft);
       const preview = adminPushNotificationPreview();
-      const targetModes = [
-        ["subscribed", "구독 작업자", `${subscribedWorkers.length}명`],
-        ["all", "전체 작업자", `${workers.length}명`],
-        ["selected", "선택 작업자", `${targetWorkers.length}명`],
-      ];
       const canSend = state.adminMode && canSendPledgeNotifications() && targetWorkers.length > 0 && draft.title.trim() && draft.body.trim() && !state.adminPushSending;
       const disabledReason = !state.adminMode
         ? "관리자 모드가 필요합니다."
@@ -5659,13 +5708,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           </div>
 
           <div class="push-style-card">
-            <div class="section-title compact">푸시 스타일</div>
-            <div class="push-style-grid">
-              ${ADMIN_PUSH_STYLES.map((style) => `<button class="push-style-option tone-${esc(style.tone)} ${draft.style === style.id ? "active" : ""}" data-action="set-admin-push-style" data-admin-push-style="${esc(style.id)}" type="button">
-                <strong>${esc(style.label)}</strong>
-                <span>${style.requireInteraction ? "확인 전까지 유지" : "일반 표시"}</span>
-              </button>`).join("")}
-            </div>
+              <div class="section-title compact">알림 유형</div>
+              <p class="push-token-help">브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다.</p>
+              <div class="push-style-grid">
+                ${ADMIN_PUSH_STYLES.map((style) => `<button class="push-style-option tone-${esc(style.tone)} ${draft.style === style.id ? "active" : ""}" data-action="set-admin-push-style" data-admin-push-style="${esc(style.id)}" type="button">
+                  <strong>${esc(style.label)}</strong>
+                  <span>${esc(style.description)}</span>
+                </button>`).join("")}
+              </div>
             <article class="push-preview tone-${esc(preview.style.tone)}">
               <span>미리보기</span>
               <strong>${esc(preview.title)}</strong>
@@ -5678,10 +5728,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <div class="push-target-card">
           <div class="push-target-head">
             <div class="section-title compact">발송 대상 <span class="small muted">${targetWorkers.length}명</span></div>
-            <div class="push-target-modes" role="group" aria-label="푸시 대상 선택">
-              ${targetModes.map(([id, label, count]) => `<button class="seg-btn ${draft.targetMode === id ? "active" : ""}" data-action="set-admin-push-target-mode" data-admin-push-target-mode="${esc(id)}" type="button">${esc(label)} <span>${esc(count)}</span></button>`).join("")}
-            </div>
+            <div class="push-target-summary"><span>알림 등록 ${esc(subscribedWorkers.length)}명</span><span>전체 ${esc(workers.length)}명</span></div>
           </div>
+          <p class="push-token-help">발송할 작업자 카드를 직접 눌러 선택하세요. 알림 미등록 작업자는 선택해도 실제 수신되지 않습니다.</p>
           <div class="push-worker-grid">
             ${workers.length ? workers.map((worker) => renderPushTargetWorker(worker, draft)).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
           </div>
@@ -5700,12 +5749,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderPushTargetWorker(worker, draft) {
       const status = workerPushSubscriptionStatusFor(worker.id);
       const count = Number(status.subscriptionCount || 0);
-      const checked = draft.targetMode === "all"
-        || draft.targetMode === "subscribed" && count > 0
-        || draft.targetMode === "selected" && normalizeAdminPushWorkerIds(draft.selectedWorkerIds).includes(worker.id);
-      const disabled = draft.targetMode !== "selected";
+      const checked = normalizeAdminPushWorkerIds(draft.selectedWorkerIds).includes(worker.id);
       return `<label class="push-worker-card ${checked ? "checked" : ""} ${count ? "" : "is-empty"}">
-        <input type="checkbox" data-admin-push-worker="${esc(worker.id)}" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""} />
+        <input type="checkbox" data-admin-push-worker="${esc(worker.id)}" ${checked ? "checked" : ""} />
         <span>
           <strong>${esc(worker.name)}</strong>
           <em>${esc(worker.team || "소속 없음")} · ${esc(normalizeWorkerPosition(worker.position))}</em>
@@ -7200,7 +7246,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!categories.length) return `<div class="empty compact-empty">등록된 작업 유형이 없습니다. 먼저 작업 유형을 추가하세요.</div>`;
       return `<div class="category-tool-assignment-list">
         ${categories.map((cat) => {
-          const selectedToolIds = sanitizeToolIds(cat.toolIds);
+          const selectedToolIds = categoryToolDraftIds(cat.id, cat.toolIds);
           const selectedCount = selectedToolIds.length;
           const expanded = state.categoryToolAssignmentOpenIds.includes(cat.id);
           const editingCategory = state.editCategoryId === cat.id;
@@ -7215,7 +7261,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               ${renderCategoryToggleImage(expanded, cat)}
             </div>
             ${editingCategory ? renderCategoryEditPanel(cat) : ""}
-            ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: cat.toolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
+            ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: selectedToolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
             <div class="category-tool-assignment-actions">
               ${expanded ? `<button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>` : ""}
               ${editingCategory ? `
@@ -7857,6 +7903,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         .map((node) => node.value);
     }
 
+    function categoryToolDraftIds(categoryId, fallbackIds = []) {
+      const draftIds = state.categoryToolDrafts?.[categoryId];
+      return sanitizeToolIds(Array.isArray(draftIds) ? draftIds : fallbackIds);
+    }
+
+    function setCategoryToolDraft(categoryId, toolIds) {
+      if (!categoryId) return;
+      state.categoryToolDrafts = {
+        ...state.categoryToolDrafts,
+        [categoryId]: sanitizeToolIds(toolIds),
+      };
+    }
+
+    function clearCategoryToolDraft(categoryId) {
+      if (!categoryId || !state.categoryToolDrafts?.[categoryId]) return;
+      const { [categoryId]: _removed, ...remaining } = state.categoryToolDrafts;
+      state.categoryToolDrafts = remaining;
+    }
+
+    function updateCategoryToolDraft(groupId, toolId, checked) {
+      if (!state.adminMode) return;
+      const categoryId = String(groupId || "").replace(/^category_/, "");
+      const category = categoryById(categoryId);
+      if (!category || !toolId) return;
+      const selected = new Set(categoryToolDraftIds(categoryId, category.toolIds));
+      checked ? selected.add(toolId) : selected.delete(toolId);
+      setCategoryToolDraft(categoryId, [...selected]);
+    }
+
     function selectedColor() {
       return $("catColor")?.value || COLORS[0];
     }
@@ -7960,7 +8035,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "delete-worker-push-device": deleteWorkerPushDevice,
         "refresh-worker-push-statuses": refreshPushManagerStatuses,
         "set-admin-push-style": () => setAdminPushStyle(event.target.closest("[data-admin-push-style]")?.dataset.adminPushStyle),
-        "set-admin-push-target-mode": () => setAdminPushTargetMode(event.target.closest("[data-admin-push-target-mode]")?.dataset.adminPushTargetMode),
         "send-admin-push": sendAdminPush,
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
@@ -8718,6 +8792,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (event.target.matches("[data-admin-push-worker]")) {
         toggleAdminPushWorker(event.target.dataset.adminPushWorker, event.target.checked);
+        return;
+      }
+      if (event.target.matches("[data-category-tool-group]")) {
+        updateCategoryToolDraft(event.target.dataset.categoryToolGroup, event.target.value, event.target.checked);
         return;
       }
       if (event.target.matches("[data-work-prep-field]")) {
@@ -10350,6 +10428,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         openIds.delete(id);
       } else {
         openIds.add(id);
+        if (!state.categoryToolDrafts?.[id]) setCategoryToolDraft(id, categoryById(id)?.toolIds || []);
       }
       state.categoryToolAssignmentOpenIds = [...openIds];
       render();
@@ -10359,11 +10438,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!requireAdmin()) return;
       const cat = categoryById(id);
       if (!cat) return;
+      const toolIds = selectedCategoryToolIds(`category_${id}`);
       state.categories = state.categories.map((row) => row.id === id ? {
         ...row,
-        toolIds: selectedCategoryToolIds(`category_${id}`),
+        toolIds,
       } : row);
       syncCategoryToolMetaItem(id, categoryById(id)?.toolIds || []);
+      clearCategoryToolDraft(id);
       state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
       persistAndSync(["categories", "items"]);
       render();
@@ -10995,9 +11076,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       scheduleRemoteRefresh("storage", 0);
     }
 
+    function remoteRealtimeConnected() {
+      return state.remoteRealtimeStatus === "SUBSCRIBED";
+    }
+
+    function stopRemotePolling() {
+      if (!state.remotePollTimer) return;
+      clearInterval(state.remotePollTimer);
+      state.remotePollTimer = null;
+    }
+
     function startRemotePolling() {
-      if (!isSyncConfigured() || state.remotePollTimer) return;
+      if (!isSyncConfigured() || state.remotePollTimer || remoteRealtimeConnected()) return;
       state.remotePollTimer = setInterval(() => {
+        if (remoteRealtimeConnected()) {
+          stopRemotePolling();
+          return;
+        }
         if (!shouldRefreshRemote()) return;
         pullRemote({ silent: true, reason: "poll" });
       }, REMOTE_POLL_INTERVAL_MS);
@@ -11021,7 +11116,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
       state.remoteRealtimeChannel = channel.subscribe((status) => {
         state.remoteRealtimeStatus = status;
+        if (status === "SUBSCRIBED") {
+          stopRemotePolling();
+          return;
+        }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          startRemotePolling();
           scheduleRemoteRefresh("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS);
         }
       });

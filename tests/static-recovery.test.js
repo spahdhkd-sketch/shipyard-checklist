@@ -15,6 +15,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/icons/icon-192.png",
   "assets/icons/icon-512.png",
   "supabase/migrations/202605240001_worker_push_subscriptions.sql",
+  "supabase/migrations/20260525151649_enable_realtime_remote_tables.sql",
   "supabase/functions/worker-push/index.ts",
   "supabase/functions/worker-push/deno.json",
 ].forEach((file) => {
@@ -23,9 +24,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const html = read("index.html");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260526-input-preserve-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/js\/app-v2\.js\?v=20260525-admin-push-1/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260526-input-preserve-1/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
 assert.match(html, /version 0\.5/);
@@ -44,9 +45,9 @@ assert.doesNotMatch(html, /version 0\.3/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260526-input-preserve-1/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js\?v=20260525-admin-push-1/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260526-input-preserve-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
   assert.match(page, /version 0\.5/, `${file} should use the current static fallback version label`);
@@ -58,7 +59,7 @@ assert.doesNotMatch(html, /version 0\.3/);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260525-admin-push-1/);
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260526-input-preserve-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 const redesignPreview = read("redesign-v2.html");
 assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
@@ -127,8 +128,21 @@ assert.match(app, /pullRemote\(\{ force: true \}\)/);
 assert.match(app, /function startRemoteRealtime\(\)/);
 assert.match(app, /\.channel\("gs-safety-remote-sync"\)/);
 assert.match(app, /"postgres_changes"/);
+assert.match(app, /REMOTE_TABLES\.forEach\(\(config\) => \{/);
+assert.match(app, /table: config\.table/);
+assert.match(app, /function remoteRealtimeConnected\(\)/);
+assert.match(app, /function stopRemotePolling\(\)/);
 assert.match(app, /function startRemotePolling\(\)/);
+assert.match(app, /state\.remotePollTimer \|\| remoteRealtimeConnected\(\)/);
+assert.match(app, /if \(remoteRealtimeConnected\(\)\) \{\s*stopRemotePolling\(\);/);
+assert.match(app, /if \(status === "SUBSCRIBED"\) \{\s*stopRemotePolling\(\);/);
+assert.match(app, /startRemotePolling\(\);\s*scheduleRemoteRefresh\("realtime-fallback"/);
 assert.match(app, /setInterval\(\(\) => \{/);
+assert.match(app, /function captureFocusedFieldState\(\)/);
+assert.match(app, /function restoreFocusedFieldState\(captured\)/);
+assert.match(app, /const focusedFieldState = captureFocusedFieldState\(\)/);
+assert.match(app, /restoreFocusedFieldState\(focusedFieldState\)/);
+assert.match(app, /selectionStart/);
 assert.match(app, /function scheduleRemoteRefresh\(reason = "change"/);
 assert.match(app, /window\.addEventListener\("visibilitychange"/);
 assert.match(app, /window\.addEventListener\("storage", handleStorageSyncWake\)/);
@@ -176,7 +190,14 @@ assert.match(app, /data-save-category="\$\{esc\(cat\.id\)\}"/);
 assert.match(app, /if \(button\.dataset\.saveCategoryTools\) saveCategoryTools\(button\.dataset\.saveCategoryTools\)/);
 assert.match(app, /const categoryToolRow = event\.target\.closest\("\.category-tool-assignment-row\[data-toggle-category-tools\]"\)/);
 assert.match(app, /function saveCategoryTools\(id\)/);
-assert.match(app, /toolIds: selectedCategoryToolIds\(`category_\$\{id\}`\)/);
+assert.match(app, /categoryToolDrafts: \{\}/);
+assert.match(app, /function categoryToolDraftIds\(categoryId, fallbackIds = \[\]\)/);
+assert.match(app, /function updateCategoryToolDraft\(groupId, toolId, checked\)/);
+assert.match(app, /categoryToolDraftIds\(cat\.id, cat\.toolIds\)/);
+assert.match(app, /data-category-tool-group/);
+assert.match(app, /updateCategoryToolDraft\(event\.target\.dataset\.categoryToolGroup, event\.target\.value, event\.target\.checked\)/);
+assert.match(app, /const toolIds = selectedCategoryToolIds\(`category_\$\{id\}`\)/);
+assert.match(app, /clearCategoryToolDraft\(id\)/);
 assert.match(app, /const CATEGORY_TOOL_META_PREFIX = "__category_tools__"/);
 assert.match(app, /function categoryToolMetaItemId\(categoryId\)/);
 assert.match(app, /function syncCategoryToolMetaItem\(categoryId, toolIds\)/);
@@ -224,6 +245,13 @@ assert.match(app, /function renderWorkerPushDeviceRow\(device\)/);
 assert.match(app, /function renderPushManager\(\)/);
 assert.match(app, /function adminPushTargetWorkers\(\)/);
 assert.match(app, /async function sendAdminPush\(\)/);
+assert.match(app, /알림 유형/);
+assert.match(app, /브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다\./);
+assert.match(app, /발송할 작업자 카드를 직접 눌러 선택하세요/);
+assert.match(app, /function adminPushTargetWorkers\(\) \{\s*const selected = new Set\(normalizeAdminPushWorkerIds\(state\.adminPushDraft\.selectedWorkerIds\)\);/);
+assert.doesNotMatch(app, /data-action="set-admin-push-target-mode"/);
+assert.doesNotMatch(app, /push-target-modes/);
+assert.match(styles, /\.push-target-summary/);
 assert.match(app, /async function saveWorkerPushDevice\(event\)/);
 assert.match(app, /async function deleteWorkerPushDevice\(event\)/);
 assert.match(app, /data-worker-push-badge/);
@@ -511,9 +539,9 @@ assert.match(css, /\.monthly-worker-cell\.excluded/);
 assert.match(css, /\.pictogram-image-fallback/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v14-20260525-admin-push"/);
-assert.match(sw, /styles-v2\.css\?v=20260525-admin-push-1/);
-assert.match(sw, /app-v2\.js\?v=20260525-admin-push-1/);
+assert.match(sw, /const CACHE = "gs-safety-v15-20260526-input-preserve"/);
+assert.match(sw, /styles-v2\.css\?v=20260526-input-preserve-1/);
+assert.match(sw, /app-v2\.js\?v=20260526-input-preserve-1/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);
@@ -536,6 +564,27 @@ assert.match(pushMigration, /create table if not exists public\.worker_push_subs
 assert.match(pushMigration, /alter table public\.worker_push_subscriptions enable row level security/);
 assert.match(pushMigration, /create index if not exists worker_push_subscriptions_worker_idx/);
 assert.match(pushMigration, /create or replace function public\.worker_push_subscription_status/);
+
+const realtimeMigration = read("supabase/migrations/20260525151649_enable_realtime_remote_tables.sql");
+assert.match(realtimeMigration, /create publication supabase_realtime/);
+assert.match(realtimeMigration, /alter publication supabase_realtime add table/);
+[
+  "safety_categories",
+  "safety_sections",
+  "safety_items",
+  "safety_tools",
+  "safety_pictograms",
+  "safety_ships",
+  "safety_inspections",
+  "safety_inspection_items",
+  "workers",
+  "unsafe_issues",
+  "missing_materials",
+  "issue_photos",
+  "work_prep_records",
+].forEach((table) => {
+  assert.match(realtimeMigration, new RegExp(`'${table}'`), `${table} should be in the realtime publication migration`);
+});
 
 const pushFunction = read("supabase/functions/worker-push/index.ts");
 assert.match(pushFunction, /import webpush from "npm:web-push@3\.6\.7"/);
