@@ -2734,6 +2734,56 @@
       letter-spacing: 0;
     }
 
+    .work-prep-direct-section {
+      margin: 18px 0 0;
+    }
+
+    .work-prep-direct-toggle {
+      width: 100%;
+      min-height: 58px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 12px;
+      align-items: center;
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .work-prep-direct-toggle > span:first-child {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      line-height: 1.25;
+    }
+
+    .work-prep-direct-toggle strong {
+      color: #07162f;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .work-prep-direct-toggle em {
+      color: #07162f;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0;
+      white-space: normal;
+    }
+
+    .work-prep-direct-toggle .category-tool-toggle-image {
+      grid-area: auto;
+      justify-self: end;
+      align-self: center;
+      flex: 0 0 auto;
+    }
+
+    .work-prep-direct-panel {
+      margin-top: 10px;
+    }
+
     .work-prep-order-strip {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -6393,7 +6443,7 @@
     body.preview-mobile .item-row { flex-direction: column; }
     body.preview-mobile .item-actions { width: 100%; justify-content: flex-start; }
     body.preview-mobile .ship-card { grid-template-columns: 1fr; }
-    body.preview-mobile .ship-date-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body.preview-mobile .ship-date-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     body.preview-mobile .table,
     body.preview-mobile .table tbody,
     body.preview-mobile .table tr,
@@ -7332,20 +7382,45 @@
       display: grid;
       grid-template-columns: 1fr;
       gap: 12px;
-      align-items: start;
+      align-items: stretch;
       border-left: 7px solid var(--stage, var(--blue));
     }
 
     .ship-card-head {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 150px;
+      grid-template-columns: minmax(0, 1fr) 108px;
       gap: 10px;
       align-items: center;
+      width: 100%;
     }
 
     .ship-card-body {
       display: grid;
       gap: 10px;
+      width: 100%;
+    }
+
+    .ship-stage-stack {
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+      justify-self: end;
+      width: 108px;
+      min-width: 0;
+    }
+
+    .ship-stage-derived {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef4fb;
+      color: #37526f;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .ship-card-title {
@@ -7367,38 +7442,243 @@
 
     .ship-date-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
       width: 100%;
+    }
+
+    .ship-data-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .ship-data-kpi {
+      position: relative;
+      min-height: 60px;
+      padding: 8px 7px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #f8fbfe;
+      color: var(--ink);
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+
+    .ship-data-kpi:hover,
+    .ship-data-kpi:focus-visible {
+      border-color: #8fb4d8;
+      box-shadow: 0 8px 18px rgba(31, 110, 179, .13);
+      outline: 0;
+      transform: translateY(-1px);
+    }
+
+    .ship-data-kpi span,
+    .ship-data-kpi strong,
+    .ship-data-kpi em {
+      display: block;
+    }
+
+    .ship-data-kpi span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .ship-data-kpi strong {
+      margin-top: 5px;
+      font-size: 18px;
+      font-weight: 1000;
+      line-height: 1;
+    }
+
+    .ship-data-kpi em {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .ship-data-kpi.tone-ok strong { color: var(--green); }
+    .ship-data-kpi.tone-warn strong { color: #c77718; }
+    .ship-data-kpi.tone-danger strong { color: var(--red); }
+
+    .ship-data-recent {
+      display: grid;
+      gap: 5px;
+      min-height: 54px;
+      padding: 10px;
+      border: 1px solid #e4ebf3;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .ship-data-recent span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .ship-data-recent strong {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ship-data-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .ship-data-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      padding: 2px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .ship-data-toggle:focus-visible {
+      outline: 2px solid #0b5cad;
+      outline-offset: 2px;
+    }
+
+    .ship-data-expanded {
+      display: grid;
+      gap: 9px;
+      padding-top: 11px;
+      border-top: 1px solid #e1e9f2;
+    }
+
+    .ship-data-detail-card {
+      display: grid;
+      gap: 2px;
+      padding: 10px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .ship-data-detail-card h3 {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 1000;
+    }
+
+    .ship-data-detail-row {
+      display: grid;
+      grid-template-columns: 62px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 0;
+      border-top: 1px solid #edf2f7;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .ship-data-detail-row:first-of-type {
+      border-top: 0;
+    }
+
+    .ship-data-detail-row span {
+      overflow: hidden;
+      color: var(--muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ship-data-status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 23px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #edf7f3;
+      color: #34664d;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 1000;
+      white-space: nowrap;
+    }
+
+    .ship-data-status-chip.warn {
+      background: #fff4df;
+      color: #8a520d;
+    }
+
+    .ship-data-status-chip.danger {
+      background: #fff1f2;
+      color: #9f3f46;
+    }
+
+    .ship-data-empty {
+      min-height: 32px;
+      padding: 8px 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .ship-card-admin-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .ship-filter-notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
     }
 
     .ship-date-field {
       position: relative;
       display: grid;
-      gap: 6px;
-      min-height: 72px;
-      padding: 10px 12px;
+      align-content: center;
+      justify-items: center;
+      gap: 3px;
+      min-height: 42px;
+      padding: 6px 8px;
       border: 1px solid #cfd9e8;
       border-radius: 8px;
       background: #f7f9fc;
     }
 
     .ship-date-field label {
-      font-size: 16px;
+      font-size: 12px;
       font-weight: 900;
       color: var(--ink);
       line-height: 1;
+      text-align: center;
     }
 
     .ship-date-field .input {
-      min-height: auto;
-      height: 26px;
+      min-height: 0;
+      height: 18px;
       padding: 0;
       border: 0;
       background: transparent;
       color: var(--muted);
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 900;
+      text-align: center;
     }
 
     .ship-date-field .input:disabled {
@@ -7407,18 +7687,21 @@
 
     .ship-date-empty {
       position: absolute;
-      left: 12px;
-      bottom: 10px;
+      left: 50%;
+      bottom: 6px;
       color: var(--muted);
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 900;
+      transform: translateX(-50%);
       pointer-events: none;
+      white-space: nowrap;
     }
 
     .ship-stage-field {
       display: grid;
       gap: 5px;
-      max-width: 220px;
+      width: 76px;
+      max-width: 76px;
       margin: 0;
     }
 
@@ -7431,14 +7714,14 @@
 
     .stage-select {
       width: 100%;
-      min-height: 62px;
+      min-height: 40px;
       border: 3px solid var(--stage);
       border-radius: 8px;
       background: var(--stage-bg, #fff);
       color: var(--stage);
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 1000;
-      padding: 10px 14px;
+      padding: 6px 8px;
       cursor: pointer;
     }
 
@@ -8644,7 +8927,7 @@
       }
 
       .ship-date-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
       .history-grid {
@@ -10133,13 +10416,14 @@
       display: flex;
       flex-direction: column;
       gap: 9px;
+      align-items: stretch;
       padding: 11px;
       border-left-width: 7px;
     }
 
     body.preview-mobile .ship-card-head {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 116px;
+      grid-template-columns: minmax(0, 1fr) 108px;
       gap: 9px;
       align-items: center;
     }
@@ -10161,9 +10445,15 @@
     }
 
     body.preview-mobile .ship-stage-field {
-      width: 100%;
-      max-width: none;
+      width: 76px;
+      max-width: 76px;
       margin: 0;
+    }
+
+    body.preview-mobile .ship-stage-stack {
+      justify-self: end;
+      justify-items: end;
+      width: 108px;
     }
 
     body.preview-mobile .ship-stage-field label,
@@ -10173,10 +10463,10 @@
     }
 
     body.preview-mobile .stage-select {
-      min-height: 44px;
-      font-size: 16px;
+      min-height: 40px;
+      font-size: 15px;
       border-width: 3px;
-      padding: 8px 9px;
+      padding: 6px 8px;
     }
 
     body.preview-mobile .badge {
@@ -10193,8 +10483,8 @@
     }
 
     body.preview-mobile .ship-date-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
     }
 
     body.preview-mobile .ship-date-field .input,
@@ -10245,12 +10535,13 @@
         display: flex;
         flex-direction: column;
         gap: 9px;
+        align-items: stretch;
         padding: 11px;
       }
 
       .ship-card-head {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 116px;
+        grid-template-columns: minmax(0, 1fr) 108px;
         gap: 9px;
         align-items: center;
       }
@@ -10261,13 +10552,73 @@
       }
 
       .ship-stage-field {
-        width: 100%;
-        max-width: none;
+        width: 76px;
+        max-width: 76px;
+      }
+
+      .ship-stage-stack {
+        justify-self: end;
+        justify-items: end;
+        width: 108px;
+      }
+
+      .ship-stage-derived {
+        width: auto;
       }
 
       .stage-select {
-        min-height: 44px;
+        min-height: 40px;
+        font-size: 15px;
+        padding: 6px 8px;
+      }
+
+      .ship-data-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .ship-data-kpi {
+        min-height: 58px;
+        padding: 7px 5px;
+      }
+
+      .ship-data-kpi span,
+      .ship-data-kpi em {
+        font-size: 9px;
+      }
+
+      .ship-data-kpi strong {
         font-size: 16px;
+      }
+
+      body.preview-mobile .ship-date-field .input,
+      .ship-date-field .input {
+        min-height: 0;
+        height: 18px;
+        font-size: 12px;
+      }
+
+      .ship-date-field {
+        min-height: 40px;
+        padding: 6px 4px;
+      }
+
+      .ship-date-field label {
+        font-size: 11px;
+      }
+
+      .ship-date-empty {
+        bottom: 6px;
+        font-size: 11px;
+      }
+
+      .ship-data-detail-row {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .ship-data-detail-row .ship-data-status-chip {
+        grid-column: 2;
+        justify-self: start;
       }
 
       .ship-card .item-actions {
@@ -10278,6 +10629,11 @@
 
       .ship-date-field label {
         font-size: 12px;
+      }
+
+      .ship-filter-notice {
+        align-items: stretch;
+        flex-direction: column;
       }
     }
 

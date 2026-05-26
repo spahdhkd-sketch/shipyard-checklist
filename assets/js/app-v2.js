@@ -2194,6 +2194,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       draft: loadDraft(),
       historyScope: "all",
       historyFilter: "all",
+      historyShipNo: "",
       historyDetailId: null,
       selectedHistoryIds: [],
       toastTimer: null,
@@ -2205,6 +2206,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       lastRemotePullAt: Number(loadJson("lastRemotePullAt", 0)) || 0,
       screenMode: localStorage.getItem(storeKey("screenMode")) || "desktop",
       shipSortMode: normalizeShipSortMode(loadJson("shipSortMode", "stage")),
+      shipDataCardOpenIds: loadJson("shipDataCardOpenIds", []),
       shipSearchQuery: "",
       toolSearchQuery: "",
       adminMode: initialAdminMode,
@@ -2311,10 +2313,51 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       return false;
     }
+
+    function routeQueryParam(name) {
+      try {
+        return new URLSearchParams(location.search).get(name) || "";
+      } catch {
+        return "";
+      }
+    }
+
+    function routeShipNo() {
+      return normalizeShipNo(String(routeQueryParam("shipNo") || "").trim());
+    }
+
+    function applyRouteFiltersFromQuery() {
+      const shipNo = routeShipNo();
+      if (!shipNo) return;
+      if (state.view === "history") {
+        state.historyScope = "all";
+        state.historyFilter = "all";
+        state.historyShipNo = shipNo;
+        state.historyDetailId = null;
+      }
+      if (state.view === "manage") {
+        const tab = routeQueryParam("tab");
+        if (tab === "unsafe") {
+          state.manageTab = "unsafe";
+          state.unsafeDetailId = "";
+          state.unsafeFilters = { ...state.unsafeFilters, shipNo, status: "" };
+          saveJson("unsafeFilters", state.unsafeFilters);
+          saveJson("manageTab", state.manageTab);
+        }
+        if (tab === "materials") {
+          state.manageTab = "materials";
+          state.materialFilters = { ...state.materialFilters, shipNo, status: "", materialName: "" };
+          saveJson("materialFilters", state.materialFilters);
+          saveJson("manageTab", state.manageTab);
+        }
+      }
+    }
+
     async function boot() {
       migrateIfNeeded();
       cleanupDeliveredShips(false);
       prepareInitialManageFilters();
+      applyRouteFiltersFromQuery();
       applyScreenMode();
       updateHeaderClock();
       render();
@@ -2626,6 +2669,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         selectedCategoryId: state.selectedCategoryId,
         historyScope: state.historyScope,
         historyFilter: state.historyFilter,
+        historyShipNo: state.historyShipNo,
         historyDetailId: state.historyDetailId,
       };
     }
@@ -2660,6 +2704,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.selectedCategoryId = route.selectedCategoryId || null;
       state.historyScope = normalizeHistoryScope(route.historyScope || "all");
       state.historyFilter = route.historyFilter || "all";
+      state.historyShipNo = route.historyShipNo || "";
       state.historyDetailId = route.historyDetailId || null;
       if (state.view !== "check") {
         state.selectedCategoryId = null;
@@ -4398,7 +4443,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderDirectCheckSection(categories) {
       return `<section class="work-prep-direct-section">
         <button class="work-prep-direct-toggle" data-action="toggle-work-prep-direct" type="button" aria-expanded="${state.workPrepDirectOpen ? "true" : "false"}">
-          <span><strong>작업 준비 없이 점검</strong><em>등록된 작업 준비가 없거나 즉시 점검할 때 펼쳐서 선택</em></span>
+          <span><strong>작업 준비 없이 점검</strong><em>등록된 작업지시서가 없거나 즉시 점검할 때 펼쳐서 선택</em></span>
           ${renderCategoryToggleImage(state.workPrepDirectOpen, { color: "#0b5cad" })}
         </button>
         ${state.workPrepDirectOpen ? `<div class="work-prep-direct-panel">
@@ -4720,6 +4765,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       ${isDeliveryScope ? "" : `<div class="segmented" style="margin-bottom:12px">
         ${filterButtons.map(([id, label]) => `<button class="seg-btn ${state.historyFilter === id ? "active" : ""}" data-history-filter="${id}" type="button">${esc(label)}</button>`).join("")}
       </div>`}
+      ${isDeliveryScope || !state.historyShipNo ? "" : renderShipFilterNotice("history", state.historyShipNo)}
       ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 이메일 로그인 후 사용할 수 있습니다.</div>`)}
       ${isDeliveryScope ? "" : renderHistoryPledgeStatus()}
       <div class="panel panel-pad">
@@ -4754,6 +4800,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.historyScope = normalizeHistoryScope(state.historyScope);
       let rows = state.inspections;
       if (state.historyScope === "today") rows = rows.filter((row) => row.date === today());
+      if (state.historyShipNo) rows = rows.filter((row) => sameShipNo(row.shipNo, state.historyShipNo));
       if (state.historyFilter !== "all") rows = rows.filter((row) => row.categoryId === state.historyFilter);
       return rows;
     }
@@ -5006,15 +5053,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderShipRow(ship) {
       const info = effectiveShipStage(ship);
-      const deliveryType = shipDeliveryType(ship) || "인도";
-      const deliveryDate = shipDeliveryDate(ship);
-      return `<div class="item-row ship-card" style="--stage:${esc(info.color)}" data-ship-search-item data-ship-search-text="${esc(searchableShipNo(ship))}">
+      const scheduleInfo = shipScheduleStage(ship);
+      const summary = shipDataSummary(ship);
+      const expanded = state.shipDataCardOpenIds.includes(ship.id);
+      return `<article class="item-row ship-card ship-data-card ${expanded ? "is-expanded" : "is-collapsed"}" style="--stage:${esc(info.color)}" data-ship-search-item data-ship-search-text="${esc(searchableShipNo(ship))}">
         <div class="ship-card-head">
           <div class="ship-identity">
             <div class="ship-card-title">${esc(ship.no)}</div>
             <div class="ship-card-sub">${esc(ship.type || "선종 미지정")}${isWorkerVisibleShip(ship) ? " · 작업자 공개" : ""}</div>
           </div>
-          ${shipStageField(ship)}
+          <div class="ship-stage-stack">
+            ${shipStageField(ship)}
+            <span class="ship-stage-derived">일정 기준 ${esc(scheduleInfo.label)}</span>
+          </div>
         </div>
         <div class="ship-card-body">
           <div class="ship-date-grid">
@@ -5023,9 +5074,166 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             ${shipDateField(ship, "clDate", "C/L")}
             ${shipDateField(ship, "dlDate", "D/L")}
           </div>
-          ${state.adminMode ? `<button class="btn-danger ship-delete-btn" data-delete-ship="${ship.id}" type="button">삭제</button>` : ""}
+          ${renderShipDataKpis(ship, summary)}
+          ${renderShipDataRecent(summary)}
+          <div class="ship-data-toggle-row">
+            <button class="ship-data-toggle" data-action="toggle-ship-data-card" data-ship-id="${esc(ship.id)}" type="button" aria-expanded="${expanded ? "true" : "false"}" aria-label="${expanded ? "호선 DATA 카드 접기" : "호선 DATA 카드 펼치기"}">
+              ${renderCategoryToggleImage(expanded, { color: "#1f6eb3" })}
+            </button>
+          </div>
+          ${expanded ? renderShipDataExpanded(summary) : ""}
+          ${state.adminMode ? `<div class="ship-card-admin-actions"><button class="btn-danger ship-delete-btn" data-delete-ship="${ship.id}" type="button">삭제</button></div>` : ""}
+        </div>
+      </article>`;
+    }
+
+    function sameShipNo(value, shipNo) {
+      const left = normalizeShipNo(String(value || ""));
+      const right = normalizeShipNo(String(shipNo || ""));
+      return Boolean(left && right && left === right);
+    }
+
+    function shipScheduleStage(ship) {
+      const current = today();
+      if (!ship.lcDate) return shipStageInfo("mounting");
+      if (ship.dlDate && current >= dateOnly(ship.dlDate)) return shipStageInfo("dl");
+      if (ship.clDate && current >= dateOnly(ship.clDate)) return shipStageInfo("cl");
+      if (ship.stDate && current >= dateOnly(ship.stDate)) return shipStageInfo("st");
+      return shipStageInfo("lc");
+    }
+
+    function shipDataSummary(ship) {
+      const shipNo = ship.no || "";
+      const todayValue = today();
+      const inspections = state.inspections
+        .filter((row) => sameShipNo(row.shipNo, shipNo))
+        .sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
+      const todayInspections = inspections.filter((row) => inspectionActualDate(row) === todayValue);
+      const todayDone = todayInspections.filter((row) => row.status === "완료").length;
+      const unsafeRows = state.unsafeIssues
+        .filter((row) => sameShipNo(row.shipNo, shipNo))
+        .sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
+      const materialRows = state.missingMaterials
+        .filter((row) => sameShipNo(row.shipNo, shipNo))
+        .sort((a, b) => recordTimestamp(b) - recordTimestamp(a));
+      const materialDone = ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2];
+      const openMaterials = materialRows.filter((row) => row.status !== materialDone && !row.completedAt).length;
+      return {
+        shipNo,
+        inspections,
+        todayDone,
+        todayTotal: todayInspections.length,
+        unsafeRows,
+        latestUnsafe: unsafeRows[0] || null,
+        materialRows,
+        openMaterials,
+      };
+    }
+
+    function renderShipDataKpis(ship, summary) {
+      const latestUnsafeStatus = summary.latestUnsafe?.status || "등록 없음";
+      const materialFoot = summary.openMaterials ? "미처리" : "처리 없음";
+      return `<div class="ship-data-kpis">
+        <button class="ship-data-kpi tone-ok" data-action="open-ship-data-target" data-ship-data-target="history" data-ship-no="${esc(ship.no)}" type="button">
+          <span>오늘 점검</span><strong>${esc(summary.todayDone)}/${esc(summary.todayTotal)}</strong><em>누적 ${esc(summary.inspections.length)}건</em>
+        </button>
+        <button class="ship-data-kpi tone-warn" data-action="open-ship-data-target" data-ship-data-target="unsafe" data-ship-no="${esc(ship.no)}" type="button">
+          <span>불안전요소</span><strong>${summary.latestUnsafe ? "최근 1" : "없음"}</strong><em>${esc(latestUnsafeStatus)}</em>
+        </button>
+        <button class="ship-data-kpi tone-danger" data-action="open-ship-data-target" data-ship-data-target="materials" data-ship-no="${esc(ship.no)}" type="button">
+          <span>자재누락</span><strong>${esc(summary.openMaterials)}건</strong><em>${esc(materialFoot)}</em>
+        </button>
+      </div>`;
+    }
+
+    function renderShipDataRecent(summary) {
+      const latest = summary.latestUnsafe;
+      const title = latest ? shortUnsafeTitle(latest.content || "불안전요소") : "등록된 불안전요소 없음";
+      return `<div class="ship-data-recent">
+        <span>최근 불안전요소</span>
+        <strong>${esc(title)}</strong>
+      </div>`;
+    }
+
+    function renderShipDataExpanded(summary) {
+      const inspectionRows = summary.inspections.slice(0, 3);
+      const latestUnsafe = summary.latestUnsafe;
+      const latestMaterial = summary.materialRows[0] || null;
+      return `<div class="ship-data-expanded">
+        <div class="ship-data-detail-card">
+          <h3>최근 점검기록</h3>
+          ${inspectionRows.length ? inspectionRows.map((row) => {
+            const cat = categoryById(row.categoryId);
+            const label = row.date === today() ? "오늘" : shortDate(row.date || row.createdAt);
+            const text = `${row.worker || "-"} · ${cat?.label || row.categoryLabel || "점검"}`;
+            return renderShipDataDetailRow(label, text, row.status || "확인");
+          }).join("") : `<div class="ship-data-empty">점검 이력이 없습니다.</div>`}
+        </div>
+        <div class="ship-data-detail-card">
+          <h3>최근 불안전요소 + 자재누락</h3>
+          ${latestUnsafe ? renderShipDataDetailRow("위험", shortUnsafeTitle(latestUnsafe.content || "불안전요소"), latestUnsafe.status || "확인중", "warn") : renderShipDataDetailRow("위험", "등록된 불안전요소 없음", "없음")}
+          ${latestMaterial ? renderShipDataDetailRow("자재", latestMaterial.materialName || latestMaterial.content || "자재누락", latestMaterial.status || "미처리", "danger") : renderShipDataDetailRow("자재", "등록된 자재누락 없음", "없음")}
         </div>
       </div>`;
+    }
+
+    function renderShipDataDetailRow(label, text, status, tone = "") {
+      return `<div class="ship-data-detail-row">
+        <b>${esc(label)}</b><span>${esc(text)}</span><i class="ship-data-status-chip ${tone}">${esc(status)}</i>
+      </div>`;
+    }
+
+    function renderShipFilterNotice(kind, shipNo) {
+      const safeShipNo = esc(shipNo);
+      if (kind === "history") {
+        return `<div class="notice ship-filter-notice">호선 ${safeShipNo} 점검 이력만 표시 중입니다. <button class="btn-light" data-action="clear-history-ship-filter" type="button">전체 보기</button></div>`;
+      }
+      const label = kind === "unsafe" ? "불안전요소" : "자재누락";
+      return `<div class="notice ship-filter-notice">호선 ${safeShipNo} ${label}만 표시 중입니다. <button class="btn-light" data-record-filter="${esc(kind)}:shipNo" value="" type="button">전체 보기</button></div>`;
+    }
+
+    function toggleShipDataCard(shipId) {
+      if (!shipId) return;
+      const openIds = new Set(state.shipDataCardOpenIds || []);
+      openIds.has(shipId) ? openIds.delete(shipId) : openIds.add(shipId);
+      state.shipDataCardOpenIds = [...openIds];
+      saveJson("shipDataCardOpenIds", state.shipDataCardOpenIds);
+      renderPreservingScroll();
+    }
+
+    function openShipDataTarget(target, shipNo) {
+      const normalizedShipNo = normalizeShipNo(String(shipNo || ""));
+      if (!normalizedShipNo) return;
+      if (target === "history") {
+        state.historyScope = "all";
+        state.historyFilter = "all";
+        state.historyShipNo = normalizedShipNo;
+        state.historyDetailId = null;
+        location.href = `${pageForView("history")}?shipNo=${encodeURIComponent(normalizedShipNo)}`;
+        return;
+      }
+      if (target === "unsafe") {
+        state.manageTab = "unsafe";
+        state.unsafeDetailId = "";
+        state.unsafeFilters = { ...state.unsafeFilters, shipNo: normalizedShipNo, status: "" };
+        saveJson("manageTab", state.manageTab);
+        saveJson("unsafeFilters", state.unsafeFilters);
+        location.href = `${pageForView("manage")}?tab=unsafe&shipNo=${encodeURIComponent(normalizedShipNo)}`;
+        return;
+      }
+      if (target === "materials") {
+        state.manageTab = "materials";
+        state.materialFilters = { ...state.materialFilters, shipNo: normalizedShipNo, status: "", materialName: "" };
+        saveJson("manageTab", state.manageTab);
+        saveJson("materialFilters", state.materialFilters);
+        location.href = `${pageForView("manage")}?tab=materials&shipNo=${encodeURIComponent(normalizedShipNo)}`;
+      }
+    }
+
+    function clearHistoryShipFilter() {
+      state.historyShipNo = "";
+      render();
+      history.pushState(routeState(), "", location.pathname);
     }
 
     function shipStageField(ship) {
@@ -5043,11 +5251,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function shipDateField(ship, field, label) {
       const value = ship[field] || "";
+      const displayValue = state.adminMode ? value : yymmddDate(value);
       return `<div class="ship-date-field">
         <label for="${field}_${ship.id}">${label}</label>
-        <input class="input" id="${field}_${ship.id}" type="date" data-ship-date-field="${field}" data-ship-id="${ship.id}" value="${esc(value)}" placeholder="미입력" ${state.adminMode ? "" : "disabled"} />
+        <input class="input" id="${field}_${ship.id}" type="${state.adminMode ? "date" : "text"}" data-ship-date-field="${field}" data-ship-id="${ship.id}" value="${esc(displayValue)}" placeholder="미입력" ${state.adminMode ? "" : "disabled"} />
         ${value ? "" : `<span class="ship-date-empty">미입력</span>`}
       </div>`;
+    }
+
+    function yymmddDate(value) {
+      const clean = dateOnly(value);
+      const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return match ? `${match[1].slice(2)}${match[2]}${match[3]}` : clean;
     }
 
     function shipStageCardFoot(ship) {
@@ -6040,6 +6255,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <button class="btn" data-view="unsafe" type="button">+ 신규</button>
           </div>
         </div>
+        ${state.unsafeFilters.shipNo ? renderShipFilterNotice("unsafe", state.unsafeFilters.shipNo) : ""}
         <div class="unsafe-split unsafe-split-inline">
           <aside class="unsafe-list-panel">
             <div class="unsafe-list-head">
@@ -6258,6 +6474,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${materialKpi("확인중", checking, "건", "#d97706", statuses[1])}
           ${materialKpi("완료", done, "건", "#4F7A5C", statuses[2])}
         </div>
+        ${state.materialFilters.shipNo ? renderShipFilterNotice("materials", state.materialFilters.shipNo) : ""}
         <div class="material-layout">
           <aside class="material-filter-panel">
             <div class="section-title">호선별 필터</div>
@@ -8132,6 +8349,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "submit-material": submitMissingMaterial,
         "new-unsafe": startNewUnsafeIssue,
         "new-material": startNewMissingMaterial,
+        "toggle-ship-data-card": () => toggleShipDataCard(event.target.closest("[data-ship-id]")?.dataset.shipId),
+        "open-ship-data-target": () => openShipDataTarget(
+          event.target.closest("[data-ship-data-target]")?.dataset.shipDataTarget,
+          event.target.closest("[data-ship-no]")?.dataset.shipNo,
+        ),
+        "clear-history-ship-filter": clearHistoryShipFilter,
         "toggle-admin": toggleAdminMode,
         "reset-history": resetHistory,
         "reset-unsafe-records": resetUnsafeIssueRecords,
@@ -9371,6 +9594,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const target = kind === "unsafe" ? state.unsafeFilters : state.materialFilters;
       target[key] = value;
       saveJson(kind === "unsafe" ? "unsafeFilters" : "materialFilters", target);
+      if (key === "shipNo" && !value && routeQueryParam("shipNo")) {
+        history.replaceState(routeState(), "", location.pathname);
+      }
       render();
     }
 

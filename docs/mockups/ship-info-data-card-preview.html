@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>호선 DATA 카드 시안</title>
+  <style>
+    :root {
+      --ink: #07162f;
+      --muted: #607089;
+      --line: #d7e1ec;
+      --soft: #f4f8fc;
+      --panel: #ffffff;
+      --navy: #0b2d56;
+      --teal: #0f766e;
+      --green: #4f7a5c;
+      --blue: #1f6eb3;
+      --orange: #c77718;
+      --red: #a33f45;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #e9f1f8;
+      color: var(--ink);
+      font-family: "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 28px));
+      margin: 24px auto 44px;
+    }
+
+    .intro {
+      margin-bottom: 18px;
+      padding: 18px 20px;
+      border: 1px solid #cbd8e7;
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .intro h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .option {
+      display: grid;
+      gap: 10px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .option[hidden] {
+      display: none;
+    }
+
+    .option-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 0 4px;
+    }
+
+    .option-title strong {
+      font-size: 16px;
+    }
+
+    .option-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .ship-card {
+      display: grid;
+      gap: 12px;
+      padding: 15px;
+      border: 1px solid #cad8e6;
+      border-left: 6px solid var(--teal);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 16px 34px rgba(11, 29, 58, .08);
+    }
+
+    .ship-card-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .ship-title {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .ship-title strong {
+      font-size: 26px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .ship-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .stage-stack {
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+    }
+
+    .stage-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 72px;
+      min-height: 34px;
+      padding: 5px 12px;
+      border: 1px solid #4f7a5c;
+      border-radius: 8px;
+      background: #e9f5ee;
+      color: #345a43;
+      font-size: 18px;
+      font-weight: 1000;
+    }
+
+    .stage-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef4fb;
+      color: #37526f;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .date-rail {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid #e0e8f1;
+      border-radius: 8px;
+      background: #f8fbfe;
+    }
+
+    .date-rail div {
+      min-width: 0;
+      padding: 6px;
+      border-radius: 7px;
+      background: #fff;
+      text-align: center;
+    }
+
+    .date-rail span,
+    .mini-kpis span,
+    .detail-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .date-rail strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .mini-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .mini-kpis div,
+    .mini-kpis a {
+      position: relative;
+      display: block;
+      min-height: 68px;
+      padding: 9px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #f8fbfe;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .mini-kpis a {
+      cursor: pointer;
+      transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+
+    .mini-kpis a::after {
+      content: "이동";
+      position: absolute;
+      right: 8px;
+      top: 7px;
+      color: #37526f;
+      font-size: 10px;
+      font-weight: 1000;
+    }
+
+    .mini-kpis a:hover,
+    .mini-kpis a:focus-visible {
+      border-color: #8fb4d8;
+      box-shadow: 0 8px 18px rgba(31, 110, 179, .13);
+      outline: 0;
+      transform: translateY(-1px);
+    }
+
+    .mini-kpis strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 19px;
+      line-height: 1;
+      font-weight: 1000;
+    }
+
+    .mini-kpis em {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .tone-ok strong { color: var(--green); }
+    .tone-warn strong { color: var(--orange); }
+    .tone-danger strong { color: var(--red); }
+
+    .recent-line {
+      display: grid;
+      gap: 5px;
+      min-height: 54px;
+      padding: 10px;
+      border: 1px solid #e4ebf3;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .recent-line strong {
+      overflow: hidden;
+      font-size: 13px;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .recent-line span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .circle-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      padding: 2px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .circle-toggle:focus-visible {
+      outline: 2px solid #0b5cad;
+      outline-offset: 2px;
+    }
+
+    .category-tool-toggle-image {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255, 255, 255, .5), transparent 34%),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent, #0b5cad) 78%, #fff), var(--accent, #0b5cad));
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, .38),
+        0 10px 20px color-mix(in srgb, var(--accent, #0b5cad) 26%, transparent);
+      color: #fff;
+    }
+
+    .category-tool-toggle-image svg {
+      display: block;
+      width: 20px;
+      height: 20px;
+    }
+
+    .category-tool-toggle-image circle {
+      fill: none;
+      stroke: rgba(255, 255, 255, .2);
+      stroke-width: 1.2;
+    }
+
+    .category-tool-toggle-image path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .expanded-panel {
+      display: grid;
+      gap: 9px;
+      padding-top: 11px;
+      border-top: 1px solid #e1e9f2;
+    }
+
+    .detail-card {
+      padding: 10px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .detail-card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: 70px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 0;
+      border-top: 1px solid #edf2f7;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .detail-row:first-of-type {
+      border-top: 0;
+    }
+
+    .detail-row span {
+      overflow: hidden;
+      color: var(--muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 23px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #edf7f3;
+      color: #34664d;
+      font-size: 11px;
+      font-weight: 1000;
+      white-space: nowrap;
+    }
+
+    .status-chip.warn {
+      background: #fff4df;
+      color: #8a520d;
+    }
+
+    .status-chip.danger {
+      background: #fff1f2;
+      color: #9f3f46;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .summary-tile {
+      min-height: 72px;
+      padding: 10px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .summary-tile strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .type-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .type-row {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 42px;
+      padding: 9px;
+      border: 1px solid #dfe8f1;
+      border-radius: 8px;
+      background: #fbfdff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .progress {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e6edf5;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--teal);
+    }
+
+    .nav-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .nav-actions button {
+      min-height: 34px;
+      border: 1px solid #cdd9e7;
+      border-radius: 8px;
+      background: #fff;
+      color: #183452;
+      font-weight: 1000;
+    }
+
+    @media (max-width: 520px) {
+      main {
+        width: min(100vw - 12px, 430px);
+        margin-top: 8px;
+      }
+
+      .intro {
+        padding: 14px;
+      }
+
+      .ship-card {
+        padding: 12px;
+      }
+
+      .ship-title strong {
+        font-size: 23px;
+      }
+
+      .preview-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .date-rail,
+      .mini-kpis,
+      .summary-grid,
+      .nav-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="intro">
+      <h1>호선 DATA 카드 시안</h1>
+      <p>공통 상단은 관리자 공정을 1순위, 날짜 기반 일정 배지를 2순위로 둡니다. 대시보드 카드 3개는 호선번호를 넘겨 각 관리 화면을 필터링해서 여는 진입점입니다.</p>
+    </section>
+
+    <div class="preview-grid">
+      <section class="option">
+        <div class="option-title">
+          <strong>A. 최근 기록 중심 · 펼침</strong>
+          <span>대시보드 카드 이동</span>
+        </div>
+        <article class="ship-card">
+          <div class="ship-card-head">
+            <div class="ship-title">
+              <strong>H3386</strong>
+              <span>LNG · 작업자 공개</span>
+            </div>
+            <div class="stage-stack">
+              <div class="stage-primary">S/T</div>
+              <div class="stage-secondary">일정 기준 L/C</div>
+            </div>
+          </div>
+          <div class="date-rail">
+            <div><span>L/C</span><strong>05.12</strong></div>
+            <div><span>S/T</span><strong>06.03</strong></div>
+            <div><span>C/L</span><strong>06.18</strong></div>
+            <div><span>D/L</span><strong>07.02</strong></div>
+          </div>
+          <div class="mini-kpis">
+            <a class="tone-ok" href="../../history.html?shipNo=H3386" aria-label="H3386 점검 이력 필터로 이동"><span>오늘 점검</span><strong>2/3</strong><em>누적 18건</em></a>
+            <a class="tone-warn" href="../../unsafe.html?shipNo=H3386" aria-label="H3386 불안전요소 관리 필터로 이동"><span>불안전요소</span><strong>최근 1</strong><em>확인중</em></a>
+            <a class="tone-danger" href="../../materials.html?shipNo=H3386" aria-label="H3386 자재누락 관리 필터로 이동"><span>자재누락</span><strong>2건</strong><em>미처리</em></a>
+          </div>
+          <div class="recent-line">
+            <span>최근 불안전요소</span>
+            <strong>가스 호스 정리 필요 · 배관 하부</strong>
+          </div>
+          <div class="toggle-row">
+            <button class="circle-toggle" type="button" aria-label="접힘">
+              <span class="category-tool-toggle-image expanded" aria-hidden="true" style="--accent:#1f6eb3">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="10.2"></circle>
+                  <path d="M7.5 13.2 12 8.8l4.5 4.4"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+          <div class="expanded-panel">
+            <div class="detail-card">
+              <h3>최근 점검기록</h3>
+              <div class="detail-row"><b>오늘</b><span>김경재 · 후행 설치 작업</span><i class="status-chip">완료</i></div>
+              <div class="detail-row"><b>05.25</b><span>김준혁 · DP 설치 작업</span><i class="status-chip">완료</i></div>
+              <div class="detail-row"><b>05.25</b><span>박정호 · 탑재 작업</span><i class="status-chip warn">확인</i></div>
+            </div>
+            <div class="detail-card">
+              <h3>최근 불안전요소 + 자재누락</h3>
+              <div class="detail-row"><b>위험</b><span>가스 호스 정리 필요</span><i class="status-chip warn">확인중</i></div>
+              <div class="detail-row"><b>자재</b><span>밸브 2EA, 브라켓 1EA</span><i class="status-chip danger">2건</i></div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <strong>A. 최근 기록 중심 · 접힘</strong>
+          <span>요약만 노출</span>
+        </div>
+        <article class="ship-card">
+          <div class="ship-card-head">
+            <div class="ship-title">
+              <strong>H3386</strong>
+              <span>LNG · 작업자 공개</span>
+            </div>
+            <div class="stage-stack">
+              <div class="stage-primary">S/T</div>
+              <div class="stage-secondary">일정 기준 L/C</div>
+            </div>
+          </div>
+          <div class="date-rail">
+            <div><span>L/C</span><strong>05.12</strong></div>
+            <div><span>S/T</span><strong>06.03</strong></div>
+            <div><span>C/L</span><strong>06.18</strong></div>
+            <div><span>D/L</span><strong>07.02</strong></div>
+          </div>
+          <div class="mini-kpis">
+            <a class="tone-ok" href="../../history.html?shipNo=H3386" aria-label="H3386 점검 이력 필터로 이동"><span>오늘 점검</span><strong>2/3</strong><em>누적 18건</em></a>
+            <a class="tone-warn" href="../../unsafe.html?shipNo=H3386" aria-label="H3386 불안전요소 관리 필터로 이동"><span>불안전요소</span><strong>최근 1</strong><em>확인중</em></a>
+            <a class="tone-danger" href="../../materials.html?shipNo=H3386" aria-label="H3386 자재누락 관리 필터로 이동"><span>자재누락</span><strong>2건</strong><em>미처리</em></a>
+          </div>
+          <div class="recent-line">
+            <span>최근 불안전요소</span>
+            <strong>가스 호스 정리 필요 · 배관 하부</strong>
+          </div>
+          <div class="toggle-row">
+            <button class="circle-toggle" type="button" aria-label="펼침">
+              <span class="category-tool-toggle-image collapsed" aria-hidden="true" style="--accent:#1f6eb3">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="10.2"></circle>
+                  <path d="M7.5 10.8 12 15.2l4.5-4.4"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="option" hidden>
+        <div class="option-title">
+          <strong>B. 요약 지표 중심</strong>
+          <span>가장 압축</span>
+        </div>
+        <article class="ship-card">
+          <div class="ship-card-head">
+            <div class="ship-title">
+              <strong>H3386</strong>
+              <span>LNG · 작업자 공개</span>
+            </div>
+            <div class="stage-stack">
+              <div class="stage-primary">S/T</div>
+              <div class="stage-secondary">일정 기준 L/C</div>
+            </div>
+          </div>
+          <div class="date-rail">
+            <div><span>L/C</span><strong>05.12</strong></div>
+            <div><span>S/T</span><strong>06.03</strong></div>
+            <div><span>C/L</span><strong>06.18</strong></div>
+            <div><span>D/L</span><strong>07.02</strong></div>
+          </div>
+          <div class="mini-kpis">
+            <div class="tone-ok"><span>오늘 점검</span><strong>2/3</strong><em>누적 18건</em></div>
+            <div class="tone-warn"><span>불안전요소</span><strong>최근 1</strong><em>확인중</em></div>
+            <div class="tone-danger"><span>자재누락</span><strong>2건</strong><em>미처리</em></div>
+          </div>
+          <div class="recent-line">
+            <span>최근 불안전요소</span>
+            <strong>가스 호스 정리 필요 · 배관 하부</strong>
+          </div>
+          <div class="toggle-row">
+            <button class="circle-toggle" type="button" aria-label="펼침">
+              <span class="category-tool-toggle-image collapsed" aria-hidden="true" style="--accent:#1f6eb3">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="10.2"></circle>
+                  <path d="M7.5 10.8 12 15.2l4.5-4.4"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+          <div class="expanded-panel">
+            <div class="summary-grid">
+              <div class="summary-tile"><span class="detail-label">오늘 완료율</span><strong>67%</strong></div>
+              <div class="summary-tile"><span class="detail-label">마지막 점검</span><strong>09:42</strong></div>
+              <div class="summary-tile"><span class="detail-label">불안전 미완료</span><strong>1건</strong></div>
+              <div class="summary-tile"><span class="detail-label">자재누락 미완료</span><strong>2건</strong></div>
+            </div>
+            <div class="nav-actions">
+              <button type="button">점검 이력</button>
+              <button type="button">불안전</button>
+              <button type="button">자재누락</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="option" hidden>
+        <div class="option-title">
+          <strong>C. 작업유형별 요약</strong>
+          <span>분석형</span>
+        </div>
+        <article class="ship-card">
+          <div class="ship-card-head">
+            <div class="ship-title">
+              <strong>H3386</strong>
+              <span>LNG · 작업자 공개</span>
+            </div>
+            <div class="stage-stack">
+              <div class="stage-primary">S/T</div>
+              <div class="stage-secondary">일정 기준 L/C</div>
+            </div>
+          </div>
+          <div class="date-rail">
+            <div><span>L/C</span><strong>05.12</strong></div>
+            <div><span>S/T</span><strong>06.03</strong></div>
+            <div><span>C/L</span><strong>06.18</strong></div>
+            <div><span>D/L</span><strong>07.02</strong></div>
+          </div>
+          <div class="mini-kpis">
+            <div class="tone-ok"><span>오늘 점검</span><strong>2/3</strong><em>누적 18건</em></div>
+            <div class="tone-warn"><span>불안전요소</span><strong>최근 1</strong><em>확인중</em></div>
+            <div class="tone-danger"><span>자재누락</span><strong>2건</strong><em>미처리</em></div>
+          </div>
+          <div class="recent-line">
+            <span>최근 불안전요소</span>
+            <strong>가스 호스 정리 필요 · 배관 하부</strong>
+          </div>
+          <div class="toggle-row">
+            <button class="circle-toggle" type="button" aria-label="펼침">
+              <span class="category-tool-toggle-image collapsed" aria-hidden="true" style="--accent:#1f6eb3">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="10.2"></circle>
+                  <path d="M7.5 10.8 12 15.2l4.5-4.4"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+          <div class="expanded-panel">
+            <div class="type-stack">
+              <div class="type-row"><b>후행 설치</b><div class="progress"><span style="width:78%"></span></div><i class="status-chip">7건</i></div>
+              <div class="type-row"><b>DP 설치</b><div class="progress"><span style="width:54%"></span></div><i class="status-chip warn">4건</i></div>
+              <div class="type-row"><b>탑재 작업</b><div class="progress"><span style="width:34%"></span></div><i class="status-chip">3건</i></div>
+            </div>
+            <div class="detail-card">
+              <h3>열린 이슈</h3>
+              <div class="detail-row"><b>위험</b><span>가스 호스 정리 필요</span><i class="status-chip warn">1</i></div>
+              <div class="detail-row"><b>자재</b><span>미처리 자재누락</span><i class="status-chip danger">2</i></div>
+            </div>
+            <div class="nav-actions">
+              <button type="button">점검 이력</button>
+              <button type="button">불안전</button>
+              <button type="button">자재누락</button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

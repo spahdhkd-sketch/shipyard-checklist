@@ -1,4 +1,4 @@
-const CACHE = "gs-safety-v16-20260526-worker-push-workprep";
+﻿const CACHE = "gs-safety-v17-20260526-ship-data-card";
 const SHELL = [
   "/",
   "/index.html",
@@ -6,11 +6,11 @@ const SHELL = [
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
   "/assets/icons/notification-icon.png",
-  "/assets/css/styles-v2.css?v=20260526-worker-push-workprep-1",
+  "/assets/css/styles-v2.css?v=20260526-ship-data-card-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260526-worker-push-workprep-1",
-  "/assets/js/issue-material-rules.js?v=20260526-worker-push-workprep-1",
-  "/assets/js/app-v2.js?v=20260526-worker-push-workprep-1"
+  "/assets/js/checklist-rules.js?v=20260526-ship-data-card-1",
+  "/assets/js/issue-material-rules.js?v=20260526-ship-data-card-1",
+  "/assets/js/app-v2.js?v=20260526-ship-data-card-1"
 ];
 
 self.addEventListener("install", (event) => {
