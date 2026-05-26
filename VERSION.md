@@ -1,15 +1,15 @@
 # Version
 
-Current version: `0.3-20260521`
+Current version: `0.6-20260526`
 
-Recorded at: `2026-05-21 09:07:08 +09:00`
+Recorded at: `2026-05-26 12:01:43 +09:00`
 
-Baseline commit: `0871874cbf0862ec94dded89c552cec8bc37ef40`
+Baseline commit: `be8e5cbf8f253cdac787f59396da8b0dda6f4fd9`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version marks the restored production checklist baseline.
+- This version includes the worker card inline edit layout, worker login ordering, ship visibility/count text cleanup, push target header send layout, and work prep appearance badge alignment.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

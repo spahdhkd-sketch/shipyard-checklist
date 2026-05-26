@@ -1,7 +1,7 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PASSWORD = "gs2026";
     const RECORD_RESET_PASSWORD = "gsfire820062!";
-    const APP_VERSION = "0.5-20260525";
+    const APP_VERSION = "0.6-20260526";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -467,6 +467,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           name: row.name,
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
+          employee_no: normalizeEmployeeNo(row.employeeNo),
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
@@ -475,6 +476,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           name: row.name,
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
+          employeeNo: normalizeEmployeeNo(row.employee_no),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }),
@@ -948,8 +950,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "허지원", "김준혁", "김경제"]);
     const DEFAULT_WORKER_POSITION = "작업자";
     const LEADER_WORKER_POSITION = "조장";
-    const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION];
-    const WORK_PREP_TEAM_OPTIONS = ["선행", "후행"];
+    const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, "대표", "관리", "총무"];
+    const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, "관리", "총무"]);
+    const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
+    const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
+    const LOGIN_WORKER_GROUP_RANK = new Map(LOGIN_WORKER_GROUP_ORDER.map((group, index) => [group, index]));
+    const WORK_PREP_TEAM_OPTIONS = WORKER_TEAM_OPTIONS;
     const WORK_PREP_STATUS_LABELS = {
       confirmed: "확정",
       preparing: "점검 대기",
@@ -979,14 +985,42 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return WORKER_POSITIONS.includes(value) ? value : DEFAULT_WORKER_POSITION;
     }
 
+    function loginWorkerGroup(worker) {
+      const position = normalizeWorkerPosition(worker?.position);
+      const team = normalizeWorkerTeam(worker?.team);
+      if (position === "대표") return "대표";
+      if (position === "총무") return "총무";
+      if (position === "관리" || team === "관리") return "관리";
+      if (team === "선행") return "선행";
+      if (team === "후행") return "후행";
+      return "";
+    }
+
+    function loginWorkerGroupRank(worker) {
+      const group = loginWorkerGroup(worker);
+      return LOGIN_WORKER_GROUP_RANK.has(group) ? LOGIN_WORKER_GROUP_RANK.get(group) : LOGIN_WORKER_GROUP_ORDER.length;
+    }
+
+    function sortWorkersForLogin(workers) {
+      return [...(Array.isArray(workers) ? workers : [])].sort((a, b) =>
+        loginWorkerGroupRank(a) - loginWorkerGroupRank(b)
+        || String(a.name || "").localeCompare(String(b.name || ""), "ko")
+        || String(a.id || "").localeCompare(String(b.id || "")));
+    }
+
     function isLeaderWorker(worker) {
       return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
     }
 
+    function canWorkerPerformLeaderActions(worker) {
+      const position = normalizeWorkerPosition(worker?.position);
+      const team = String(worker?.team || "").trim();
+      return PRIVILEGED_WORKER_POSITIONS.has(position) || team === "관리" || team === "총무";
+    }
+
     function canOpenWorkPrepRegister() {
       const worker = currentWorkerSessionWorker();
-      const team = String(worker?.team || "").trim();
-      return Boolean(state.adminMode || isLeaderWorker(worker) || team === "관리" || team === "총무");
+      return Boolean(state.adminMode || canWorkerPerformLeaderActions(worker));
     }
 
     function saveWorkPrepDraft() {
@@ -2027,8 +2061,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function canSendPledgeNotifications() {
       const worker = currentWorkerSessionWorker();
-      const team = String(worker?.team || "").trim();
-      return Boolean(isLeaderWorker(worker) || team === "관리" || team === "총무");
+      return canWorkerPerformLeaderActions(worker);
     }
 
     async function notifyPledgePendingWorkers() {
@@ -2196,6 +2229,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workerPushDevices: [],
       workerPushDeviceLoading: false,
       workerPushDeviceSavingId: "",
+      workerEditCardId: "",
       pushEmployeeNoPromptOpen: false,
       pushRegistrationSubmitting: false,
       loginSubmitting: false,
@@ -2405,6 +2439,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         name: String(worker.name || "").trim(),
         team: String(worker.team || "").trim(),
         position: normalizeWorkerPosition(worker.position),
+        employeeNo: normalizeEmployeeNo(worker.employeeNo || worker.employee_no || ""),
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
       })).filter((worker) => worker.name);
@@ -2990,8 +3025,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         row.hidden = !matches;
         if (matches) visibleCount += 1;
       });
-      const counter = document.querySelector("[data-ship-search-count]");
-      if (counter) counter.textContent = query ? `${visibleCount}/${rows.length}척` : `${rows.length}척`;
       const empty = document.querySelector("[data-ship-search-empty]");
       if (empty) empty.hidden = visibleCount > 0;
     }
@@ -3294,7 +3327,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderLogin() {
-      const workers = [...state.workers].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      const workers = [...sortWorkersForLogin(state.workers)];
       const disabled = !workers.length || state.loginSubmitting;
       const selectedWorker = workers.find((worker) => worker.id === state.loginWorkerId);
       return `<section class="login-screen" aria-labelledby="loginTitle">
@@ -3464,7 +3497,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div class="ops-today-grid">
             <div><span>대기</span><strong>${todayPending}</strong></div>
             <div><span>호선</span><strong>${activeShips}</strong></div>
-            <div><span>완료율</span><strong>${completion}%</strong></div>
+            <div><span>완료율</span><strong>${todayCompletion}%</strong></div>
           </div>
         </div>
       </section>
@@ -3784,7 +3817,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function workerRoleBadge(worker) {
-      return isLeaderWorker(worker) ? `<span class="worker-position-badge is-leader">${esc(LEADER_WORKER_POSITION)}</span>` : "";
+      const position = normalizeWorkerPosition(worker?.position);
+      const className = PRIVILEGED_WORKER_POSITIONS.has(position) ? "is-leader" : "";
+      return `<span class="worker-position-badge ${className}">${esc(position)}</span>`;
     }
 
     function workerBadgeRow(worker) {
@@ -4549,7 +4584,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${renderPledgeShipSelect(selectableShips)}
         ${renderSafetyPledgeChecklist()}
       </div>
-      ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 L/C일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
+      ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
       ${highMissing.length ? `<div class="notice danger" data-high-missing-notice>미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice>고위험 항목이 모두 확인되었습니다.</div>`}
       ${renderChecklistSections(cat.id)}`;
       const footer = disabledReasonWrap(`<button class="material-flow-primary check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit);
@@ -4918,19 +4953,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       <div class="panel panel-pad">
         <div class="section-title">
-          <span>호선 정보 카드 <span class="small muted">${state.ships.length}척</span></span>
+          <span>호선 정보 카드</span>
           <span class="ship-data-actions">
             <button class="btn-light" data-action="import-ships" type="button">엑셀 불러오기</button>
             <button class="btn-light" data-action="export-ships" ${state.ships.length ? "" : "disabled"} type="button">엑셀 내보내기</button>
           </span>
           <input data-import-ships-file type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
         </div>
-        <div class="ship-board-note">수정 모드에서 각 호선의 현재 공정 상태를 선택할 수 있습니다. L/C일이 입력된 호선만 작업자 점검 화면에 표시됩니다.</div>
         <div class="ship-sort-bar">
           <div class="field ship-search-field">
             <label for="shipSearch">호선번호 검색</label>
             <input class="input search-input" id="shipSearch" data-ship-search value="${esc(state.shipSearchQuery)}" placeholder="예) H3481" autocomplete="off" />
-            <div class="small muted" data-ship-search-count>${ships.length}척</div>
           </div>
           <div class="field ship-sort-field">
             <label for="shipSortMode">정렬</label>
@@ -4979,7 +5012,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <div class="ship-card-head">
           <div class="ship-identity">
             <div class="ship-card-title">${esc(ship.no)}</div>
-            <div class="ship-card-sub">${esc(ship.type || "선종 미지정")} · ${isWorkerVisibleShip(ship) ? "작업자 공개" : "L/C일 입력 전 비공개"}</div>
+            <div class="ship-card-sub">${esc(ship.type || "선종 미지정")}${isWorkerVisibleShip(ship) ? " · 작업자 공개" : ""}</div>
           </div>
           ${shipStageField(ship)}
         </div>
@@ -5603,6 +5636,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderWorkerManager() {
+      const workers = sortWorkersForLogin(state.workers);
       return `<section class="panel panel-pad">
         <div class="section-title">작업자 목록 <span class="small muted">${state.workers.length}명</span></div>
         <div class="form-row worker-form">
@@ -5611,11 +5645,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <input class="input" id="workerName" placeholder="예) 김민수" />
           </div>
           <div class="field">
-            <label for="workerTeam">소속/팀</label>
-            <input class="input" id="workerTeam" placeholder="예) 배관팀" />
+            <label for="workerTeam">팀 성격</label>
+            <select class="select" id="workerTeam">
+              ${renderWorkerTeamOptions("")}
+            </select>
           </div>
           <div class="field">
-            <label for="workerPosition">직책</label>
+            <label for="workerPosition">배지</label>
             <select class="select" id="workerPosition">
               ${renderWorkerPositionOptions(DEFAULT_WORKER_POSITION)}
             </select>
@@ -5623,7 +5659,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <button class="btn" data-action="add-worker" type="button">추가</button>
         </div>
         <div class="list worker-list">
-          ${state.workers.length ? state.workers.map(renderWorkerRow).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
+          ${workers.length ? workers.map(renderWorkerRow).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
         </div>
       </section>`;
     }
@@ -5677,6 +5713,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             : !draft.title.trim() || !draft.body.trim()
               ? "제목과 내용을 입력하세요."
               : "";
+      const sendButtonLabel = state.adminPushSending ? "발송중" : "즉시발송";
       return `<section class="panel panel-pad push-manager-panel">
         <div class="push-manager-head">
           <div>
@@ -5728,20 +5765,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <div class="push-target-card">
           <div class="push-target-head">
             <div class="section-title compact">발송 대상 <span class="small muted">${targetWorkers.length}명</span></div>
-            <div class="push-target-summary"><span>알림 등록 ${esc(subscribedWorkers.length)}명</span><span>전체 ${esc(workers.length)}명</span></div>
+            <button class="btn push-target-send-btn" data-action="send-admin-push" ${canSend ? "" : "disabled"} title="${esc(disabledReason || "즉시 푸시 발송")}" aria-label="${esc(disabledReason || "즉시 푸시 발송")}" type="button">${esc(sendButtonLabel)}</button>
           </div>
           <p class="push-token-help">발송할 작업자 카드를 직접 눌러 선택하세요. 알림 미등록 작업자는 선택해도 실제 수신되지 않습니다.</p>
           <div class="push-worker-grid">
             ${workers.length ? workers.map((worker) => renderPushTargetWorker(worker, draft)).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
           </div>
-        </div>
-
-        <div class="push-send-bar">
-          <div>
-            <strong>${esc(targetWorkers.length)}명 대상</strong>
-            <span>${esc(disabledReason || "선택한 작업자에게 즉시 푸시를 발송합니다.")}</span>
-          </div>
-          <button class="btn" data-action="send-admin-push" ${canSend ? "" : "disabled"} type="button">${state.adminPushSending ? "발송 중" : "즉시 발송"}</button>
         </div>
       </section>`;
     }
@@ -5763,6 +5792,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderWorkerPositionOptions(selectedPosition) {
       const selected = normalizeWorkerPosition(selectedPosition);
       return WORKER_POSITIONS.map((position) => `<option value="${esc(position)}" ${position === selected ? "selected" : ""}>${esc(position)}</option>`).join("");
+    }
+
+    function normalizeWorkerTeam(team) {
+      const value = String(team || "").trim();
+      return WORKER_TEAM_OPTIONS.includes(value) ? value : "";
+    }
+
+    function renderWorkerTeamOptions(selectedTeam) {
+      const selected = normalizeWorkerTeam(selectedTeam);
+      return `<option value="" ${selected ? "" : "selected"}>팀 성격 선택</option>${WORKER_TEAM_OPTIONS.map((team) => `<option value="${esc(team)}" ${team === selected ? "selected" : ""}>${esc(team)}</option>`).join("")}`;
     }
 
     function workerPushSubscriptionBadgeMeta(workerId) {
@@ -5879,25 +5918,58 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>`;
     }
 
-    function renderWorkerRow(worker) {
-      const position = normalizeWorkerPosition(worker.position);
-      const positionAction = isLeaderWorker(worker) ? "작업자로 변경" : "조장 지정";
-      return `<div class="item-row worker-row">
-        <div class="item-main">
-          <div class="item-name">${esc(worker.name)}</div>
-          <div class="small muted worker-meta-line">
-            <span>${esc(worker.team || "소속/팀 없음")}</span>
-            <span class="worker-position-badge ${isLeaderWorker(worker) ? "is-leader" : ""}">${esc(position)}</span>
-            ${workerPushSubscriptionBadgeHtml(worker.id)}
+    function workerFieldId(worker, field) {
+      return `worker_${String(worker.id || "").replace(/[^a-zA-Z0-9_-]/g, "_")}_${field}`;
+    }
+
+    function renderWorkerEditPanel(worker) {
+      return `<div class="worker-edit-panel">
+        <div class="worker-edit-grid">
+          <div class="field">
+            <label for="${esc(workerFieldId(worker, "name"))}">이름</label>
+            <input class="input" id="${esc(workerFieldId(worker, "name"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="name" value="${esc(worker.name)}" />
+          </div>
+          <div class="field">
+            <label for="${esc(workerFieldId(worker, "employeeNo"))}">사번/비밀번호</label>
+            <input class="input" id="${esc(workerFieldId(worker, "employeeNo"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="employeeNo" value="${esc(worker.employeeNo || "")}" autocomplete="off" inputmode="text" />
+          </div>
+          <div class="field">
+            <label for="${esc(workerFieldId(worker, "team"))}">팀 성격</label>
+            <select class="select" id="${esc(workerFieldId(worker, "team"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="team">
+              ${renderWorkerTeamOptions(worker.team)}
+            </select>
+          </div>
+          <div class="field">
+            <label for="${esc(workerFieldId(worker, "position"))}">배지</label>
+            <select class="select" id="${esc(workerFieldId(worker, "position"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="position">
+              ${renderWorkerPositionOptions(worker.position)}
+            </select>
           </div>
         </div>
-        <div class="item-actions">
-          <button class="btn-light" data-action="edit-worker-push-devices" data-worker-push-manage="${esc(worker.id)}" ${state.adminMode ? "" : "disabled"} type="button">알림수정</button>
-          <button class="btn-light" data-toggle-worker-position="${esc(worker.id)}" type="button">${esc(positionAction)}</button>
-          <button class="btn-light" data-edit-worker="${esc(worker.id)}" type="button">수정</button>
+        <div class="worker-edit-actions">
+          <button class="btn" data-save-worker="${esc(worker.id)}" type="button">수정</button>
           <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
         </div>
       </div>`;
+    }
+
+    function renderWorkerRow(worker) {
+      const expanded = state.workerEditCardId === worker.id;
+      return `<article class="item-row worker-row ${expanded ? "is-open" : ""}" data-worker-card-toggle="${esc(worker.id)}" aria-expanded="${expanded ? "true" : "false"}">
+        <div class="worker-card-head">
+          <div class="item-main">
+            <div class="item-name">${esc(worker.name)}</div>
+            <div class="small muted worker-team-line">${esc(worker.team || "팀 성격 미지정")}</div>
+          </div>
+          <button class="btn-light worker-push-edit-btn" data-action="edit-worker-push-devices" data-worker-push-manage="${esc(worker.id)}" ${state.adminMode ? "" : "disabled"} type="button">알림수정</button>
+        </div>
+        <div class="worker-meta-line">
+          ${workerTeamBadge(worker.team)}
+          ${workerRoleBadge(worker)}
+          ${workerPushSubscriptionBadgeHtml(worker.id)}
+        </div>
+        ${expanded ? renderWorkerEditPanel(worker) : ""}
+      </article>`;
     }
 
     function shortRecordId(id) {
@@ -7545,7 +7617,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function isWorkerVisibleShip(ship) {
-      return Boolean(ship.lcDate);
+      return Boolean(ship.lcDate || ship.stDate || ship.clDate);
     }
 
     function visibleWorkerShips() {
@@ -8145,6 +8217,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
 
+      const workerCard = event.target.closest("[data-worker-card-toggle]");
+      if (workerCard && !event.target.closest("button,input,label,select,textarea,.worker-edit-panel")) {
+        toggleWorkerCard(workerCard.dataset.workerCardToggle);
+        return;
+      }
+
       if (state.loginWorkerPickerOpen && !event.target.closest("[data-login-worker-picker]")) {
         state.loginWorkerPickerOpen = false;
         render();
@@ -8410,8 +8488,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         scrollScreenTop();
       }
       if (button.dataset.action === "add-worker") addWorker();
-      if (button.dataset.toggleWorkerPosition) toggleWorkerPosition(button.dataset.toggleWorkerPosition);
-      if (button.dataset.editWorker) editWorker(button.dataset.editWorker);
+      if (button.dataset.saveWorker) saveWorker(button.dataset.saveWorker);
       if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
       if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
       if (button.dataset.saveRecord) saveAdminRecord(button.dataset.saveRecord);
@@ -9228,48 +9305,50 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function addWorker() {
       if (!requireAdmin()) return;
       const name = $("workerName")?.value.trim() || "";
-      const team = $("workerTeam")?.value.trim() || "";
+      const team = normalizeWorkerTeam($("workerTeam")?.value || "");
       const position = normalizeWorkerPosition($("workerPosition")?.value || "");
       if (!name) return toast("작업자 이름을 입력하세요.");
       const now = serverNow().toISOString();
-      state.workers.push({ id: uid("worker"), name, team, position, createdAt: now, updatedAt: now });
+      const id = uid("worker");
+      state.workers.push({ id, name, team, position, employeeNo: "", createdAt: now, updatedAt: now });
+      state.workerEditCardId = id;
       persistAndSync("workers");
       render();
       toast("작업자를 추가했습니다.");
     }
 
-    function editWorker(id) {
+    function toggleWorkerCard(id) {
+      state.workerEditCardId = state.workerEditCardId === id ? "" : id;
+      renderPreservingScroll();
+    }
+
+    function workerEditFieldValue(id, field) {
+      return Array.from(document.querySelectorAll(`[data-worker-edit-field="${field}"]`))
+        .find((node) => node.dataset.workerEdit === id)?.value || "";
+    }
+
+    function saveWorker(id) {
       if (!requireAdmin()) return;
       const worker = state.workers.find((row) => row.id === id);
       if (!worker) return;
-      const name = prompt("작업자 이름", worker.name);
-      if (name === null) return;
-      const team = prompt("소속/팀", worker.team || "");
-      if (team === null) return;
-      const position = prompt("직책 (작업자 또는 조장)", normalizeWorkerPosition(worker.position));
-      if (position === null) return;
-      const cleanPosition = normalizeWorkerPosition(position);
-      const cleanName = name.trim();
+      const cleanName = workerEditFieldValue(id, "name").trim();
+      const cleanTeam = normalizeWorkerTeam(workerEditFieldValue(id, "team"));
+      const cleanPosition = normalizeWorkerPosition(workerEditFieldValue(id, "position"));
+      const cleanEmployeeNo = normalizeEmployeeNo(workerEditFieldValue(id, "employeeNo"));
       if (!cleanName) return toast("작업자 이름을 입력하세요.");
-      if (!WORKER_POSITIONS.includes(position.trim())) return toast("직책은 작업자 또는 조장으로 입력하세요.");
+      if (!cleanTeam) return toast("팀 성격을 선택하세요.");
       worker.name = cleanName;
-      worker.team = team.trim();
+      worker.team = cleanTeam;
       worker.position = cleanPosition;
+      worker.employeeNo = cleanEmployeeNo;
       worker.updatedAt = serverNow().toISOString();
+      if (state.workerSession?.workerId === worker.id) {
+        state.workerSession = { ...state.workerSession, workerName: cleanName, employeeNo: cleanEmployeeNo };
+        saveWorkerSession(state.workerSession);
+      }
       persistAndSync("workers");
       render();
       toast("작업자를 수정했습니다.");
-    }
-
-    function toggleWorkerPosition(id) {
-      if (!requireAdmin()) return;
-      const worker = state.workers.find((row) => row.id === id);
-      if (!worker) return;
-      worker.position = isLeaderWorker(worker) ? DEFAULT_WORKER_POSITION : LEADER_WORKER_POSITION;
-      worker.updatedAt = serverNow().toISOString();
-      persistAndSync("workers");
-      render();
-      toast(`${worker.name}님 직책을 ${worker.position}로 표시했습니다.`);
     }
 
     async function deleteWorker(id) {
@@ -9280,6 +9359,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.workers = state.workers.filter((row) => row.id !== id);
       if (state.unsafeDraft.workerId === id) state.unsafeDraft.workerId = "";
       if (state.materialDraft.workerId === id) state.materialDraft.workerId = "";
+      if (state.workerEditCardId === id) state.workerEditCardId = "";
       persist();
       await deleteRemoteRows("workers", [id]);
       render();

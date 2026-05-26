@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="980" viewBox="0 0 1200 980">
+  <defs>
+    <style>
+      .bg { fill: #f4f7fb; }
+      .panel { fill: #ffffff; stroke: #dbe3ee; stroke-width: 1.5; }
+      .card { fill: #ffffff; stroke: #d9e2ee; stroke-width: 1.5; }
+      .expanded { fill: #f8fbff; stroke: #c9d7e8; stroke-width: 1.5; }
+      .mobilePanel { fill: #fbfdff; stroke: #dbe3ee; stroke-width: 1.5; }
+      .text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #172033; }
+      .title { font-size: 26px; font-weight: 800; }
+      .section { font-size: 20px; font-weight: 800; }
+      .note { fill: #64748b; font-size: 17px; }
+      .name { font-size: 22px; font-weight: 800; }
+      .mobileName { font-size: 17px; font-weight: 800; }
+      .meta { fill: #64748b; font-size: 15px; }
+      .mobileMeta { fill: #64748b; font-size: 12px; }
+      .label { fill: #475569; font-size: 14px; font-weight: 800; }
+      .inputText { fill: #172033; font-size: 15px; }
+      .chip { fill: #f0fdfa; stroke: #99f6e4; stroke-width: 1.1; }
+      .chipBlue { fill: #e0f2fe; stroke: #bae6fd; stroke-width: 1.1; }
+      .chipWarn { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1.1; }
+      .chipGray { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.1; }
+      .chipText { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 13px; font-weight: 800; fill: #0f766e; }
+      .mobileChipText { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 10px; font-weight: 800; fill: #0f766e; }
+      .warnText { fill: #9a3412; }
+      .grayText { fill: #475569; }
+      .btnLight { fill: #eef7f5; stroke: #9dd6c5; stroke-width: 1.2; }
+      .btnMain { fill: #0f766e; }
+      .btnDanger { fill: #fff1f2; stroke: #fecdd3; stroke-width: 1.2; }
+      .btnText { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 15px; font-weight: 800; fill: #0f766e; }
+      .mobileBtnText { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 11px; font-weight: 800; fill: #0f766e; }
+      .btnTextWhite { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 15px; font-weight: 800; fill: #ffffff; }
+      .btnTextDanger { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 15px; font-weight: 800; fill: #be123c; }
+      .field { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; }
+      .line { stroke: #e2e8f0; stroke-width: 1.3; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="980" />
+  <rect class="panel" x="50" y="42" width="1100" height="876" rx="8" />
+
+  <text class="text title" x="84" y="92">작업자 카드 배치 시안</text>
+  <text class="note" x="84" y="124">데스크톱은 1줄 3명, 모바일은 1줄 2명 / 접힌 카드에는 알림수정만 노출 / 수정·삭제는 펼침 안에 배치</text>
+
+  <text class="text section" x="84" y="166">데스크톱: 3열 카드</text>
+
+  <rect class="card" x="84" y="190" width="328" height="154" rx="8" />
+  <text class="text name" x="110" y="230">김민수</text>
+  <text class="meta" x="110" y="258">선행팀</text>
+  <rect class="chipBlue" x="110" y="276" width="58" height="26" rx="13" />
+  <text class="chipText" x="125" y="294">선행</text>
+  <rect class="chip" x="176" y="276" width="52" height="26" rx="13" />
+  <text class="chipText" x="191" y="294">조장</text>
+  <rect class="chip" x="236" y="276" width="76" height="26" rx="13" />
+  <text class="chipText" x="253" y="294">알림 1대</text>
+  <rect class="btnLight" x="286" y="216" width="98" height="40" rx="7" />
+  <text class="btnText" x="306" y="243">알림수정</text>
+
+  <rect class="card" x="436" y="190" width="328" height="154" rx="8" />
+  <text class="text name" x="462" y="230">박지훈</text>
+  <text class="meta" x="462" y="258">후행팀</text>
+  <rect class="chipWarn" x="462" y="276" width="58" height="26" rx="13" />
+  <text class="chipText warnText" x="477" y="294">후행</text>
+  <rect class="chipGray" x="528" y="276" width="64" height="26" rx="13" />
+  <text class="chipText grayText" x="543" y="294">작업자</text>
+  <rect class="chipWarn" x="600" y="276" width="78" height="26" rx="13" />
+  <text class="chipText warnText" x="616" y="294">알림 없음</text>
+  <rect class="btnLight" x="638" y="216" width="98" height="40" rx="7" />
+  <text class="btnText" x="658" y="243">알림수정</text>
+
+  <rect class="card" x="788" y="190" width="328" height="154" rx="8" />
+  <text class="text name" x="814" y="230">이서연</text>
+  <text class="meta" x="814" y="258">선행팀</text>
+  <rect class="chipBlue" x="814" y="276" width="58" height="26" rx="13" />
+  <text class="chipText" x="829" y="294">선행</text>
+  <rect class="chip" x="880" y="276" width="52" height="26" rx="13" />
+  <text class="chipText" x="895" y="294">대표</text>
+  <rect class="chip" x="940" y="276" width="76" height="26" rx="13" />
+  <text class="chipText" x="957" y="294">알림 2대</text>
+  <rect class="btnLight" x="990" y="216" width="98" height="40" rx="7" />
+  <text class="btnText" x="1010" y="243">알림수정</text>
+
+  <rect class="expanded" x="84" y="374" width="328" height="354" rx="8" />
+  <text class="text name" x="110" y="414">최하늘</text>
+  <text class="meta" x="110" y="442">관리팀</text>
+  <rect class="chipGray" x="110" y="460" width="58" height="26" rx="13" />
+  <text class="chipText grayText" x="125" y="478">관리</text>
+  <rect class="chip" x="176" y="460" width="76" height="26" rx="13" />
+  <text class="chipText" x="193" y="478">알림 1대</text>
+  <rect class="btnLight" x="286" y="400" width="98" height="40" rx="7" />
+  <text class="btnText" x="306" y="427">알림수정</text>
+  <line class="line" x1="110" y1="510" x2="386" y2="510" />
+  <text class="label" x="110" y="542">이름</text>
+  <rect class="field" x="110" y="554" width="128" height="40" rx="6" />
+  <text class="inputText" x="124" y="579">최하늘</text>
+  <text class="label" x="252" y="542">사번/비밀번호</text>
+  <rect class="field" x="252" y="554" width="134" height="40" rx="6" />
+  <text class="inputText" x="266" y="579">1042</text>
+  <text class="label" x="110" y="620">팀 성격</text>
+  <rect class="field" x="110" y="632" width="128" height="40" rx="6" />
+  <text class="inputText" x="124" y="657">선행 ▾</text>
+  <text class="label" x="252" y="620">배지</text>
+  <rect class="field" x="252" y="632" width="134" height="40" rx="6" />
+  <text class="inputText" x="266" y="657">관리 ▾</text>
+  <rect class="btnMain" x="204" y="686" width="82" height="38" rx="7" />
+  <text class="btnTextWhite" x="229" y="711">수정</text>
+  <rect class="btnDanger" x="296" y="686" width="82" height="38" rx="7" />
+  <text class="btnTextDanger" x="321" y="711">삭제</text>
+
+  <rect class="card" x="436" y="374" width="328" height="154" rx="8" />
+  <text class="text name" x="462" y="414">정다은</text>
+  <text class="meta" x="462" y="442">총무팀</text>
+  <rect class="chipGray" x="462" y="460" width="58" height="26" rx="13" />
+  <text class="chipText grayText" x="477" y="478">총무</text>
+  <rect class="chip" x="528" y="460" width="76" height="26" rx="13" />
+  <text class="chipText" x="545" y="478">알림 1대</text>
+  <rect class="btnLight" x="638" y="400" width="98" height="40" rx="7" />
+  <text class="btnText" x="658" y="427">알림수정</text>
+
+  <rect class="card" x="788" y="374" width="328" height="154" rx="8" />
+  <text class="text name" x="814" y="414">한도윤</text>
+  <text class="meta" x="814" y="442">후행팀</text>
+  <rect class="chipWarn" x="814" y="460" width="58" height="26" rx="13" />
+  <text class="chipText warnText" x="829" y="478">후행</text>
+  <rect class="chipGray" x="880" y="460" width="64" height="26" rx="13" />
+  <text class="chipText grayText" x="895" y="478">작업자</text>
+  <rect class="chipWarn" x="952" y="460" width="78" height="26" rx="13" />
+  <text class="chipText warnText" x="968" y="478">알림 없음</text>
+  <rect class="btnLight" x="990" y="400" width="98" height="40" rx="7" />
+  <text class="btnText" x="1010" y="427">알림수정</text>
+
+  <rect class="mobilePanel" x="84" y="768" width="1032" height="112" rx="8" />
+  <text class="text section" x="110" y="808">모바일: 2열 카드</text>
+  <text class="note" x="110" y="835">좁은 화면에서는 카드가 2개씩 배치되고, 펼친 카드만 세로로 길어집니다.</text>
+  <rect class="card" x="466" y="790" width="146" height="72" rx="7" />
+  <text class="text mobileName" x="480" y="815">김민수</text>
+  <text class="mobileMeta" x="480" y="834">선행팀 · 조장</text>
+  <rect class="btnLight" x="528" y="840" width="70" height="18" rx="5" />
+  <text class="mobileBtnText" x="540" y="853">알림수정</text>
+  <rect class="card" x="626" y="790" width="146" height="72" rx="7" />
+  <text class="text mobileName" x="640" y="815">박지훈</text>
+  <text class="mobileMeta" x="640" y="834">후행팀 · 작업자</text>
+  <rect class="btnLight" x="688" y="840" width="70" height="18" rx="5" />
+  <text class="mobileBtnText" x="700" y="853">알림수정</text>
+  <rect class="expanded" x="786" y="790" width="146" height="92" rx="7" />
+  <text class="text mobileName" x="800" y="815">이서연</text>
+  <text class="mobileMeta" x="800" y="834">선행팀 · 대표</text>
+  <rect class="btnLight" x="848" y="840" width="70" height="18" rx="5" />
+  <text class="mobileBtnText" x="860" y="853">알림수정</text>
+  <rect class="btnMain" x="800" y="864" width="48" height="16" rx="4" />
+  <rect class="btnDanger" x="856" y="864" width="48" height="16" rx="4" />
+  <rect class="card" x="946" y="790" width="146" height="72" rx="7" />
+  <text class="text mobileName" x="960" y="815">최하늘</text>
+  <text class="mobileMeta" x="960" y="834">관리팀 · 관리</text>
+  <rect class="btnLight" x="1008" y="840" width="70" height="18" rx="5" />
+  <text class="mobileBtnText" x="1020" y="853">알림수정</text>
+</svg>

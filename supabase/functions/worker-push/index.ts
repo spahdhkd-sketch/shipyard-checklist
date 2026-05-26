@@ -79,7 +79,7 @@ function booleanValue(value: unknown, fallback = false) {
 function canSendPledgeNotifications(worker: Record<string, unknown>) {
   const team = cleanText(worker.team, 40);
   const position = cleanText(worker.position, 40);
-  return position === LEADER_WORKER_POSITION || team === "관리" || team === "총무";
+  return [LEADER_WORKER_POSITION, "관리", "총무"].includes(position) || team === "관리" || team === "총무";
 }
 
 function validSubscription(value: unknown) {
