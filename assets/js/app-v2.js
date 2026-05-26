@@ -873,12 +873,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return false;
       }
     };
-    const saveAdminMode = (enabled) => {
+    const loadAdminAuthSource = () => {
+      try {
+        return sessionStorage.getItem(storeKey("adminAuthSource")) || "";
+      } catch {
+        return "";
+      }
+    };
+    const saveAdminMode = (enabled, source = "") => {
       try {
         if (enabled) {
           sessionStorage.setItem(storeKey("adminMode"), "true");
+          if (source) {
+            sessionStorage.setItem(storeKey("adminAuthSource"), source);
+          } else {
+            sessionStorage.removeItem(storeKey("adminAuthSource"));
+          }
         } else {
           sessionStorage.removeItem(storeKey("adminMode"));
+          sessionStorage.removeItem(storeKey("adminAuthSource"));
         }
       } catch {}
     };
@@ -951,6 +964,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const DEFAULT_WORKER_POSITION = "작업자";
     const LEADER_WORKER_POSITION = "조장";
     const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, "대표", "관리", "총무"];
+    const ADMIN_PREENTRY_WORKER_POSITIONS = new Set(["대표", "관리", "총무"]);
     const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, "관리", "총무"]);
     const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
     const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
@@ -1010,6 +1024,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function isLeaderWorker(worker) {
       return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
+    }
+
+    function canWorkerPreEnterAdminMode(worker) {
+      const position = normalizeWorkerPosition(worker?.position);
+      return ADMIN_PREENTRY_WORKER_POSITIONS.has(position);
+    }
+
+    function workerAdminModeLabel(worker) {
+      const name = String(worker?.name || "").trim();
+      return name ? `${name} 권한` : "작업자 권한";
     }
 
     function canWorkerPerformLeaderActions(worker) {
@@ -2141,6 +2165,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     const initialAdminMode = loadAdminMode();
+    const initialAdminAuthSource = initialAdminMode ? loadAdminAuthSource() || "password" : "";
     const state = {
       view: initialView(),
       categories: loadJson("categories", []),
@@ -2210,7 +2235,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       shipSearchQuery: "",
       toolSearchQuery: "",
       adminMode: initialAdminMode,
-      adminEmail: initialAdminMode ? "비밀번호 인증" : "",
+      adminEmail: initialAdminMode ? (initialAdminAuthSource === "worker" ? "작업자 권한" : "비밀번호 인증") : "",
+      adminAuthSource: initialAdminAuthSource,
       scrollTimer: null,
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
@@ -4979,7 +5005,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <span class="toggle-track"></span><span>수정 ${state.adminMode ? "ON" : "OFF"}</span>
           </button>
         </div>
-        ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">호선 추가/삭제는 수정 모드를 ON으로 전환한 뒤 가능합니다.</div>`}
         <div class="grid-2">
           <div class="field">
             <label for="newShipNos">호선 번호</label>
@@ -5255,7 +5280,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return `<div class="ship-date-field">
         <label for="${field}_${ship.id}">${label}</label>
         <input class="input" id="${field}_${ship.id}" type="${state.adminMode ? "date" : "text"}" data-ship-date-field="${field}" data-ship-id="${ship.id}" value="${esc(displayValue)}" placeholder="미입력" ${state.adminMode ? "" : "disabled"} />
-        ${value ? "" : `<span class="ship-date-empty">미입력</span>`}
+        ${value || state.adminMode ? "" : `<span class="ship-date-empty">미입력</span>`}
       </div>`;
     }
 
@@ -5288,7 +5313,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             섹션/점검 항목 관리
           </div>
           <p class="section-help">점검 항목 추가/수정/삭제는 작업 유형을 선택해서 관리합니다.</p>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">항목 수정은 상단 수정 버튼으로 관리자 로그인 후 가능합니다.</div>`}
         </div>
         <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
           <div class="section-title">
@@ -5296,7 +5320,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <button class="btn" data-action="toggle-category-add" ${state.adminMode ? "" : "disabled"} type="button">${state.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
           </div>
           <p class="section-help">작업 유형 카드 안에서 공기구 지정과 섹션/항목 관리를 함께 처리합니다. 카드를 누르면 공기구 지정 영역이 펼쳐집니다.</p>
-          ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:12px">수정 모드를 켜면 작업 유형과 공기구 지정을 바꿀 수 있습니다.</div>`}
           ${state.categoryAddOpen ? `
           <div class="collapsible-panel category-add-panel">
           <div class="form-row">
@@ -7651,7 +7674,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderToolManager() {
       const tools = activeTools();
       return `
-        ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:10px">수정 모드를 켜면 공기구 목록과 성격을 바꿀 수 있습니다.</div>`}
         <div class="tool-admin-toolbar">
           <div class="tool-admin-search-stack">
             <div class="field">
@@ -7721,7 +7743,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderPictogramLibraryManager() {
       const customPictograms = pictogramLibrary().filter((row) => row.source === "custom");
       return `
-        ${state.adminMode ? "" : `<div class="notice" style="margin-bottom:10px">수정 모드를 켜면 사용자 지정 픽토그램을 관리할 수 있습니다.</div>`}
         <div class="field" style="margin-bottom:10px">
           <label for="newPictogramLabel">새 픽토그램 이름</label>
           <input class="input" id="newPictogramLabel" placeholder="예) 방폭 조명" ${state.adminMode ? "" : "disabled"} />
@@ -9428,7 +9449,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       };
       state.loginWorkerPickerOpen = false;
       saveWorkerSession(state.workerSession);
-      toast(`${worker.name}님 로그인되었습니다.`);
+      if (!state.adminMode && canWorkerPreEnterAdminMode(worker)) {
+        setAdminMode(true, workerAdminModeLabel(worker), "worker");
+        toast(`${worker.name}님 로그인되었습니다. 관리자 수정 모드가 켜졌습니다.`);
+      } else {
+        toast(`${worker.name}님 로그인되었습니다.`);
+      }
       render();
       refreshWorkerPushSubscriptionStatus({ force: true }).catch((error) => console.warn("push status refresh failed", error));
       scrollScreenTop();
@@ -9441,6 +9467,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function logoutWorker() {
+      if (state.adminAuthSource === "worker") {
+        setAdminMode(false);
+      }
       state.workerSession = null;
       state.pushSubscriptionStatus = {};
       state.pushSubscriptionStatusChecking = false;
@@ -9455,10 +9484,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       history.replaceState(routeState(), "", "/");
     }
 
-    function setAdminMode(enabled, email = "") {
+    function setAdminMode(enabled, email = "", source = "password") {
       const wasAdmin = state.adminMode;
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
+      state.adminAuthSource = enabled ? source : "";
       if (state.adminMode && !wasAdmin && isNarrowViewport()) {
         state.screenMode = "mobile";
         localStorage.setItem(storeKey("screenMode"), state.screenMode);
@@ -9470,7 +9500,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         saveJson("manageTab", state.manageTab);
         saveJson("unsafeFilters", state.unsafeFilters);
       }
-      saveAdminMode(state.adminMode);
+      saveAdminMode(state.adminMode, state.adminAuthSource);
       if (!enabled) {
         state.toolAddOpen = false;
         state.categoryAddOpen = false;
@@ -9568,6 +9598,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (state.workerSession?.workerId === worker.id) {
         state.workerSession = { ...state.workerSession, workerName: cleanName, employeeNo: cleanEmployeeNo };
         saveWorkerSession(state.workerSession);
+        if (state.adminAuthSource === "worker" && !canWorkerPreEnterAdminMode(worker)) {
+          setAdminMode(false);
+        }
       }
       persistAndSync("workers");
       render();

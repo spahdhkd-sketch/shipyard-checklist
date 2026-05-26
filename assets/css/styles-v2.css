@@ -7670,6 +7670,10 @@
     }
 
     .ship-date-field .input {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       min-height: 0;
       height: 18px;
       padding: 0;
@@ -7679,6 +7683,19 @@
       font-size: 14px;
       font-weight: 900;
       text-align: center;
+    }
+
+    .ship-date-field .input[type="date"] {
+      min-width: 0;
+      font-size: 11px;
+      line-height: 18px;
+    }
+
+    .ship-date-field .input[type="date"]::-webkit-calendar-picker-indicator {
+      width: 12px;
+      height: 12px;
+      margin: 0;
+      padding: 0;
     }
 
     .ship-date-field .input:disabled {
@@ -10240,10 +10257,11 @@
       }
 
       .ship-sort-bar {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(112px, 38%);
       }
 
       .ship-sort-bar .btn-light {
+        grid-column: 1 / -1;
         width: 100%;
       }
 
