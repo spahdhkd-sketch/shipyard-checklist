@@ -15,6 +15,7 @@ function expectNoMatch(source, pattern, message) {
 const app = read("assets/js/app-v2.js");
 const edge = read("supabase/functions/admin-mutations/index.ts");
 const migration = read("supabase/migrations/20260527090000_admin_mutation_boundary.sql");
+const lintCleanupMigration = read("supabase/migrations/20260527091500_admin_mutation_policy_lint_cleanup.sql");
 const pkg = JSON.parse(read("package.json"));
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");
@@ -82,6 +83,11 @@ expectMatch(migration, /drop policy if exists "workers public update"/i, "worker
 expectMatch(migration, /drop policy if exists "public all unsafe issues"/i, "broad unsafe issue policy should be dropped");
 expectMatch(migration, /drop policy if exists "public all missing materials"/i, "broad missing material policy should be dropped");
 expectMatch(migration, /drop policy if exists "public all issue photos"/i, "broad issue photo policy should be dropped");
+expectMatch(lintCleanupMigration, /drop policy if exists "public read workers"/i, "follow-up migration should remove duplicate worker read policy");
+expectMatch(lintCleanupMigration, /drop policy if exists "workers public select"/i, "follow-up migration should rebuild a single canonical worker read policy");
+expectMatch(lintCleanupMigration, /create policy "workers public select"/i, "follow-up migration should keep one worker read policy");
+expectMatch(lintCleanupMigration, /create policy "deny browser admin mutation sessions"/i, "session ledger should have an explicit deny policy for browser roles");
+expectMatch(lintCleanupMigration, /create policy "deny browser admin mutation attempts"/i, "attempt ledger should have an explicit deny policy for browser roles");
 expectMatch(pkg.scripts.verify, /tests\/admin-mutation-boundary-static\.test\.js/, "verify script should include admin mutation boundary static test");
 
 console.log("admin mutation boundary static tests passed");
