@@ -180,8 +180,8 @@ function checkRuntimeSource() {
   assertContains(app, "function startRemotePolling()", "polling fallback starter exists");
   assertContains(app, "function stopRemotePolling()", "polling fallback stopper exists");
   assertMatch(app, /if \(remoteRealtimeConnected\(\)\) \{\s*stopRemotePolling\(\);/, "polling stops while realtime is connected");
-  assertContains(app, 'if (status === "SUBSCRIBED") {\n          stopRemotePolling();', "polling stops on realtime subscription");
-  assertContains(app, 'startRemotePolling();\n          scheduleRemoteRefresh("realtime-fallback"', "polling restarts on realtime fallback");
+  assertMatch(app, /if \(status === "SUBSCRIBED"\) \{\s*stopRemotePolling\(\);\s*return;\s*\}/, "polling stops on realtime subscription");
+  assertMatch(app, /startRemotePolling\(\);\s*scheduleRemoteRefresh\("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS\);/, "polling restarts on realtime fallback");
 
   assertContains(app, "function captureFocusedFieldState()", "focused input capture exists");
   assertContains(app, "function restoreFocusedFieldState(captured)", "focused input restore exists");
