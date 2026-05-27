@@ -15,6 +15,7 @@ function expectNoMatch(source, pattern, message) {
 const app = read("assets/js/app-v2.js");
 const migration = read("supabase/migrations/20260527064035_worker_public_read_path.sql");
 const deleteMigration = read("supabase/migrations/20260527071140_revoke_workers_delete.sql");
+const rpcBoundaryMigration = read("supabase/migrations/20260527144951_security_definer_rpc_boundary.sql");
 const manualScreenshots = read("tools/capture-manual-screenshots.mjs");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
@@ -27,7 +28,9 @@ expectNoMatch(app, /data-worker-edit-field="employeeNo"/, "worker edit panel sho
 expectNoMatch(app, /data-delete-worker=/, "worker delete UI should not expose direct browser deletion in Phase 1");
 expectNoMatch(app, /deleteRemoteRows\("workers"/, "browser runtime must not directly delete workers through anon REST");
 expectMatch(app, /employeeNo,\s*loggedInAt: serverNow\(\)\.toISOString\(\)/, "worker session may still keep the typed employee number for push compatibility");
-expectMatch(app, /p_employee_no: employeeNo/, "verify_worker_login should still send the typed employee number to the RPC");
+expectMatch(app, /client\.functions\.invoke\("worker-push"[\s\S]*?action:\s*"verifyWorker"[\s\S]*?employeeNo/, "worker login should send the typed employee number to the worker-push Edge Function");
+expectNoMatch(app, /verify_worker_login/, "browser runtime must not directly execute the login SECURITY DEFINER RPC");
+expectNoMatch(app, /worker_push_subscription_status/, "browser runtime must not directly execute the push status SECURITY DEFINER RPC");
 
 expectMatch(migration, /create or replace view public\.workers_public\s+with\s*\(security_invoker\s*=\s*true\)/i, "workers_public view should be security_invoker");
 expectMatch(migration, /select\s+id,\s*name,\s*team,\s*position,\s*active,\s*unsafe_push_target,\s*created_at,\s*updated_at\s+from public\.workers/i, "workers_public should omit employee_no");
@@ -38,8 +41,12 @@ expectMatch(migration, /revoke insert, update on table public\.workers from publ
 expectMatch(migration, /grant insert\s*\(\s*id,\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers insert grant should omit employee_no");
 expectMatch(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers update grant should omit employee_no while allowing Phase 1 upsert created_at");
 expectMatch(migration, /create or replace function public\.verify_worker_login\(p_worker_id text, p_employee_no text\)/i, "login RPC source should be tracked");
-expectMatch(migration, /security definer/i, "login RPC should keep current security-definer behavior for browser RPC compatibility");
-expectMatch(migration, /grant execute on function public\.verify_worker_login\(text, text\) to anon, authenticated/i, "browser clients should be able to execute login RPC");
+expectMatch(migration, /security definer/i, "login RPC source should remain visible in migration history");
+expectMatch(rpcBoundaryMigration, /revoke all on function public\.verify_worker_login\(text, text\) from public, anon, authenticated/i, "login RPC execute should be revoked from browser roles");
+expectMatch(rpcBoundaryMigration, /revoke all on function public\.worker_push_subscription_status\(text\) from public, anon, authenticated/i, "push status RPC execute should be revoked from browser roles");
+expectMatch(rpcBoundaryMigration, /grant execute on function public\.verify_worker_login\(text, text\) to service_role/i, "login RPC should remain service-role executable");
+expectMatch(rpcBoundaryMigration, /grant execute on function public\.worker_push_subscription_status\(text\) to service_role/i, "push status RPC should remain service-role executable");
+expectNoMatch(rpcBoundaryMigration, /grant execute on function public\.(verify_worker_login|worker_push_subscription_status)\([^)]*\) to (anon|authenticated)/i, "boundary migration must not restore browser-role RPC execute");
 
 expectMatch(deleteMigration, /revoke delete on table public\.workers from public, anon, authenticated/i, "workers delete privilege should be revoked from public browser roles");
 expectMatch(deleteMigration, /drop policy if exists "workers public delete" on public\.workers/i, "broad workers delete policy should be removed");

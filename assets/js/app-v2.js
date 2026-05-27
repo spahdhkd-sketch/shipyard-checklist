@@ -1509,17 +1509,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       };
     }
 
-    async function fetchWorkerPushSubscriptionStatusFromRpc(workerId) {
-      const client = supabaseClient();
-      if (!client || !workerId) return null;
-      const { data, error } = await client.rpc("worker_push_subscription_status", {
-        p_worker_id: workerId,
-      });
-      if (error) throw new Error(error.message);
-      const row = Array.isArray(data) ? data[0] : data;
-      return normalizeWorkerPushSubscriptionStatus(workerId, row);
-    }
-
     async function fetchWorkerPushSubscriptionStatuses(workerIds) {
       const ids = [...new Set((Array.isArray(workerIds) ? workerIds : []).map((id) => String(id || "").trim()).filter(Boolean))];
       const client = supabaseClient();
@@ -1543,11 +1532,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           console.warn("worker push status function failed", error);
         }
       }
-      const results = await Promise.all(ids.map((id) => fetchWorkerPushSubscriptionStatusFromRpc(id).catch((error) => {
-        console.warn("worker push status rpc failed", id, error);
-        return null;
-      })));
-      return results.filter(Boolean);
+      return [];
     }
 
     async function fetchWorkerPushSubscriptionStatus(workerId) {
@@ -9453,14 +9438,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return false;
       }
       try {
-        const { data, error } = await client.rpc("verify_worker_login", {
-          p_worker_id: workerId,
-          p_employee_no: employeeNo,
+        const { data, error } = await client.functions.invoke("worker-push", {
+          body: {
+            action: "verifyWorker",
+            workerId,
+            employeeNo,
+          },
         });
-        if (!error) return Boolean(data);
-        console.warn("worker login rpc unavailable", error);
+        if (!error && data?.ok) return true;
+        console.warn("worker login function unavailable", error || data?.error);
       } catch (error) {
-        console.warn("worker login rpc failed", error);
+        console.warn("worker login function failed", error);
       }
       return false;
     }

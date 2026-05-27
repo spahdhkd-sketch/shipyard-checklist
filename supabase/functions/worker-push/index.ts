@@ -92,6 +92,35 @@ function validSubscription(value: unknown) {
   );
 }
 
+function serializeLoginWorker(worker: Record<string, unknown>) {
+  return {
+    id: cleanText(worker.id, 80),
+    name: cleanText(worker.name, 120),
+    team: cleanText(worker.team, 40),
+    position: cleanText(worker.position, 40),
+  };
+}
+
+async function verifyWorkerLogin(payload: Record<string, unknown>) {
+  const workerId = cleanText(payload.workerId, 80);
+  const employeeNo = normalizeEmployeeNo(payload.employeeNo);
+  if (!workerId || !employeeNo) return jsonResponse({ error: "invalid_request" }, 400);
+
+  const { data: worker, error } = await supabase
+    .from("workers")
+    .select("id,name,team,position,active,employee_no")
+    .eq("id", workerId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) return jsonResponse({ error: error.message }, 500);
+  if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
+    return jsonResponse({ error: "worker_login_failed" }, 403);
+  }
+
+  return jsonResponse({ ok: true, worker: serializeLoginWorker(worker as Record<string, unknown>) });
+}
+
 async function registerSubscription(payload: Record<string, unknown>) {
   const workerId = cleanText(payload.workerId, 80);
   const employeeNo = cleanText(payload.employeeNo, 80);
@@ -418,6 +447,7 @@ Deno.serve(async (req) => {
 
   const action = cleanText(payload.action, 40);
   if (action === "register") return registerSubscription(payload);
+  if (action === "verifyWorker") return verifyWorkerLogin(payload);
   if (action === "status") return subscriptionStatus(payload);
   if (action === "devices") return subscriptionDevices(payload);
   if (action === "updateDevice") return updateSubscriptionDevice(payload);
