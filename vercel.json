@@ -1,6 +1,39 @@
 {
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "shipyard-checklist.vercel.app"
+        }
+      ],
+      "destination": "https://gs-safety-checklist.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "shipyard-checklist-spahdhkd-3161s-projects.vercel.app"
+        }
+      ],
+      "destination": "https://gs-safety-checklist.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "shipyard-checklist-git-main-spahdhkd-3161s-projects.vercel.app"
+        }
+      ],
+      "destination": "https://gs-safety-checklist.vercel.app/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
