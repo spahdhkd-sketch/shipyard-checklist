@@ -15,6 +15,7 @@ assert.equal(pkg.scripts.serve, "node tools/static-server.mjs 4173");
 assert.match(pkg.scripts.verify, /node --check tools\/quality-harness\.mjs/);
 assert.match(pkg.scripts.verify, /node --check tools\/claude-quality-harness\.mjs/);
 assert.match(pkg.scripts.verify, /tests\/harness-config\.test\.js/);
+assert.match(pkg.scripts.verify, /tests\/worker-security-static\.test\.js/);
 
 assert.ok(exists("tools/quality-harness.mjs"), "quality harness should exist");
 assert.ok(exists("tools/claude-quality-harness.mjs"), "legacy harness entrypoint should remain");
