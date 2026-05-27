@@ -5,7 +5,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
-    const UNSAFE_PUSH_TARGET_WORKER_NAMES = ["허지원", "김준혁", "김경제"];
     const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date.parse("2026-05-26T11:59:00+09:00");
     const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = {
       pledgePending: {
@@ -468,6 +467,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
           employee_no: normalizeEmployeeNo(row.employeeNo),
+          unsafe_push_target: Boolean(row.unsafePushTarget),
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
@@ -477,6 +477,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
           employeeNo: normalizeEmployeeNo(row.employee_no),
+          unsafePushTarget: Boolean(row.unsafe_push_target),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }),
@@ -1965,7 +1966,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function unsafePushTargetWorkerIds() {
-      return workerIdsForNames(UNSAFE_PUSH_TARGET_WORKER_NAMES);
+      return state.workers.filter((w) => w.unsafePushTarget).map((w) => w.id).filter(Boolean);
     }
 
     function normalizePushTemplateKind(kind) {
@@ -4400,15 +4401,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         });
     }
 
-    function renderWorkPrepOrderStrip() {
-      return `<div class="work-prep-order-strip" aria-label="카드 정렬 순서">
-        <span>1 확정</span>
-        <span>2 점검 대기</span>
-        <span>3 작업지시</span>
-        <span>4 미등록</span>
-      </div>`;
-    }
-
     function renderWorkPrepCard(record) {
       const category = categoryById(record.categoryId);
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
@@ -4451,7 +4443,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <h2>${esc(workPrepDateSectionTitle(date))}</h2>
           <span class="count">${records.length}건</span>
         </div>
-        ${renderWorkPrepOrderStrip()}
         <div class="work-prep-record-stack">
           ${records.length ? records.map(renderWorkPrepCard).join("") : `<div class="empty compact-empty">등록된 작업지시서가 없습니다.</div>`}
         </div>
@@ -9408,17 +9399,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function verifyWorkerLogin(workerId, employeeNo) {
       const client = supabaseClient();
-      if (client) {
-        try {
-          const { data, error } = await client.rpc("verify_worker_login", {
-            p_worker_id: workerId,
-            p_employee_no: employeeNo,
-          });
-          if (!error) return Boolean(data);
-          console.warn("worker login rpc unavailable", error);
-        } catch (error) {
-          console.warn("worker login rpc failed", error);
-        }
+      if (!client) {
+        toast("서버에 연결할 수 없습니다. 네트워크를 확인하세요.");
+        return false;
+      }
+      try {
+        const { data, error } = await client.rpc("verify_worker_login", {
+          p_worker_id: workerId,
+          p_employee_no: employeeNo,
+        });
+        if (!error) return Boolean(data);
+        console.warn("worker login rpc unavailable", error);
+      } catch (error) {
+        console.warn("worker login rpc failed", error);
       }
       return false;
     }
@@ -9433,31 +9426,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
       state.loginSubmitting = true;
       render();
-      const ok = await verifyWorkerLogin(workerId, employeeNo);
-      state.loginSubmitting = false;
-      if (!ok) {
-        render();
-        toast("작업자 또는 사번을 확인하세요.");
-        return;
-      }
+      try {
+        const ok = await verifyWorkerLogin(workerId, employeeNo);
+        if (!ok) {
+          toast("작업자 또는 사번을 확인하세요.");
+          return;
+        }
 
-      state.workerSession = {
-        workerId: worker.id,
-        workerName: worker.name,
-        employeeNo,
-        loggedInAt: serverNow().toISOString(),
-      };
-      state.loginWorkerPickerOpen = false;
-      saveWorkerSession(state.workerSession);
-      if (!state.adminMode && canWorkerPreEnterAdminMode(worker)) {
-        setAdminMode(true, workerAdminModeLabel(worker), "worker");
-        toast(`${worker.name}님 로그인되었습니다. 관리자 수정 모드가 켜졌습니다.`);
-      } else {
-        toast(`${worker.name}님 로그인되었습니다.`);
+        state.workerSession = {
+          workerId: worker.id,
+          workerName: worker.name,
+          employeeNo,
+          loggedInAt: serverNow().toISOString(),
+        };
+        state.loginWorkerPickerOpen = false;
+        saveWorkerSession(state.workerSession);
+        if (!state.adminMode && canWorkerPreEnterAdminMode(worker)) {
+          setAdminMode(true, workerAdminModeLabel(worker), "worker");
+          toast(`${worker.name}님 로그인되었습니다. 관리자 수정 모드가 켜졌습니다.`);
+        } else {
+          toast(`${worker.name}님 로그인되었습니다.`);
+        }
+        scrollScreenTop();
+        refreshWorkerPushSubscriptionStatus({ force: true }).catch((error) => console.warn("push status refresh failed", error));
+      } finally {
+        state.loginSubmitting = false;
+        render();
       }
-      render();
-      refreshWorkerPushSubscriptionStatus({ force: true }).catch((error) => console.warn("push status refresh failed", error));
-      scrollScreenTop();
     }
 
     async function refreshWorkerList() {
@@ -9471,6 +9466,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         setAdminMode(false);
       }
       state.workerSession = null;
+      state.loginSubmitting = false;
       state.pushSubscriptionStatus = {};
       state.pushSubscriptionStatusChecking = false;
       state.view = "dashboard";
@@ -11406,6 +11402,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!isSyncConfigured()) return;
       flushPendingSyncQueue();
       scheduleRemoteRefresh("wake", 0);
+      if (!remoteRealtimeConnected()) startRemoteRealtime();
     }
 
     function handleStorageSyncWake(event) {
@@ -11460,8 +11457,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          const ch = state.remoteRealtimeChannel;
+          state.remoteRealtimeChannel = null;
+          state.remoteRealtimeStatus = "";
+          if (ch) { try { supabaseClient()?.removeChannel(ch); } catch (_) {} }
           startRemotePolling();
           scheduleRemoteRefresh("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS);
+          setTimeout(startRemoteRealtime, 5000);
         }
       });
     }
@@ -11482,8 +11484,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.remotePullInFlight = true;
       if (!options.silent) setSyncStatus("서버 확인 중", "pending");
       try {
-        const results = await Promise.all(REMOTE_TABLES.map((config) => selectTable(client, config)));
-        results.forEach(({ key, rows }) => applyRemoteTableRows(key, rows));
+        const settled = await Promise.allSettled(REMOTE_TABLES.map((config) => selectTable(client, config)));
+        const failures = [];
+        settled.forEach((result) => {
+          if (result.status === "fulfilled") {
+            applyRemoteTableRows(result.value.key, result.value.rows);
+          } else {
+            failures.push(result.reason);
+            console.warn("테이블 pull 실패:", result.reason);
+          }
+        });
+        if (failures.length === REMOTE_TABLES.length) throw failures[0];
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();

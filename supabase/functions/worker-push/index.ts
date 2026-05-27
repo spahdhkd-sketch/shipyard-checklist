@@ -8,7 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UNSAFE_PUSH_TARGET_WORKER_NAMES = ["허지원", "김준혁", "김경제"];
 const LEADER_WORKER_POSITION = "조장";
 
 const supabase = createClient(
@@ -168,15 +167,14 @@ async function verifiedSender(payload: Record<string, unknown>) {
 }
 
 async function unsafeTargetWorkerIds() {
-  const targetNames = new Set(UNSAFE_PUSH_TARGET_WORKER_NAMES.map(normalizedWorkerName));
   const { data, error } = await supabase
     .from("workers")
-    .select("id,name,active")
-    .eq("active", true);
+    .select("id,unsafe_push_target,active")
+    .eq("active", true)
+    .eq("unsafe_push_target", true);
 
   if (error) throw error;
   return new Set((data || [])
-    .filter((worker) => targetNames.has(normalizedWorkerName(worker.name)))
     .map((worker) => cleanText(worker.id, 80))
     .filter(Boolean));
 }
