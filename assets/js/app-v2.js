@@ -2510,6 +2510,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         team: String(worker.team || "").trim(),
         position: normalizeWorkerPosition(worker.position),
         employeeNo: normalizeEmployeeNo(worker.employeeNo || worker.employee_no || ""),
+        unsafePushTarget: Boolean(worker.unsafePushTarget || worker.unsafe_push_target),
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
       })).filter((worker) => worker.name);
