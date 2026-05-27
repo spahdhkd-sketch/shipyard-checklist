@@ -24,6 +24,8 @@ const issueInsertShapeMigration = read("supabase/migrations/20260527144011_issue
 const workerPushBoundaryMigration = read("supabase/migrations/20260527144418_worker_push_subscriptions_boundary.sql");
 const performanceIndexCleanupMigration = read("supabase/migrations/20260527150339_drop_redundant_unused_indexes.sql");
 const adminSessionFkIndexMigration = read("supabase/migrations/20260527150501_restore_admin_session_worker_fk_index.sql");
+const pictogramStorageMigration = read("supabase/migrations/20260528001000_safety_pictograms_storage_metadata.sql");
+const pictogramMetadataGrantMigration = read("supabase/migrations/20260528002000_safety_pictograms_metadata_select_grants.sql");
 const pkg = JSON.parse(read("package.json"));
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");
@@ -34,6 +36,9 @@ expectMatch(edge, /action === "upsertRows"/, "admin-mutations must support white
 expectMatch(edge, /action === "deleteRows"/, "admin-mutations must support whitelisted deletes");
 expectMatch(edge, /action === "deleteCategoryCascade"/, "admin-mutations must support category cascade deletes");
 expectMatch(edge, /action === "deleteSectionCascade"/, "admin-mutations must support section cascade deletes");
+expectMatch(edge, /action === "uploadPictogramImage"/, "admin-mutations must upload custom pictograms through Storage");
+expectMatch(edge, /const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms"/, "admin-mutations should use the safety pictogram bucket");
+expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "admin-mutations should write pictogram bytes to Storage");
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
@@ -43,6 +48,11 @@ expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(/, "frontend must classify 
 expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(/, "frontend must keep worker-submitted records insert-only through public REST");
 expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(\[[\s\S]*"inspections"[\s\S]*"inspectionItems"/, "inspection history should be public insert-only");
 expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes must invoke the Edge Function");
+expectMatch(app, /invokeAdminMutation\("uploadPictogramImage"/, "frontend custom pictogram images should upload through admin-mutations");
+expectMatch(app, /select\(config\.selectColumns \|\| "\*"\)/, "remote pulls should support metadata-only column lists");
+expectMatch(app, /selectColumns:\s*"id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size"/, "safety_pictograms should pull metadata columns only");
+expectNoMatch(app, /fromDb:\s*\(row\) => \(\{[\s\S]*?src:\s*row\.src[\s\S]*?source:\s*row\.source \|\| "custom"/, "safety_pictograms fromDb must not pull src into state");
+expectNoMatch(app, /src:\s*String\(reader\.result \|\| ""\)/, "custom pictogram data URLs must not be saved directly into state");
 expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send server-issued admin session auth for admin mutations");
 expectMatch(app, /adminSessionToken/, "frontend must store an admin session token instead of replaying employee numbers");
 expectNoMatch(app, /adminAuth:\s*adminMutationAuthPayload\(\)/, "frontend must not send replayable adminAuth credentials on each mutation");
@@ -158,6 +168,15 @@ expectNoMatch(performanceIndexCleanupMigration, /drop\s+index\s+if\s+exists\s+pu
 expectMatch(performanceIndexCleanupMigration, /comment on index public\.issue_photos_target_idx/i, "retained issue photo target index should document the service-role query path");
 expectMatch(adminSessionFkIndexMigration, /create\s+index\s+if\s+not\s+exists\s+admin_mutation_sessions_worker_fk_idx\s+on\s+public\.admin_mutation_sessions\s*\(\s*worker_id\s*\)/i, "admin mutation sessions should keep a covering index for its worker_id foreign key");
 expectMatch(adminSessionFkIndexMigration, /comment on index public\.admin_mutation_sessions_worker_fk_idx/i, "admin session worker FK index should document why it is retained");
+expectMatch(pictogramStorageMigration, /insert into storage\.buckets/i, "pictogram migration should create a Storage bucket");
+expectMatch(pictogramStorageMigration, /'safety-pictograms'/, "pictogram migration should target the safety pictogram bucket");
+expectMatch(pictogramStorageMigration, /alter table public\.safety_pictograms[\s\S]*add column if not exists storage_bucket text/i, "pictogram metadata should include a storage bucket");
+expectMatch(pictogramStorageMigration, /alter table public\.safety_pictograms[\s\S]*add column if not exists storage_path text/i, "pictogram metadata should include a storage path");
+expectMatch(pictogramStorageMigration, /add column if not exists mime_type text/i, "pictogram metadata should include mime type");
+expectMatch(pictogramStorageMigration, /add column if not exists file_size bigint/i, "pictogram metadata should include file size");
+expectMatch(pictogramMetadataGrantMigration, /revoke select on table public\.safety_pictograms from public, anon, authenticated/i, "pictogram src should not remain table-selectable by browser roles");
+expectMatch(pictogramMetadataGrantMigration, /grant select \([\s\S]*id,[\s\S]*label,[\s\S]*source,[\s\S]*deleted,[\s\S]*sort_order,[\s\S]*storage_bucket,[\s\S]*storage_path,[\s\S]*mime_type,[\s\S]*file_size[\s\S]*\) on public\.safety_pictograms to anon, authenticated/i, "browser roles should regain metadata-only pictogram select");
+expectNoMatch(pictogramMetadataGrantMigration, /grant select \([\s\S]*src[\s\S]*\) on public\.safety_pictograms/i, "pictogram metadata select grant must not include legacy src");
 expectMatch(pkg.scripts.verify, /tests\/admin-mutation-boundary-static\.test\.js/, "verify script should include admin mutation boundary static test");
 
 console.log("admin mutation boundary static tests passed");

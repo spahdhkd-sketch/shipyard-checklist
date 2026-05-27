@@ -13,6 +13,13 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const ATTEMPT_LOCK_MS = 15 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 5;
+const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms";
+const PICTOGRAM_IMAGE_MAX_BYTES = 768 * 1024;
+const PICTOGRAM_IMAGE_MIME_EXTENSIONS = new Map<string, string>([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+]);
 const encoder = new TextEncoder();
 
 type TableConfig = {
@@ -100,6 +107,10 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "source",
       "deleted",
       "sort_order",
+      "storage_bucket",
+      "storage_path",
+      "mime_type",
+      "file_size",
     ]),
   }],
   ["ships", {
@@ -249,6 +260,18 @@ function cleanIds(value: unknown) {
   return Array.isArray(value)
     ? [...new Set(value.map((id) => cleanText(id, 120)).filter(Boolean))]
     : [];
+}
+
+function parseDataUrl(value: unknown) {
+  const text = String(value || "");
+  const match = text.match(/^data:([^;,]+);base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  if (!PICTOGRAM_IMAGE_MIME_EXTENSIONS.has(mimeType)) return null;
+  const binary = atob(match[2].replace(/\s+/g, ""));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  if (!bytes.length || bytes.length > PICTOGRAM_IMAGE_MAX_BYTES) return null;
+  return { mimeType, bytes };
 }
 
 function parseTime(value: unknown) {
@@ -654,6 +677,45 @@ async function deleteIssuePhotos(payload: Record<string, unknown>) {
   return jsonResponse({ ok: true, mutated: rowIds.length });
 }
 
+async function uploadPictogramImage(payload: Record<string, unknown>) {
+  const pictogramId = cleanText(payload.pictogramId, 120);
+  if (!/^[a-zA-Z0-9_-]+$/.test(pictogramId)) return jsonResponse({ error: "invalid_pictogram_id" }, 400);
+
+  const authorization = await verifyAdminSession(payload);
+  if (authorization.error) return authorization.error;
+
+  const rawLength = String(payload.dataUrl || "").length;
+  if (!rawLength || rawLength > PICTOGRAM_IMAGE_MAX_BYTES * 2) {
+    return jsonResponse({ error: "invalid_pictogram_image" }, 413);
+  }
+
+  const parsed = parseDataUrl(payload.dataUrl);
+  if (!parsed) return jsonResponse({ error: "invalid_pictogram_image" }, 400);
+
+  const extension = PICTOGRAM_IMAGE_MIME_EXTENSIONS.get(parsed.mimeType) || "png";
+  const storagePath = `custom/${pictogramId}.${extension}`;
+  const { error } = await supabase.storage.from(PICTOGRAM_IMAGE_BUCKET).upload(storagePath, parsed.bytes, {
+    upsert: true,
+    contentType: parsed.mimeType,
+    cacheControl: "3600",
+  });
+
+  if (error) {
+    console.error("admin pictogram upload failed", error);
+    return jsonResponse({ error: "admin_pictogram_upload_failed" }, 500);
+  }
+
+  return jsonResponse({
+    ok: true,
+    image: {
+      storageBucket: PICTOGRAM_IMAGE_BUCKET,
+      storagePath,
+      mimeType: parsed.mimeType,
+      fileSize: parsed.bytes.byteLength,
+    },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
@@ -673,6 +735,7 @@ Deno.serve(async (req) => {
   if (action === "deleteCategoryCascade") return deleteCategoryCascade(payload);
   if (action === "deleteSectionCascade") return deleteSectionCascade(payload);
   if (action === "deleteIssuePhotos") return deleteIssuePhotos(payload);
+  if (action === "uploadPictogramImage") return uploadPictogramImage(payload);
   if (action === "ping") return jsonResponse({ ok: true });
   return jsonResponse({ error: "unknown_action" }, 400);
 });

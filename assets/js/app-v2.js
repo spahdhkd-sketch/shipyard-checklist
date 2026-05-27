@@ -70,6 +70,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const STORAGE_COMPACT_KB = 3800;
     const PENDING_PHOTO_RETRY_MAX_BYTES = 240 * 1024;
     const PENDING_PHOTO_DATA_URL_MAX_CHARS = 360 * 1024;
+    const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms";
+    const PICTOGRAM_IMAGE_MAX_BYTES = 768 * 1024;
+    const PICTOGRAM_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+    const PICTOGRAM_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -345,22 +349,29 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_pictograms",
         key: "pictograms",
+        selectColumns: "id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size",
         rows: (rows) => rows.filter((row) => row.source === "custom"),
         toDb: (row) => ({
           id: row.id,
           label: row.label,
-          src: row.src,
           source: "custom",
           deleted: Boolean(row.deleted),
           sort_order: row.order || 0,
+          storage_bucket: row.storageBucket || PICTOGRAM_IMAGE_BUCKET,
+          storage_path: row.storagePath || null,
+          mime_type: row.mimeType || null,
+          file_size: Number(row.fileSize || 0) || null,
         }),
         fromDb: (row) => ({
           id: row.id,
           label: row.label,
-          src: row.src,
           source: row.source || "custom",
           deleted: Boolean(row.deleted),
           order: row.sort_order || 0,
+          storageBucket: row.storage_bucket || PICTOGRAM_IMAGE_BUCKET,
+          storagePath: row.storage_path || "",
+          mimeType: row.mime_type || "",
+          fileSize: Number(row.file_size || 0),
         }),
       },
       {
@@ -2538,6 +2549,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             source: "custom",
             order: row.order || BUILT_IN_PICTOGRAMS.length + index + 1,
             deleted: Boolean(row.deleted),
+            storageBucket: row.storageBucket || row.storage_bucket || PICTOGRAM_IMAGE_BUCKET,
+            storagePath: row.storagePath || row.storage_path || "",
+            mimeType: row.mimeType || row.mime_type || "",
+            fileSize: Number(row.fileSize || row.file_size || 0),
           })),
       ];
       state.draft = createDraft(state.draft);
@@ -2599,6 +2614,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           createdAt: row.createdAt || serverNow().toISOString(),
           updatedAt: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }));
+    }
+
+    function storedPictograms() {
+      return state.pictograms
+        .filter((row) => row.source !== "builtIn")
+        .map(({ src, ...row }) => row);
     }
 
     function dedupeChecklistItems() {
@@ -2700,7 +2721,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveJson("sections", state.sections);
       saveJson("items", state.items);
       saveJson("tools", state.tools);
-      saveJson("pictograms", state.pictograms.filter((row) => row.source !== "builtIn"));
+      saveJson("pictograms", storedPictograms());
       saveJson("ships", state.ships);
       saveJson("inspections", state.inspections);
       saveJson("inspectionItems", state.inspectionItems);
@@ -2719,7 +2740,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveJson("manageTab", state.manageTab);
       if (compactStoragePayloadsIfNeeded()) {
         saveJson("pendingPhotoUploads", state.pendingPhotoUploads);
-        saveJson("pictograms", state.pictograms.filter((row) => row.source !== "builtIn"));
+        saveJson("pictograms", storedPictograms());
       }
       if (shouldWarnStorage() && !state.storageWarningShown) {
         state.storageWarningShown = true;
@@ -3778,7 +3799,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function pictogramAssetSrc(id) {
       const key = normalizeIconKey(id);
-      return PICTOGRAM_ASSETS[id] || PICTOGRAM_ASSETS[key] || "";
+      const builtInSrc = PICTOGRAM_ASSETS[id] || PICTOGRAM_ASSETS[key] || "";
+      if (builtInSrc) return builtInSrc;
+      const row = (Array.isArray(state?.pictograms) ? state.pictograms : []).find((item) => (
+        item?.deleted !== true && normalizeIconKey(item.id) === key
+      ));
+      if (!row || row.source !== "custom") return "";
+      if (isSyncConfigured()) return pictogramLazyImageSrc(row);
+      return row.src || "";
+    }
+
+    function pictogramLazyImageSrc(row) {
+      const id = String(row?.id || "").trim();
+      if (!id || !isSyncConfigured()) return "";
+      const version = encodeURIComponent(row.storagePath || row.updatedAt || row.id);
+      return `${SUPABASE_URL}/functions/v1/pictogram-image?id=${encodeURIComponent(id)}&v=${version}`;
     }
 
     function lineIconName(id, fallbackIcon = "") {
@@ -7775,7 +7810,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         <div class="field" style="margin-bottom:10px">
           <label for="newPictogramFile">이미지 파일</label>
-          <input class="input" id="newPictogramFile" type="file" accept="image/*" ${state.adminMode ? "" : "disabled"} />
+          <input class="input" id="newPictogramFile" type="file" accept="${PICTOGRAM_IMAGE_ACCEPT}" ${state.adminMode ? "" : "disabled"} />
         </div>
         <button class="btn" data-action="add-pictogram" ${state.adminMode ? "" : "disabled"} type="button" style="width:100%">픽토그램 추가</button>
         <div class="tool-admin-list">
@@ -11091,30 +11126,68 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function addPictogram() {
+    function pictogramMimeType(file) {
+      const type = String(file?.type || "").toLowerCase();
+      if (PICTOGRAM_IMAGE_MIME_TYPES.has(type)) return type;
+      const name = String(file?.name || "").toLowerCase();
+      if (name.endsWith(".png")) return "image/png";
+      if (name.endsWith(".webp")) return "image/webp";
+      if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+      return "";
+    }
+
+    function validatePictogramFile(file) {
+      if (!file) return "이미지 파일을 선택하세요.";
+      if (!PICTOGRAM_IMAGE_MIME_TYPES.has(pictogramMimeType(file))) return "PNG, JPG, WebP 이미지만 사용할 수 있습니다.";
+      if (Number(file.size || 0) > PICTOGRAM_IMAGE_MAX_BYTES) return `픽토그램 이미지는 ${formatBytes(PICTOGRAM_IMAGE_MAX_BYTES)} 이하로 등록하세요.`;
+      return "";
+    }
+
+    async function uploadPictogramImage(id, file) {
+      const dataUrl = await fileToDataUrl(file);
+      if (!dataUrl) throw new Error("pictogram_file_read_failed");
+      const result = await invokeAdminMutation("uploadPictogramImage", {
+        pictogramId: id,
+        fileName: file.name || `${id}.png`,
+        mimeType: pictogramMimeType(file),
+        fileSize: Number(file.size || 0),
+        dataUrl,
+      });
+      return result.image || {};
+    }
+
+    async function addPictogram() {
       if (!requireAdminWrite()) return;
       const label = $("newPictogramLabel")?.value.trim() || "";
       const file = $("newPictogramFile")?.files?.[0];
       if (!label) return toast("픽토그램 이름을 입력하세요.");
-      if (!file) return toast("이미지 파일을 선택하세요.");
-      const reader = new FileReader();
-      reader.onload = async () => {
+      const fileError = validatePictogramFile(file);
+      if (fileError) return toast(fileError);
+      const id = uid("pictogram");
+      setSyncStatus("픽토그램 업로드 중", "pending");
+      try {
+        const image = await uploadPictogramImage(id, file);
         state.pictograms.push({
-          id: uid("pictogram"),
+          id,
           label,
-          src: String(reader.result || ""),
           source: "custom",
           order: pictogramLibrary().length + 1,
           deleted: false,
+          storageBucket: image.storageBucket || PICTOGRAM_IMAGE_BUCKET,
+          storagePath: image.storagePath || "",
+          mimeType: image.mimeType || pictogramMimeType(file),
+          fileSize: Number(image.fileSize || file.size || 0),
         });
         $("newPictogramLabel").value = "";
         $("newPictogramFile").value = "";
         if (!(await persistAndSync("pictograms"))) return;
         render();
         toast("사용자 지정 픽토그램을 추가했습니다.");
-      };
-      reader.onerror = () => toast("이미지 파일을 읽지 못했습니다.");
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("픽토그램 업로드에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+      }
     }
 
     async function savePictogram(id) {
@@ -11805,7 +11878,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function selectTable(client, config) {
       const source = config.readTable || config.table;
-      const { data, error } = await client.from(source).select("*");
+      const { data, error } = await client.from(source).select(config.selectColumns || "*");
       if (error) throw error;
       return { key: config.key, rows: (data || []).map(config.fromDb) };
     }

@@ -625,6 +625,11 @@ const storagePolicyMigration = read("supabase/migrations/20260522004144_tighten_
 assert.match(storagePolicyMigration, /create policy "issue_photos_insert_public"/);
 assert.match(storagePolicyMigration, /create policy "issue_photos_delete_public"/);
 
+const pictogramStorageMigration = read("supabase/migrations/20260528001000_safety_pictograms_storage_metadata.sql");
+assert.match(pictogramStorageMigration, /'safety-pictograms'/);
+assert.match(pictogramStorageMigration, /add column if not exists storage_bucket text/i);
+assert.match(pictogramStorageMigration, /add column if not exists storage_path text/i);
+
 const workerPositionMigration = read("supabase/migrations/20260522082035_add_worker_position.sql");
 assert.match(workerPositionMigration, /add column if not exists position text not null default '작업자'/);
 
@@ -677,6 +682,11 @@ assert.match(pushFunction, /deleteSubscriptionDevice/);
 assert.match(pushFunction, /sendNotification/);
 assert.match(pushFunction, /unsafe_push_target/);
 assert.match(pushFunction, /function canSendPledgeNotifications/);
+
+const pictogramImageFunction = read("supabase/functions/pictogram-image/index.ts");
+assert.match(pictogramImageFunction, /storage_bucket,storage_path,mime_type,src/);
+assert.match(pictogramImageFunction, /supabase\.storage\.from\(bucket\)\.download\(storagePath\)/);
+assert.match(pictogramImageFunction, /parseDataUrl/);
 assert.match(pushFunction, /async function verifiedSender/);
 assert.match(pushFunction, /async function authorizeSendRequest/);
 assert.match(pushFunction, /senderWorkerId/);
