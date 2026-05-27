@@ -1,4 +1,5 @@
 .vercel
+.worktrees/
 supabase/.temp/
 visual-verification/
 .tmp-chrome-*/
