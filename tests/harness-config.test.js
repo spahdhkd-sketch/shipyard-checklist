@@ -22,6 +22,12 @@ assert.ok(exists("tools/claude-quality-harness.mjs"), "legacy harness entrypoint
 
 const harness = read("tools/quality-harness.mjs");
 const legacyHarness = read("tools/claude-quality-harness.mjs");
+const vercelConfig = JSON.parse(read("vercel.json"));
+const duplicateAliases = [
+  "shipyard-checklist.vercel.app",
+  "shipyard-checklist-spahdhkd-3161s-projects.vercel.app",
+  "shipyard-checklist-git-main-spahdhkd-3161s-projects.vercel.app",
+];
 
 assert.match(harness, /GS Safety Quality Harness/);
 assert.match(harness, /https:\/\/gs-safety-checklist\.vercel\.app/);
@@ -40,8 +46,31 @@ assert.match(harness, /worker sync does not write employee_no/);
 assert.match(harness, /worker sync does not read employee_no/);
 assert.match(harness, /worker delete UI does not expose direct browser deletion/);
 assert.match(harness, /worker delete does not call anon REST directly/);
+assert.match(harness, /DUPLICATE_VERCEL_ALIASES/);
+assert.match(harness, /live duplicate alias root is closed/);
 assert.match(harness, /--strict-git/);
 assert.match(harness, /--live/);
 assert.doesNotMatch(harness, /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9/);
+
+for (const alias of duplicateAliases) {
+  assert.ok(
+    vercelConfig.redirects.some(
+      (redirect) =>
+        redirect.source === "/" &&
+        redirect.destination === "https://gs-safety-checklist.vercel.app/" &&
+        redirect.has?.some((condition) => condition.type === "host" && condition.value === alias),
+    ),
+    `${alias} should redirect root to canonical production`,
+  );
+  assert.ok(
+    vercelConfig.redirects.some(
+      (redirect) =>
+        redirect.source === "/:path*" &&
+        redirect.destination === "https://gs-safety-checklist.vercel.app/:path*" &&
+        redirect.has?.some((condition) => condition.type === "host" && condition.value === alias),
+    ),
+    `${alias} should redirect paths to canonical production`,
+  );
+}
 
 assert.match(legacyHarness, /quality-harness\.mjs/);

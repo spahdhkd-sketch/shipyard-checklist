@@ -17,6 +17,11 @@ const ASSET_TOKEN = "20260527-inspection-insert-only-1";
 const SW_CACHE = "gs-safety-20260527-inspection-insert-only-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
+const DUPLICATE_VERCEL_ALIASES = [
+  "https://shipyard-checklist.vercel.app",
+  "https://shipyard-checklist-spahdhkd-3161s-projects.vercel.app",
+  "https://shipyard-checklist-git-main-spahdhkd-3161s-projects.vercel.app",
+];
 const PAGES = [
   "index.html",
   "check.html",
@@ -255,6 +260,18 @@ async function fetchText(url) {
   return { status: response.status, text: await response.text() };
 }
 
+async function fetchRedirect(url) {
+  const response = await fetch(url, { cache: "no-store", redirect: "manual" });
+  return {
+    status: response.status,
+    location: response.headers.get("location") || "",
+  };
+}
+
+function duplicateAliasIsClosed(redirect, expectedCanonicalUrl) {
+  return redirect.status === 404 || (redirect.status === 308 && redirect.location === expectedCanonicalUrl);
+}
+
 async function checkLiveProduction() {
   const stamp = Date.now();
   try {
@@ -277,6 +294,27 @@ async function checkLiveProduction() {
     add("live service worker responds 200", swLive.status === 200, String(swLive.status));
     add("live service worker cache is current", swLive.text.includes(`const CACHE = "${SW_CACHE}"`));
     add("live 404 uses current CSS token", notFoundLive.text.includes(`assets/css/styles-v2.css?v=${ASSET_TOKEN}`));
+
+    const duplicateRootRedirects = await Promise.all(
+      DUPLICATE_VERCEL_ALIASES.map((alias) => fetchRedirect(`${alias}/?__harness=${stamp}`)),
+    );
+    const duplicatePathRedirects = await Promise.all(
+      DUPLICATE_VERCEL_ALIASES.map((alias) => fetchRedirect(`${alias}/checklist?__harness=${stamp}`)),
+    );
+    add(
+      "live duplicate alias root is closed",
+      duplicateRootRedirects.every((redirect) =>
+        duplicateAliasIsClosed(redirect, `${PRODUCTION_ALIAS}/?__harness=${stamp}`),
+      ),
+      duplicateRootRedirects.map((redirect) => `${redirect.status} ${redirect.location}`).join(" | "),
+    );
+    add(
+      "live duplicate alias paths are closed",
+      duplicatePathRedirects.every((redirect) =>
+        duplicateAliasIsClosed(redirect, `${PRODUCTION_ALIAS}/checklist?__harness=${stamp}`),
+      ),
+      duplicatePathRedirects.map((redirect) => `${redirect.status} ${redirect.location}`).join(" | "),
+    );
   } catch (error) {
     add("live production fetch", false, error && error.message ? error.message : String(error));
   }
