@@ -25,14 +25,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const html = read("index.html");
 const vercelConfig = read("vercel.json");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/css\/styles-v2\.css\?v=20260527-unsafe-push-db-1/);
+assert.match(html, /assets\/css\/styles-v2\.css\?v=20260527-v0-7-release-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/js\/app-v2\.js\?v=20260527-unsafe-push-db-1/);
+assert.match(html, /assets\/js\/app-v2\.js\?v=20260527-v0-7-release-1/);
 assert.match(html, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
-assert.match(html, /version 0\.6/);
+assert.match(html, /version 0\.7/);
 assert.doesNotMatch(html, /version 0\.3/);
 
 [
@@ -48,12 +48,12 @@ assert.doesNotMatch(html, /version 0\.3/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260527-unsafe-push-db-1/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/css\/styles-v2\.css\?v=20260527-v0-7-release-1/, `${file} should use v2 styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/js\/app-v2\.js\?v=20260527-unsafe-push-db-1/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/js\/app-v2\.js\?v=20260527-v0-7-release-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
-  assert.match(page, /version 0\.6/, `${file} should use the current static fallback version label`);
+  assert.match(page, /version 0\.7/, `${file} should use the current static fallback version label`);
   assert.doesNotMatch(page, /assets\/css\/styles\.css/, `${file} should not use legacy styles`);
   assert.doesNotMatch(page, /assets\/js\/app\.js/, `${file} should not use legacy app runtime`);
   assert.doesNotMatch(page, /version 0\.3/, `${file} should not use the stale static fallback version label`);
@@ -62,7 +62,7 @@ assert.doesNotMatch(html, /version 0\.3/);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260527-unsafe-push-db-1/);
+assert.match(notFound, /assets\/css\/styles-v2\.css\?v=20260527-v0-7-release-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 const redesignPreview = read("redesign-v2.html");
 assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
@@ -88,7 +88,7 @@ assert.ok(fs.existsSync(path.join(root, "assets/icons/shipyard/shipyard-illustra
 
 const app = read("assets/js/app-v2.js");
 const styles = read("assets/css/styles-v2.css");
-assert.match(app, /const APP_VERSION = "0\.6-20260526"/);
+assert.match(app, /const APP_VERSION = "0\.7-20260527"/);
 assert.match(app, /const REMOTE_PULL_THROTTLE_MS = 10 \* 1000/);
 assert.match(app, /const REMOTE_POLL_INTERVAL_MS = 15 \* 1000/);
 assert.match(app, /const REMOTE_REACTIVE_PULL_DELAY_MS = 700/);
@@ -590,9 +590,9 @@ assert.match(css, /\.monthly-worker-cell\.excluded/);
 assert.match(css, /\.pictogram-image-fallback/);
 
 const sw = read("sw.js");
-assert.match(sw, /const CACHE = "gs-safety-v18-20260527-unsafe-push-db"/);
-assert.match(sw, /styles-v2\.css\?v=20260527-unsafe-push-db-1/);
-assert.match(sw, /app-v2\.js\?v=20260527-unsafe-push-db-1/);
+assert.match(sw, /const CACHE = "gs-safety-v19-20260527-v0-7-release"/);
+assert.match(sw, /styles-v2\.css\?v=20260527-v0-7-release-1/);
+assert.match(sw, /app-v2\.js\?v=20260527-v0-7-release-1/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);

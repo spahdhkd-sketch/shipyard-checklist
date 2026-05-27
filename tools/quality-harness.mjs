@@ -12,9 +12,9 @@ const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
-const APP_VERSION = "0.6-20260526";
-const ASSET_TOKEN = "20260527-unsafe-push-db-1";
-const SW_CACHE = "gs-safety-v18-20260527-unsafe-push-db";
+const APP_VERSION = "0.7-20260527";
+const ASSET_TOKEN = "20260527-v0-7-release-1";
+const SW_CACHE = "gs-safety-v19-20260527-v0-7-release";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const PAGES = [
@@ -144,7 +144,7 @@ function checkHtmlPages() {
     assertContains(html, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, `${page} uses current CSS token`);
     assertContains(html, `assets/js/app-v2.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
     assertContains(html, "assets/js/vendor/supabase-js-2.105.3.min.js", `${page} uses local Supabase vendor bundle`);
-    assertContains(html, "version 0.6", `${page} uses current static fallback version`);
+    assertContains(html, "version 0.7", `${page} uses current static fallback version`);
     assertNotContains(html, "assets/css/styles.css", `${page} does not use legacy CSS`);
     assertNotContains(html, "assets/js/app.js", `${page} does not use legacy JS`);
     assertNotContains(html, "version 0.3", `${page} does not use stale fallback version`);

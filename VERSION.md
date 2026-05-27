@@ -1,15 +1,15 @@
-# Version
+﻿# Version
 
-Current version: `0.6-20260526`
+Current version: `0.7-20260527`
 
-Recorded at: `2026-05-26 12:01:43 +09:00`
+Recorded at: `2026-05-27 13:14:06 +09:00`
 
-Baseline commit: `be8e5cbf8f253cdac787f59396da8b0dda6f4fd9`
+Baseline commit: `ae92a82b3c04f3118b60b8bc0b0f481169c2df22`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version includes the worker card inline edit layout, worker login ordering, ship visibility/count text cleanup, push target header send layout, and work prep appearance badge alignment.
+- This version preserves DB-driven unsafe push targets through local normalization, allows Supabase Realtime WebSocket connections in CSP, and refreshes deployment quality-harness baselines.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:
