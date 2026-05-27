@@ -1,15 +1,15 @@
 ﻿# Version
 
-Current version: `0.7-20260527`
+Current version: `0.8-20260527`
 
-Recorded at: `2026-05-27 13:14:06 +09:00`
+Recorded at: `2026-05-27 15:50:35 +09:00`
 
-Baseline commit: `426972f04aa39f8830f83a801481e24019acc48a`
+Baseline commit: `pending-worker-public-deployment`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version preserves DB-driven unsafe push targets through local normalization, allows Supabase Realtime WebSocket connections in CSP, and refreshes deployment quality-harness baselines.
+- This version switches browser worker reads to the `workers_public` view, keeps `workers.employee_no` out of browser sync/direct anon reads, and refreshes service-worker assets so production clients load the compatible runtime.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

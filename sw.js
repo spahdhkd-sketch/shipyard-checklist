@@ -1,4 +1,4 @@
-const CACHE = "gs-safety-v19-20260527-v0-7-release";
+const CACHE = "gs-safety-v20-20260527-worker-public";
 const SHELL = [
   "/",
   "/index.html",
@@ -6,11 +6,11 @@ const SHELL = [
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
   "/assets/icons/notification-icon.png",
-  "/assets/css/styles-v2.css?v=20260527-v0-7-release-1",
+  "/assets/css/styles-v2.css?v=20260527-v0-8-worker-public-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260527-v0-7-release-1",
-  "/assets/js/issue-material-rules.js?v=20260527-v0-7-release-1",
-  "/assets/js/app-v2.js?v=20260527-v0-7-release-1"
+  "/assets/js/checklist-rules.js?v=20260527-v0-8-worker-public-1",
+  "/assets/js/issue-material-rules.js?v=20260527-v0-8-worker-public-1",
+  "/assets/js/app-v2.js?v=20260527-v0-8-worker-public-1"
 ];
 
 self.addEventListener("install", (event) => {

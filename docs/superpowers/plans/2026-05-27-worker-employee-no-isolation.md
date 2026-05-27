@@ -97,7 +97,7 @@ assert.match(migration, /grant select\s*\(\s*id,\s*name,\s*team,\s*position,\s*a
 assert.match(migration, /grant select on table public\.workers_public to anon, authenticated/i, "workers_public should be selectable by browser clients");
 assert.match(migration, /revoke insert, update on table public\.workers from public, anon, authenticated/i, "workers insert/update should be reset before column grants");
 assert.match(migration, /grant insert\s*\(\s*id,\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers insert grant should omit employee_no");
-assert.match(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers update grant should omit employee_no");
+assert.match(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers update grant should omit employee_no while allowing Phase 1 upsert created_at");
 assert.match(migration, /create or replace function public\.verify_worker_login\(p_worker_id text, p_employee_no text\)/i, "login RPC source should be tracked");
 assert.match(migration, /security definer/i, "login RPC should keep current security-definer behavior for browser RPC compatibility");
 assert.match(migration, /grant execute on function public\.verify_worker_login\(text, text\) to anon, authenticated/i, "browser clients should be able to execute login RPC");
@@ -696,23 +696,23 @@ Open `http://localhost:4173` and verify:
 - Worker edit panel no longer shows the employee-number field.
 - Push registration still asks for a typed employee number when the worker session lacks one.
 
-- [ ] **Step 4: Do not deploy until user approves**
+- [x] **Step 4: Deployment approval/status**
 
-Stop here and report results. Deployment requires explicit user approval because production RLS and frontend behavior have changed.
+User previously approved version-up/deploy work. After the DB migration, live REST `/workers?select=*` returned 401 while `/workers_public` returned 200, so frontend deployment is required for production compatibility.
 
 ## Task 7: Production Deployment Plan After Approval
 
-**Files:**
-- Version/cache files only if the user requests a version bump.
+- **Files:**
+- Version/cache files changed because the live service worker already cached the previous 0.7 token without `workers_public`.
 
 - [ ] **Step 1: Confirm versioning**
 
-Ask the user whether to bump `APP_VERSION`, asset token, and service-worker cache. If the user does not ask for a version bump, keep:
+Version/cache values for this deployment:
 
 ```text
-APP_VERSION: 0.7-20260527
-Asset token: 20260527-v0-7-release-1
-SW cache: gs-safety-v19-20260527-v0-7-release
+APP_VERSION: 0.8-20260527
+Asset token: 20260527-v0-8-worker-public-1
+SW cache: gs-safety-v20-20260527-worker-public
 ```
 
 - [ ] **Step 2: Deploy**
