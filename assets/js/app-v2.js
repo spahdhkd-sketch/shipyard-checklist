@@ -6176,7 +6176,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <p class="small muted worker-security-note">사번/비밀번호 변경은 보안 전환 중 서버 관리 경로로 이동합니다.</p>
         <div class="worker-edit-actions">
           <button class="btn" data-save-worker="${esc(worker.id)}" type="button">수정</button>
-          <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
         </div>
       </div>`;
     }
@@ -8723,7 +8722,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "add-worker") addWorker();
       if (button.dataset.saveWorker) saveWorker(button.dataset.saveWorker);
-      if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
       if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
       if (button.dataset.saveRecord) saveAdminRecord(button.dataset.saveRecord);
       if (button.dataset.deleteRecord) deleteAdminRecord(button.dataset.deleteRecord);
@@ -9598,21 +9596,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       persistAndSync("workers");
       render();
       toast("작업자를 수정했습니다.");
-    }
-
-    async function deleteWorker(id) {
-      if (!requireAdmin()) return;
-      const worker = state.workers.find((row) => row.id === id);
-      if (!worker) return;
-      if (!confirm(`${worker.name} 작업자를 삭제할까요? 기존 기록의 등록자 정보는 유지됩니다.`)) return;
-      state.workers = state.workers.filter((row) => row.id !== id);
-      if (state.unsafeDraft.workerId === id) state.unsafeDraft.workerId = "";
-      if (state.materialDraft.workerId === id) state.materialDraft.workerId = "";
-      if (state.workerEditCardId === id) state.workerEditCardId = "";
-      persist();
-      await deleteRemoteRows("workers", [id]);
-      render();
-      toast("작업자를 삭제했습니다.");
     }
 
     function updateRecordFilter(token, value) {

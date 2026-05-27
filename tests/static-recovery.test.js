@@ -14,8 +14,13 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
   "assets/icons/icon-512.png",
-  "supabase/migrations/202605240001_worker_push_subscriptions.sql",
-  "supabase/migrations/20260525151649_enable_realtime_remote_tables.sql",
+  "supabase/migrations/20260522004013_create_issue_photos_bucket.sql",
+  "supabase/migrations/20260522004144_tighten_issue_photos_storage_policies.sql",
+  "supabase/migrations/20260522082035_add_worker_position.sql",
+  "supabase/migrations/20260523181216_worker_push_subscriptions.sql",
+  "supabase/migrations/20260527064035_worker_public_read_path.sql",
+  "supabase/migrations/20260527071140_revoke_workers_delete.sql",
+  "supabase/migrations/20260527071213_enable_realtime_remote_tables.sql",
   "supabase/functions/worker-push/index.ts",
   "supabase/functions/worker-push/deno.json",
 ].forEach((file) => {
@@ -611,13 +616,28 @@ swShellAssets.forEach((asset) => {
   assert.ok(fs.existsSync(path.join(root, asset)), `service worker shell asset should exist: ${asset}`);
 });
 
-const pushMigration = read("supabase/migrations/202605240001_worker_push_subscriptions.sql");
+const bucketMigration = read("supabase/migrations/20260522004013_create_issue_photos_bucket.sql");
+assert.match(bucketMigration, /insert into storage\.buckets/);
+assert.match(bucketMigration, /'issue-photos'/);
+
+const storagePolicyMigration = read("supabase/migrations/20260522004144_tighten_issue_photos_storage_policies.sql");
+assert.match(storagePolicyMigration, /create policy "issue_photos_insert_public"/);
+assert.match(storagePolicyMigration, /create policy "issue_photos_delete_public"/);
+
+const workerPositionMigration = read("supabase/migrations/20260522082035_add_worker_position.sql");
+assert.match(workerPositionMigration, /add column if not exists position text not null default '작업자'/);
+
+const pushMigration = read("supabase/migrations/20260523181216_worker_push_subscriptions.sql");
 assert.match(pushMigration, /create table if not exists public\.worker_push_subscriptions/);
 assert.match(pushMigration, /alter table public\.worker_push_subscriptions enable row level security/);
 assert.match(pushMigration, /create index if not exists worker_push_subscriptions_worker_idx/);
 assert.match(pushMigration, /create or replace function public\.worker_push_subscription_status/);
 
-const realtimeMigration = read("supabase/migrations/20260525151649_enable_realtime_remote_tables.sql");
+const workerDeleteMigration = read("supabase/migrations/20260527071140_revoke_workers_delete.sql");
+assert.match(workerDeleteMigration, /revoke delete on table public\.workers from public, anon, authenticated/);
+assert.match(workerDeleteMigration, /drop policy if exists "workers public delete" on public\.workers/);
+
+const realtimeMigration = read("supabase/migrations/20260527071213_enable_realtime_remote_tables.sql");
 assert.match(realtimeMigration, /create publication supabase_realtime/);
 assert.match(realtimeMigration, /alter publication supabase_realtime add table/);
 [

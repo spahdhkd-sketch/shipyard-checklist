@@ -38,6 +38,8 @@ assert.match(harness, /remoteRealtimeConnected/);
 assert.match(harness, /workers read through public safe view/);
 assert.match(harness, /worker sync does not write employee_no/);
 assert.match(harness, /worker sync does not read employee_no/);
+assert.match(harness, /worker delete UI does not expose direct browser deletion/);
+assert.match(harness, /worker delete does not call anon REST directly/);
 assert.match(harness, /--strict-git/);
 assert.match(harness, /--live/);
 assert.doesNotMatch(harness, /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9/);

@@ -25,7 +25,7 @@ This is a static Vercel app backed by Supabase. The current production code uses
 - `assets/js/issue-material-rules.js`
 - `sw.js`
 - Supabase Edge Function: `worker-push`
-- Supabase migration: `supabase/migrations/202605240001_worker_push_subscriptions.sql`
+- Supabase migration: `supabase/migrations/20260523181216_worker_push_subscriptions.sql`
 
 Recent changes to include in review:
 

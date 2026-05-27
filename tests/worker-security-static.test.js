@@ -14,6 +14,7 @@ function expectNoMatch(source, pattern, message) {
 
 const app = read("assets/js/app-v2.js");
 const migration = read("supabase/migrations/20260527064035_worker_public_read_path.sql");
+const deleteMigration = read("supabase/migrations/20260527071140_revoke_workers_delete.sql");
 const manualScreenshots = read("tools/capture-manual-screenshots.mjs");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
@@ -23,6 +24,8 @@ expectNoMatch(app, /employeeNo: normalizeEmployeeNo\(row\.employee_no\)/, "worke
 expectNoMatch(app, /employee_no: normalizeEmployeeNo\(row\.employeeNo\)/, "worker toDb must not write employee_no from browser worker rows");
 expectMatch(app, /table: "workers",[\s\S]*?toDb: \(row\) => \(\{[\s\S]*?created_at: row\.createdAt \|\| serverNow\(\)\.toISOString\(\)/, "worker toDb still includes created_at for Phase 1 upsert compatibility");
 expectNoMatch(app, /data-worker-edit-field="employeeNo"/, "worker edit panel should not expose employeeNo editing in Phase 1");
+expectNoMatch(app, /data-delete-worker=/, "worker delete UI should not expose direct browser deletion in Phase 1");
+expectNoMatch(app, /deleteRemoteRows\("workers"/, "browser runtime must not directly delete workers through anon REST");
 expectMatch(app, /employeeNo,\s*loggedInAt: serverNow\(\)\.toISOString\(\)/, "worker session may still keep the typed employee number for push compatibility");
 expectMatch(app, /p_employee_no: employeeNo/, "verify_worker_login should still send the typed employee number to the RPC");
 
@@ -37,6 +40,9 @@ expectMatch(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\
 expectMatch(migration, /create or replace function public\.verify_worker_login\(p_worker_id text, p_employee_no text\)/i, "login RPC source should be tracked");
 expectMatch(migration, /security definer/i, "login RPC should keep current security-definer behavior for browser RPC compatibility");
 expectMatch(migration, /grant execute on function public\.verify_worker_login\(text, text\) to anon, authenticated/i, "browser clients should be able to execute login RPC");
+
+expectMatch(deleteMigration, /revoke delete on table public\.workers from public, anon, authenticated/i, "workers delete privilege should be revoked from public browser roles");
+expectMatch(deleteMigration, /drop policy if exists "workers public delete" on public\.workers/i, "broad workers delete policy should be removed");
 
 expectMatch(manualScreenshots, /MANUAL_CAPTURE_EMPLOYEE_NO/, "manual screenshot capture should require an explicit local employee number");
 expectMatch(manualScreenshots, /\/rest\/v1\/workers_public\?select=id,name,team,position&order=name\.asc/, "manual screenshot capture should read workers through workers_public");
