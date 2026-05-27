@@ -20,6 +20,7 @@ expectMatch(app, /const source = config\.readTable \|\| config\.table/, "selectT
 expectMatch(app, /client\.from\(source\)\.select\("\*"\)/, "selectTable should select from readTable source");
 expectNoMatch(app, /employeeNo: normalizeEmployeeNo\(row\.employee_no\)/, "worker fromDb must not map employee_no into browser worker rows");
 expectNoMatch(app, /employee_no: normalizeEmployeeNo\(row\.employeeNo\)/, "worker toDb must not write employee_no from browser worker rows");
+expectMatch(app, /table: "workers",[\s\S]*?toDb: \(row\) => \(\{[\s\S]*?created_at: row\.createdAt \|\| serverNow\(\)\.toISOString\(\)/, "worker toDb still includes created_at for Phase 1 upsert compatibility");
 expectNoMatch(app, /data-worker-edit-field="employeeNo"/, "worker edit panel should not expose employeeNo editing in Phase 1");
 expectMatch(app, /employeeNo,\s*loggedInAt: serverNow\(\)\.toISOString\(\)/, "worker session may still keep the typed employee number for push compatibility");
 expectMatch(app, /p_employee_no: employeeNo/, "verify_worker_login should still send the typed employee number to the RPC");
@@ -31,7 +32,7 @@ expectMatch(migration, /grant select\s*\(\s*id,\s*name,\s*team,\s*position,\s*ac
 expectMatch(migration, /grant select on table public\.workers_public to anon, authenticated/i, "workers_public should be selectable by browser clients");
 expectMatch(migration, /revoke insert, update on table public\.workers from public, anon, authenticated/i, "workers insert/update should be reset before column grants");
 expectMatch(migration, /grant insert\s*\(\s*id,\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers insert grant should omit employee_no");
-expectMatch(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers update grant should omit employee_no");
+expectMatch(migration, /grant update\s*\(\s*name,\s*team,\s*position,\s*active,\s*created_at,\s*updated_at,\s*unsafe_push_target\s*\)\s+on public\.workers to anon, authenticated/i, "workers update grant should omit employee_no while allowing Phase 1 upsert created_at");
 expectMatch(migration, /create or replace function public\.verify_worker_login\(p_worker_id text, p_employee_no text\)/i, "login RPC source should be tracked");
 expectMatch(migration, /security definer/i, "login RPC should keep current security-definer behavior for browser RPC compatibility");
 expectMatch(migration, /grant execute on function public\.verify_worker_login\(text, text\) to anon, authenticated/i, "browser clients should be able to execute login RPC");

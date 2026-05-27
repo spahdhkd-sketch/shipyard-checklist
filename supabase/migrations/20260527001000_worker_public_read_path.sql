@@ -47,6 +47,7 @@ grant update (
   team,
   position,
   active,
+  created_at,
   updated_at,
   unsafe_push_target
 ) on public.workers to anon, authenticated;
