@@ -13,7 +13,7 @@ function expectNoMatch(source, pattern, message) {
 }
 
 const app = read("assets/js/app-v2.js");
-const migration = read("supabase/migrations/20260527001000_worker_public_read_path.sql");
+const migration = read("supabase/migrations/20260527064035_worker_public_read_path.sql");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
 expectMatch(app, /const source = config\.readTable \|\| config\.table/, "selectTable should support readTable");

@@ -38,7 +38,7 @@ This plan implements Phase 1 only:
   - Remove the worker edit panel's employee-number input for this phase.
   - Keep `state.workerSession.employeeNo` for login/push flow compatibility.
 
-- Create `supabase/migrations/20260527001000_worker_public_read_path.sql`
+- Create `supabase/migrations/20260527064035_worker_public_read_path.sql`
   - Define `public.workers_public` with `security_invoker = true`.
   - Track the current `verify_worker_login` RPC source.
   - Revoke table/column privileges that expose or mutate `employee_no`.
@@ -79,7 +79,7 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const app = read("assets/js/app-v2.js");
-const migration = read("supabase/migrations/20260527001000_worker_public_read_path.sql");
+const migration = read("supabase/migrations/20260527064035_worker_public_read_path.sql");
 
 assert.match(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
 assert.match(app, /const source = config\.readTable \|\| config\.table/, "selectTable should support readTable");
@@ -137,7 +137,7 @@ Run:
 npm.cmd run verify
 ```
 
-Expected: FAIL because `supabase/migrations/20260527001000_worker_public_read_path.sql` does not exist yet and `app-v2.js` still maps `employee_no`.
+Expected: FAIL because `supabase/migrations/20260527064035_worker_public_read_path.sql` does not exist yet and `app-v2.js` still maps `employee_no`.
 
 - [ ] **Step 5: Commit the failing test**
 
@@ -151,7 +151,7 @@ git commit -m "test: cover worker employee number isolation"
 ## Task 2: Add Supabase Migration for Public Worker Read Path
 
 **Files:**
-- Create: `supabase/migrations/20260527001000_worker_public_read_path.sql`
+- Create: `supabase/migrations/20260527064035_worker_public_read_path.sql`
 
 - [ ] **Step 1: Create the migration file**
 
@@ -164,12 +164,12 @@ npx.cmd supabase migration new worker_public_read_path
 If the CLI creates a different timestamped file, rename that generated file to:
 
 ```text
-supabase/migrations/20260527001000_worker_public_read_path.sql
+supabase/migrations/20260527064035_worker_public_read_path.sql
 ```
 
 - [ ] **Step 2: Add the migration SQL**
 
-Put this exact SQL into `supabase/migrations/20260527001000_worker_public_read_path.sql`:
+Put this exact SQL into `supabase/migrations/20260527064035_worker_public_read_path.sql`:
 
 ```sql
 -- Phase 1 security hardening:
@@ -264,7 +264,7 @@ Expected: still FAIL because `app-v2.js` has not been changed yet, but migration
 - [ ] **Step 4: Commit the migration**
 
 ```powershell
-git add -- supabase/migrations/20260527001000_worker_public_read_path.sql
+git add -- supabase/migrations/20260527064035_worker_public_read_path.sql
 git commit -m "chore: add worker public read path migration"
 ```
 
@@ -537,7 +537,7 @@ git commit -m "test: guard worker secret sync in harness"
 Run:
 
 ```powershell
-Get-Content -Raw supabase\migrations\20260527001000_worker_public_read_path.sql
+Get-Content -Raw supabase\migrations\20260527064035_worker_public_read_path.sql
 ```
 
 Confirm:
@@ -555,7 +555,7 @@ Use the Supabase MCP `apply_migration` tool with:
 ```text
 project_id: yuuroocvxvzgmsdeeiws
 name: worker_public_read_path
-query: contents of supabase/migrations/20260527001000_worker_public_read_path.sql
+query: contents of supabase/migrations/20260527064035_worker_public_read_path.sql
 ```
 
 Expected: migration succeeds without returning any data rows.
