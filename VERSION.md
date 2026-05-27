@@ -4,7 +4,7 @@ Current version: `0.8-20260527`
 
 Recorded at: `2026-05-27 15:50:35 +09:00`
 
-Baseline commit: `e6e694390b4def2f5709bb8e056f9a3eca6d86fc`
+Baseline commit: `fa75b71d`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
