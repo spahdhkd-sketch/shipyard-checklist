@@ -165,6 +165,10 @@ function checkRuntimeSource() {
 
   assertContains(app, `const APP_VERSION = "${APP_VERSION}"`, "APP_VERSION is current");
   assertContains(app, `https://${SUPABASE_PROJECT_REF}.supabase.co`, "Supabase project ref is active target");
+  assertContains(app, 'readTable: "workers_public"', "workers read through public safe view");
+  assertNotContains(app, "employee_no: normalizeEmployeeNo(row.employeeNo)", "worker sync does not write employee_no");
+  assertNotContains(app, "employeeNo: normalizeEmployeeNo(row.employee_no)", "worker sync does not read employee_no");
+  assertNotContains(app, 'data-worker-edit-field="employeeNo"', "worker edit UI does not expose employee_no");
   add("Supabase anon key is not printed by harness", true, "only project ref is reported");
 
   assertContains(app, "function startRemoteRealtime()", "Supabase realtime sync starter exists");
