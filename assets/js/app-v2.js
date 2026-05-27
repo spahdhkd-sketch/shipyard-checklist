@@ -460,13 +460,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
       {
         table: "workers",
+        readTable: "workers_public",
         key: "workers",
         toDb: (row) => ({
           id: row.id,
           name: row.name,
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
-          employee_no: normalizeEmployeeNo(row.employeeNo),
+          active: row.active !== false,
           unsafe_push_target: Boolean(row.unsafePushTarget),
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
@@ -476,7 +477,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           name: row.name,
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
-          employeeNo: normalizeEmployeeNo(row.employee_no),
+          active: row.active !== false,
           unsafePushTarget: Boolean(row.unsafe_push_target),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -2509,7 +2510,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         name: String(worker.name || "").trim(),
         team: String(worker.team || "").trim(),
         position: normalizeWorkerPosition(worker.position),
-        employeeNo: normalizeEmployeeNo(worker.employeeNo || worker.employee_no || ""),
+        active: worker.active !== false,
         unsafePushTarget: Boolean(worker.unsafePushTarget || worker.unsafe_push_target),
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
@@ -6160,10 +6161,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <input class="input" id="${esc(workerFieldId(worker, "name"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="name" value="${esc(worker.name)}" />
           </div>
           <div class="field">
-            <label for="${esc(workerFieldId(worker, "employeeNo"))}">사번/비밀번호</label>
-            <input class="input" id="${esc(workerFieldId(worker, "employeeNo"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="employeeNo" value="${esc(worker.employeeNo || "")}" autocomplete="off" inputmode="text" />
-          </div>
-          <div class="field">
             <label for="${esc(workerFieldId(worker, "team"))}">팀 성격</label>
             <select class="select" id="${esc(workerFieldId(worker, "team"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="team">
               ${renderWorkerTeamOptions(worker.team)}
@@ -6176,6 +6173,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             </select>
           </div>
         </div>
+        <p class="small muted worker-security-note">사번/비밀번호 변경은 보안 전환 중 서버 관리 경로로 이동합니다.</p>
         <div class="worker-edit-actions">
           <button class="btn" data-save-worker="${esc(worker.id)}" type="button">수정</button>
           <button class="btn-danger" data-delete-worker="${esc(worker.id)}" type="button">삭제</button>
@@ -9560,7 +9558,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!name) return toast("작업자 이름을 입력하세요.");
       const now = serverNow().toISOString();
       const id = uid("worker");
-      state.workers.push({ id, name, team, position, employeeNo: "", createdAt: now, updatedAt: now });
+      state.workers.push({ id, name, team, position, active: true, createdAt: now, updatedAt: now });
       state.workerEditCardId = id;
       persistAndSync("workers");
       render();
@@ -9584,16 +9582,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const cleanName = workerEditFieldValue(id, "name").trim();
       const cleanTeam = normalizeWorkerTeam(workerEditFieldValue(id, "team"));
       const cleanPosition = normalizeWorkerPosition(workerEditFieldValue(id, "position"));
-      const cleanEmployeeNo = normalizeEmployeeNo(workerEditFieldValue(id, "employeeNo"));
       if (!cleanName) return toast("작업자 이름을 입력하세요.");
       if (!cleanTeam) return toast("팀 성격을 선택하세요.");
       worker.name = cleanName;
       worker.team = cleanTeam;
       worker.position = cleanPosition;
-      worker.employeeNo = cleanEmployeeNo;
       worker.updatedAt = serverNow().toISOString();
       if (state.workerSession?.workerId === worker.id) {
-        state.workerSession = { ...state.workerSession, workerName: cleanName, employeeNo: cleanEmployeeNo };
+        state.workerSession = { ...state.workerSession, workerName: cleanName };
         saveWorkerSession(state.workerSession);
         if (state.adminAuthSource === "worker" && !canWorkerPreEnterAdminMode(worker)) {
           setAdminMode(false);
@@ -11615,7 +11611,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function selectTable(client, config) {
-      const { data, error } = await client.from(config.table).select("*");
+      const source = config.readTable || config.table;
+      const { data, error } = await client.from(source).select("*");
       if (error) throw error;
       return { key: config.key, rows: (data || []).map(config.fromDb) };
     }
