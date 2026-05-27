@@ -1,4 +1,7 @@
 .vercel
+node_modules/
+**/node_modules/
+**/deno.lock
 .worktrees/
 supabase/.temp/
 visual-verification/
