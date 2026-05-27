@@ -629,6 +629,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       "ships",
     ]);
     const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set([
+      "inspections",
+      "inspectionItems",
       "unsafeIssues",
       "missingMaterials",
       "issuePhotos",
@@ -10643,8 +10645,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function resetHistory() {
-      if (!requireAdmin()) return;
+      if (!requireAdminWrite()) return;
       if (!confirm("모든 점검 이력을 초기화할까요? 작업 유형, 섹션, 항목, 호선은 유지됩니다.")) return;
+      const inspectionIds = state.inspections.map((row) => row.id).filter(Boolean);
+      const itemIds = state.inspectionItems.map((row) => row.id).filter(Boolean);
+      if (isSyncConfigured() && !(await resetRemoteHistory(inspectionIds, itemIds))) return;
       state.inspections = [];
       state.inspectionItems = [];
       state.historyDetailId = null;
@@ -10653,7 +10658,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.selectedHistoryIds = [];
       persist();
       localStorage.removeItem(OLD_KEYS.history);
-      if (isSyncConfigured()) await resetRemoteHistory();
       render();
       replaceRouteState();
       toast("점검 이력을 초기화했습니다.");
@@ -10719,16 +10723,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function deleteSelectedHistory() {
-      if (!requireAdmin()) return;
+    async function deleteSelectedHistory() {
+      if (!requireAdminWrite()) return;
       const ids = new Set(state.selectedHistoryIds);
       if (!ids.size) return toast("삭제할 이력을 선택하세요.");
       if (!confirm(`선택한 점검 이력 ${ids.size}건을 삭제할까요?`)) return;
+      if (isSyncConfigured() && !(await deleteRemoteHistory([...ids]))) return;
       state.inspections = state.inspections.filter((row) => !ids.has(row.id));
       state.inspectionItems = state.inspectionItems.filter((row) => !ids.has(row.inspectionId));
       state.selectedHistoryIds = [];
       persist();
-      if (isSyncConfigured()) deleteRemoteHistory([...ids]);
       render();
       toast("선택한 이력을 삭제했습니다.");
     }
@@ -11691,20 +11695,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
-    async function resetRemoteHistory() {
-      const client = supabaseClient();
-      if (!client) return;
-      try {
-        const itemDelete = await client.from("safety_inspection_items").delete().neq("id", "");
-        if (itemDelete.error) throw itemDelete.error;
-        const inspectionDelete = await client.from("safety_inspections").delete().neq("id", "");
-        if (inspectionDelete.error) throw inspectionDelete.error;
-        setSyncStatus("온라인", "online");
-      } catch (error) {
-        console.error(error);
-        setSyncStatus("동기화 오류", "error");
-        toast("서버 이력 초기화에 실패했습니다.");
-      }
+    async function resetRemoteHistory(inspectionIds = [], itemIds = []) {
+      if (!inspectionIds.length && !itemIds.length) return true;
+      if (itemIds.length && !(await deleteRemoteRows("inspectionItems", itemIds))) return false;
+      if (inspectionIds.length && !(await deleteRemoteRows("inspections", inspectionIds))) return false;
+      return true;
     }
 
     function cleanupDeliveredShips(syncRemote) {
@@ -11719,19 +11714,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function deleteRemoteHistory(ids) {
-      const client = supabaseClient();
-      if (!client || !ids.length) return;
-      try {
-        const itemDelete = await client.from("safety_inspection_items").delete().in("inspection_id", ids);
-        if (itemDelete.error) throw itemDelete.error;
-        const inspectionDelete = await client.from("safety_inspections").delete().in("id", ids);
-        if (inspectionDelete.error) throw inspectionDelete.error;
-        setSyncStatus("온라인", "online");
-      } catch (error) {
-        console.error(error);
-        setSyncStatus("동기화 오류", "error");
-        toast("서버 선택 삭제에 실패했습니다.");
-      }
+      const inspectionIds = [...new Set((Array.isArray(ids) ? ids : []).map(String).filter(Boolean))];
+      if (!inspectionIds.length) return true;
+      const inspectionSet = new Set(inspectionIds);
+      const itemIds = state.inspectionItems
+        .filter((row) => inspectionSet.has(row.inspectionId))
+        .map((row) => row.id)
+        .filter(Boolean);
+      if (itemIds.length && !(await deleteRemoteRows("inspectionItems", itemIds))) return false;
+      return deleteRemoteRows("inspections", inspectionIds);
     }
 
     async function upsertAdminRows(key, rows) {

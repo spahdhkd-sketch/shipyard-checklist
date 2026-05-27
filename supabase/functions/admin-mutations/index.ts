@@ -116,6 +116,37 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "sort_order",
     ]),
   }],
+  ["inspections", {
+    table: "safety_inspections",
+    columns: new Set([
+      "id",
+      "category_id",
+      "worker",
+      "ship_no",
+      "date",
+      "time",
+      "status",
+      "warnings",
+      "completion",
+      "tools",
+      "safety_pledge",
+      "work_prep_record_id",
+      "work_prep_worker_id",
+      "created_at",
+    ]),
+  }],
+  ["inspectionItems", {
+    table: "safety_inspection_items",
+    columns: new Set([
+      "id",
+      "inspection_id",
+      "item_id",
+      "checked",
+      "risk",
+      "text",
+      "section_title",
+    ]),
+  }],
   ["unsafeIssues", {
     table: "unsafe_issues",
     columns: new Set([

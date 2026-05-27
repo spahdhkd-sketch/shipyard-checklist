@@ -13,8 +13,8 @@ const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
 const APP_VERSION = "0.8-20260527";
-const ASSET_TOKEN = "20260527-admin-session-boundary-1";
-const SW_CACHE = "gs-safety-20260527-admin-session-boundary-1";
+const ASSET_TOKEN = "20260527-inspection-insert-only-1";
+const SW_CACHE = "gs-safety-20260527-inspection-insert-only-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const PAGES = [
