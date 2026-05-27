@@ -7,8 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const PRIVILEGED_POSITIONS = new Set(["대표", "관리", "총무"]);
-const PRIVILEGED_TEAMS = new Set(["관리", "총무"]);
+const PRIVILEGED_POSITIONS = new Set(["\uB300\uD45C", "\uAD00\uB9AC", "\uCD1D\uBB34"]);
+const PRIVILEGED_TEAMS = new Set(["\uAD00\uB9AC", "\uCD1D\uBB34"]);
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const ATTEMPT_LOCK_MS = 15 * 60 * 1000;
