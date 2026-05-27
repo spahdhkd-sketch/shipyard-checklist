@@ -164,7 +164,7 @@ assert.match(app, /version \$\{String\(APP_VERSION\)\.split\("-"\)\[0\]\}/);
 assert.match(app, /pendingSyncQueue: normalizePendingSyncQueue\(loadJson\("pendingSyncQueue", \[\]\)\)/);
 assert.match(app, /function enqueueSyncRows\(key, rows\)/);
 assert.match(app, /async function flushPendingSyncQueue\(\)/);
-assert.match(app, /async function persistAndSync\(keys = null\)/);
+assert.match(app, /async function persistAndSync\(keys = null, options = \{\}\)/);
 assert.match(app, /syncInspectionHistory\(inspection, inspectionItems\);/);
 assert.match(app, /Date\.now\(\) - state\.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS/);
 assert.match(app, /\{ id: "pledge", label: "서약"/);

@@ -628,6 +628,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       "pictograms",
       "ships",
     ]);
+    const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set([
+      "unsafeIssues",
+      "missingMaterials",
+      "issuePhotos",
+    ]);
 
     const starterCategories = [
       { id: "welding", label: "용접/절단 작업", icon: "welding", color: "#b8323b", toolNature: "선행/후행", order: 1 },
@@ -889,6 +894,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return "";
       }
     };
+    const loadAdminSession = () => {
+      try {
+        const value = sessionStorage.getItem(storeKey("adminSession"));
+        return value ? JSON.parse(value) : null;
+      } catch {
+        return null;
+      }
+    };
     const saveAdminMode = (enabled, source = "") => {
       try {
         if (enabled) {
@@ -902,6 +915,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           sessionStorage.removeItem(storeKey("adminMode"));
           sessionStorage.removeItem(storeKey("adminAuthSource"));
         }
+      } catch {}
+    };
+    const saveAdminSession = (session) => {
+      try {
+        if (session?.token) {
+          sessionStorage.setItem(storeKey("adminSession"), JSON.stringify(session));
+        } else {
+          sessionStorage.removeItem(storeKey("adminSession"));
+        }
+      } catch {}
+    };
+    const clearAdminSession = () => {
+      try {
+        sessionStorage.removeItem(storeKey("adminSession"));
       } catch {}
     };
     const loadWorkerSession = () => {
@@ -923,6 +950,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch {}
     };
     const normalizeEmployeeNo = (value) => String(value || "").trim();
+    const adminSessionLooksActive = (session) => Boolean(
+      session
+      && session.token
+      && session.workerId
+      && (!session.expiresAt || Date.parse(session.expiresAt) > Date.now() + 30000),
+    );
 
     function createDraft(overrides = {}) {
       return {
@@ -2175,8 +2208,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     const savedAdminMode = loadAdminMode();
     const savedAdminAuthSource = savedAdminMode ? loadAdminAuthSource() : "";
-    if (savedAdminMode && savedAdminAuthSource !== "worker") saveAdminMode(false);
-    const initialAdminMode = savedAdminMode && savedAdminAuthSource === "worker";
+    const savedAdminSession = savedAdminMode && savedAdminAuthSource === "worker" ? loadAdminSession() : null;
+    if (savedAdminMode && (savedAdminAuthSource !== "worker" || !adminSessionLooksActive(savedAdminSession))) {
+      saveAdminMode(false);
+      clearAdminSession();
+    }
+    const initialAdminMode = savedAdminMode && savedAdminAuthSource === "worker" && adminSessionLooksActive(savedAdminSession);
     const initialAdminAuthSource = initialAdminMode ? savedAdminAuthSource : "";
     const state = {
       view: initialView(),
@@ -2249,6 +2286,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       adminMode: initialAdminMode,
       adminEmail: initialAdminMode ? (initialAdminAuthSource === "worker" ? "작업자 권한" : "비밀번호 인증") : "",
       adminAuthSource: initialAdminAuthSource,
+      adminSessionToken: initialAdminMode ? savedAdminSession.token : "",
+      adminSessionWorkerId: initialAdminMode ? savedAdminSession.workerId : "",
+      adminSessionExpiresAt: initialAdminMode ? (savedAdminSession.expiresAt || "") : "",
       scrollTimer: null,
       lastScrollY: 0,
       serverTimeOffsetMs: 0,
@@ -8166,12 +8206,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function saveCurrentShipOrder() {
+    async function saveCurrentShipOrder() {
       if (!requireAdminWrite()) return;
       const ordered = sortedShips().map((ship, index) => ({ ...ship, order: index + 1 }));
       state.ships = ordered;
       state.shipSortMode = "saved";
-      persistAndSync("ships");
+      if (!(await persistAndSync("ships"))) return;
       saveJson("shipSortMode", state.shipSortMode);
       render();
       toast("현재 호선 순서를 저장했습니다.");
@@ -9423,6 +9463,52 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return false;
     }
 
+    function setAdminSession(session = {}) {
+      state.adminSessionToken = String(session.token || "");
+      state.adminSessionWorkerId = String(session.workerId || "");
+      state.adminSessionExpiresAt = String(session.expiresAt || "");
+      if (state.adminSessionToken) {
+        saveAdminSession({
+          token: state.adminSessionToken,
+          workerId: state.adminSessionWorkerId,
+          expiresAt: state.adminSessionExpiresAt,
+        });
+      } else {
+        clearAdminSession();
+      }
+    }
+
+    function clearAdminSessionState() {
+      state.adminSessionToken = "";
+      state.adminSessionWorkerId = "";
+      state.adminSessionExpiresAt = "";
+      clearAdminSession();
+    }
+
+    function adminSessionActive() {
+      return Boolean(
+        state.adminSessionToken
+        && state.adminSessionWorkerId
+        && state.adminSessionWorkerId === state.workerSession?.workerId
+        && (!state.adminSessionExpiresAt || Date.parse(state.adminSessionExpiresAt) > Date.now() + 30000),
+      );
+    }
+
+    async function createAdminSession(workerId, employeeNo) {
+      const client = supabaseClient();
+      if (!client) throw new Error("Supabase client is not configured.");
+      const { data, error } = await client.functions.invoke("admin-mutations", {
+        body: {
+          action: "createSession",
+          workerId,
+          employeeNo,
+        },
+      });
+      if (error || data?.error) throw new Error(error?.message || data.error);
+      if (!data?.session?.token) throw new Error("admin_session_missing");
+      return data.session;
+    }
+
     async function submitWorkerLogin() {
       if (state.loginSubmitting) return;
       const workerId = $("loginWorkerId")?.value || state.loginWorkerId || "";
@@ -9449,9 +9535,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.loginWorkerPickerOpen = false;
         saveWorkerSession(state.workerSession);
         if (!state.adminMode && canWorkerPreEnterAdminMode(worker)) {
-          setAdminMode(true, workerAdminModeLabel(worker), "worker");
-          toast(`${worker.name}님 로그인되었습니다. 관리자 수정 모드가 켜졌습니다.`);
+          try {
+            setAdminSession(await createAdminSession(worker.id, employeeNo));
+            setAdminMode(true, workerAdminModeLabel(worker), "worker");
+            toast(`${worker.name}님 로그인되었습니다. 관리자 수정 모드가 켜졌습니다.`);
+          } catch (error) {
+            console.warn("admin session create failed", error);
+            clearAdminSessionState();
+            setAdminMode(false);
+            toast(`${worker.name}님 로그인되었습니다. 관리자 서버 권한 확인에는 실패했습니다.`);
+          }
         } else {
+          clearAdminSessionState();
           toast(`${worker.name}님 로그인되었습니다.`);
         }
         scrollScreenTop();
@@ -9472,6 +9567,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (state.adminAuthSource === "worker") {
         setAdminMode(false);
       }
+      clearAdminSessionState();
       state.workerSession = null;
       state.loginSubmitting = false;
       state.pushSubscriptionStatus = {};
@@ -9519,6 +9615,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function requestAdminAccess() {
+      const worker = currentWorkerSessionWorker();
+      if (canWorkerPreEnterAdminMode(worker) && adminSessionActive()) {
+        setAdminMode(true, workerAdminModeLabel(worker), "worker");
+        toast("관리자 수정 모드가 켜졌습니다.");
+        return true;
+      }
       toast("관리자 수정은 관리자 권한 작업자 로그인 후 사용할 수 있습니다.");
       return false;
     }
@@ -9545,7 +9647,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return false;
     }
 
-    function addWorker() {
+    async function addWorker() {
       if (!requireAdminWrite()) return;
       const name = $("workerName")?.value.trim() || "";
       const team = normalizeWorkerTeam($("workerTeam")?.value || "");
@@ -9555,7 +9657,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const id = uid("worker");
       state.workers.push({ id, name, team, position, active: true, createdAt: now, updatedAt: now });
       state.workerEditCardId = id;
-      persistAndSync("workers");
+      if (!(await persistAndSync("workers"))) return;
       render();
       toast("작업자를 추가했습니다.");
     }
@@ -9570,7 +9672,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         .find((node) => node.dataset.workerEdit === id)?.value || "";
     }
 
-    function saveWorker(id) {
+    async function saveWorker(id) {
       if (!requireAdminWrite()) return;
       const worker = state.workers.find((row) => row.id === id);
       if (!worker) return;
@@ -9587,10 +9689,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workerSession = { ...state.workerSession, workerName: cleanName };
         saveWorkerSession(state.workerSession);
         if (state.adminAuthSource === "worker" && !canWorkerPreEnterAdminMode(worker)) {
+          clearAdminSessionState();
           setAdminMode(false);
         }
       }
-      persistAndSync("workers");
+      if (!(await persistAndSync("workers"))) return;
       render();
       toast("작업자를 수정했습니다.");
     }
@@ -9608,19 +9711,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function adminMutationAuthPayload() {
       return {
-        workerId: state.workerSession?.workerId || "",
-        employeeNo: normalizeEmployeeNo(state.workerSession?.employeeNo || ""),
+        token: state.adminSessionToken || "",
       };
     }
 
     function canAttemptServerAdminWrite() {
-      const auth = adminMutationAuthPayload();
-      return Boolean(auth.workerId && auth.employeeNo);
+      return adminSessionActive();
     }
 
     function requireAdminWrite() {
       if (!requireAdmin()) return false;
       if (canAttemptServerAdminWrite()) return true;
+      clearAdminSessionState();
+      setAdminMode(false);
       toast("서버 저장은 관리자 권한 작업자 로그인 후 사용할 수 있습니다.");
       return false;
     }
@@ -10281,7 +10384,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return confirm(`기존 날짜가 등록된 호선의 일자가 변경됩니다.\n이 날짜가 맞으면 확인을 눌러 업데이트하세요.\n\n${preview}${suffix}\n\n취소하면 불러오기를 중단합니다.`);
     }
 
-    function applyShipImportRows(importedRows) {
+    async function applyShipImportRows(importedRows) {
       const existingByNo = new Map(state.ships.map((ship) => [ship.no, ship]));
       const now = serverNow().toISOString();
       let added = 0;
@@ -10328,7 +10431,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         added += 1;
       });
       cleanupDeliveredShips(false);
-      persistAndSync("ships");
+      if (!(await persistAndSync("ships"))) return;
       render();
       toast(`호선 ${added}척 추가, ${updated}척 업데이트했습니다.`);
     }
@@ -10342,7 +10445,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (!importedRows.length) return toast("불러올 호선 데이터가 없습니다.");
         const conflicts = shipImportDateConflicts(importedRows);
         if (!confirmShipImportDateChanges(conflicts)) return toast("호선 불러오기를 취소했습니다.");
-        applyShipImportRows(importedRows);
+        await applyShipImportRows(importedRows);
       } catch (error) {
         console.error(error);
         toast(error?.message || "호선 엑셀 파일을 읽지 못했습니다.");
@@ -10404,6 +10507,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const memo = prompt("일괄 변경 메모", "상태 일괄 변경") || "";
       const updatedAt = serverNow().toISOString();
       const doneStatus = statuses[2];
+      const snapshots = rows.map((row) => ({ row, previous: { ...row, statusHistory: Array.isArray(row.statusHistory) ? [...row.statusHistory] : [] } }));
       rows.forEach((row) => {
         const previousStatus = row.status;
         row.status = status;
@@ -10419,7 +10523,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           }, { initialStatus: statuses[0] });
         }
       });
-      await persistAndSync("missingMaterials");
+      const ok = await upsertAdminRows("missingMaterials", rows);
+      if (!ok) {
+        snapshots.forEach(({ row, previous }) => Object.assign(row, previous));
+        render();
+        return;
+      }
+      persist();
       render();
       toast(`${rows.length}건의 상태를 변경했습니다.`);
     }
@@ -10462,12 +10572,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       changeView("manage");
     }
 
-    function saveAdminRecord(token, options = {}) {
+    async function saveAdminRecord(token, options = {}) {
       if (!requireAdminWrite()) return;
       const [kind, id] = token.split(":");
       const rows = kind === "unsafe" ? state.unsafeIssues : state.missingMaterials;
       const row = rows.find((item) => item.id === id);
       if (!row) return;
+      const previous = { ...row, statusHistory: Array.isArray(row.statusHistory) ? [...row.statusHistory] : [] };
       const status = document.querySelector(`[data-record-status="${cssEscape(token)}"]`)?.value || row.status;
       const memo = document.querySelector(`[data-record-memo="${cssEscape(token)}"]`)?.value || "";
       const previousStatus = row.status;
@@ -10498,24 +10609,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             actor: "관리자",
           }, { initialStatus: statuses[0] })
         : ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: statuses[0] });
-      persistAndSync(kind === "unsafe" ? "unsafeIssues" : "missingMaterials");
+      const remoteKey = kind === "unsafe" ? "unsafeIssues" : "missingMaterials";
+      const ok = await upsertAdminRows(remoteKey, [row]);
+      if (!ok) {
+        Object.assign(row, previous);
+        render();
+        return;
+      }
+      persist();
       render();
       toast("기록을 저장했습니다.");
     }
 
     async function deleteAdminRecord(token) {
-      if (!requireAdmin()) return;
+      if (!requireAdminWrite()) return;
       const [kind, id] = token.split(":");
       const label = kind === "unsafe" ? "불안전요소" : "호선자재 누락";
       if (!confirm(`${label} 기록을 영구 삭제할까요?`)) return;
+      if (isSyncConfigured()) {
+        const remoteKey = kind === "unsafe" ? "unsafeIssues" : "missingMaterials";
+        if (kind === "unsafe" && !(await deleteUnsafePhotos(id))) return;
+        if (!(await deleteRemoteRows(remoteKey, [id]))) return;
+      }
       if (kind === "unsafe") {
-        await deleteUnsafePhotos(id);
         state.unsafeIssues = state.unsafeIssues.filter((row) => row.id !== id);
         state.issuePhotos = state.issuePhotos.filter((row) => row.targetId !== id);
-        await deleteRemoteRows("unsafeIssues", [id]);
       } else {
         state.missingMaterials = state.missingMaterials.filter((row) => row.id !== id);
-        await deleteRemoteRows("missingMaterials", [id]);
       }
       persist();
       render();
@@ -10540,13 +10660,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function resetUnsafeIssueRecords() {
-      if (!requireAdmin()) return;
+      if (!requireAdminWrite()) return;
       if (!requireRecordResetPassword("불안전요소")) return;
       const issueIds = state.unsafeIssues.map((row) => row.id).filter(Boolean);
       if (!confirm(`불안전요소 이력 ${issueIds.length}건을 초기화할까요? 호선/작업자/점검 항목은 유지됩니다.`)) return;
       if (isSyncConfigured()) {
-        await Promise.all(issueIds.map((id) => deleteUnsafePhotos(id)));
-        await deleteRemoteRows("unsafeIssues", issueIds);
+        const photoResults = await Promise.all(issueIds.map((id) => deleteUnsafePhotos(id)));
+        if (photoResults.some((ok) => !ok)) return;
+        if (!(await deleteRemoteRows("unsafeIssues", issueIds))) return;
       }
       state.unsafeIssues = [];
       state.issuePhotos = state.issuePhotos.filter((photo) => !issueIds.includes(photo.targetId));
@@ -10562,17 +10683,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function resetMissingMaterialRecords() {
-      if (!requireAdmin()) return;
+      if (!requireAdminWrite()) return;
       if (!requireRecordResetPassword("자재누락")) return;
       const materialIds = state.missingMaterials.map((row) => row.id).filter(Boolean);
       if (!confirm(`자재누락 이력 ${materialIds.length}건을 초기화할까요? 호선/작업자/점검 항목은 유지됩니다.`)) return;
+      if (isSyncConfigured() && !(await deleteRemoteRows("missingMaterials", materialIds))) return;
       state.missingMaterials = [];
       state.lastMaterialId = null;
       state.materialDetailId = null;
       state.materialFilters = { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" };
       saveJson("materialFilters", state.materialFilters);
       persist();
-      if (isSyncConfigured()) await deleteRemoteRows("missingMaterials", materialIds);
       render();
       toast("자재누락 이력을 초기화했습니다.");
     }
@@ -10612,7 +10733,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toast("선택한 이력을 삭제했습니다.");
     }
 
-    function addShip() {
+    async function addShip() {
       if (!requireAdminWrite()) return;
       const rawLines = $("newShipNos").value.split(/\n+/).map((line) => line.trim()).filter(Boolean);
       const defaultType = resolveShipType("newShipType", "newShipCustom");
@@ -10647,7 +10768,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         added += 1;
       });
       if (!added) return toast("추가된 호선이 없습니다. 호선 번호와 선종을 확인하세요.");
-      persistAndSync("ships");
+      if (!(await persistAndSync("ships"))) return;
       render();
       toast(`호선 ${added}척을 추가했습니다.${skipped ? ` ${skipped}건은 중복/오류로 건너뛰었습니다.` : ""}`);
     }
@@ -10657,17 +10778,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const ship = state.ships.find((row) => row.id === id);
       if (!ship) return;
       if (!confirm(`${ship.no} 호선을 삭제할까요? 기존 점검 이력은 유지됩니다.`)) return;
+      if (isSyncConfigured()) {
+        if (!(await deleteRemoteShips([id]))) return;
+      }
       state.ships = state.ships.filter((row) => row.id !== id);
       if (state.draft.shipNo === ship.no) state.draft.shipNo = "";
       persist();
-      if (isSyncConfigured()) {
-        await deleteRemoteShips([id]);
-      }
       render();
       toast(`${ship.no} 호선을 삭제했습니다.`);
     }
 
-    function updateShipProcess(id, patch) {
+    async function updateShipProcess(id, patch) {
       if (!requireAdminWrite()) return;
       state.ships = state.ships.map((ship) => {
         if (ship.id !== id) return ship;
@@ -10677,11 +10798,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return next;
       });
       cleanupDeliveredShips(false);
-      persistAndSync("ships");
+      if (!(await persistAndSync("ships"))) return;
       render();
     }
 
-    function addCategory() {
+    async function addCategory() {
       if (!requireAdminWrite()) return;
       const label = $("catLabel").value.trim();
       if (!label) return toast("작업 유형명을 입력하세요.");
@@ -10697,20 +10818,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         order: state.categories.length + 1,
       });
       state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
-      persistAndSync(["categories", "sections"]);
+      if (!(await persistAndSync(["categories", "sections"]))) return;
       state.categoryAddOpen = false;
       state.manageCategoryId = id;
       render();
     }
 
-    function saveCategoryIcon() {
+    async function saveCategoryIcon() {
       if (!requireAdminWrite()) return;
       const cat = categoryById(state.manageCategoryId);
       if (!cat) return;
       const icon = $("editCatIcon").value.trim() || cat.label.slice(0, 1).toUpperCase();
       const toolNature = normalizeToolNature($("editCatToolNature")?.value || cat.toolNature);
       state.categories = state.categories.map((row) => row.id === cat.id ? { ...row, icon, toolNature } : row);
-      persistAndSync("categories");
+      if (!(await persistAndSync("categories"))) return;
       render();
       toast("아이콘과 공기구 기준을 저장했습니다.");
     }
@@ -10725,7 +10846,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function saveCategory(id) {
+    async function saveCategory(id) {
       if (!requireAdminWrite()) return;
       const cat = categoryById(id);
       if (!cat) return;
@@ -10744,7 +10865,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         toolNature,
       } : row);
       state.editCategoryId = null;
-      persistAndSync("categories");
+      if (!(await persistAndSync("categories"))) return;
       render();
       toast("작업 유형 설정을 수정했습니다.");
     }
@@ -10761,7 +10882,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function saveCategoryTools(id) {
+    async function saveCategoryTools(id) {
       if (!requireAdminWrite()) return;
       const cat = categoryById(id);
       if (!cat) return;
@@ -10773,7 +10894,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       syncCategoryToolMetaItem(id, categoryById(id)?.toolIds || []);
       clearCategoryToolDraft(id);
       state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
-      persistAndSync(["categories", "items"]);
+      if (!(await persistAndSync(["categories", "items"]))) return;
       render();
       toast(`${cat.label} 공기구 지정을 저장했습니다.`);
     }
@@ -10783,23 +10904,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const cat = categoryById(id);
       if (!cat) return;
       if (!confirm(`${cat.label} 작업 유형을 삭제할까요? 기존 점검 이력은 유지됩니다.`)) return;
-      const sectionIds = state.sections.filter((row) => row.categoryId === id).map((row) => row.id);
-      const itemIds = state.items.filter((row) => row.categoryId === id).map((row) => row.id);
+      if (isSyncConfigured()) {
+        try {
+          await invokeAdminMutation("deleteCategoryCascade", { categoryId: id });
+          setSyncStatus("온라인", "online");
+        } catch (error) {
+          console.error(error);
+          setSyncStatus("동기화 오류", "error");
+          toast("작업 유형 서버 삭제에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+          return;
+        }
+      }
       state.categories = state.categories.filter((row) => row.id !== id);
       state.sections = state.sections.filter((row) => row.categoryId !== id);
       state.items = state.items.filter((row) => row.categoryId !== id);
       if (state.manageCategoryId === id) state.manageCategoryId = null;
       persist();
-      if (isSyncConfigured()) {
-        await deleteRemoteRows("items", itemIds);
-        await deleteRemoteRows("sections", sectionIds);
-        await deleteRemoteRows("categories", [id]);
-      }
       render();
       toast("작업 유형을 삭제했습니다.");
     }
 
-    function addSection() {
+    async function addSection() {
       if (!requireAdminWrite()) return;
       const title = $("newSectionTitle").value.trim();
       if (!title) return toast("섹션명을 입력하세요.");
@@ -10810,7 +10935,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         title,
         order: sectionsFor(state.manageCategoryId).length + 1,
       });
-      persistAndSync("sections");
+      if (!(await persistAndSync("sections"))) return;
       render();
     }
 
@@ -10821,7 +10946,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function saveSection(id) {
+    async function saveSection(id) {
       if (!requireAdminWrite()) return;
       const section = state.sections.find((row) => row.id === id);
       if (!section) return;
@@ -10831,7 +10956,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (duplicate) return toast("같은 이름의 섹션이 이미 있습니다.");
       state.sections = state.sections.map((row) => row.id === id ? { ...row, title } : row);
       state.editSectionId = null;
-      persistAndSync("sections");
+      if (!(await persistAndSync("sections"))) return;
       render();
       toast("섹션명을 수정했습니다.");
     }
@@ -10842,16 +10967,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!section) return;
       const count = state.items.filter((row) => row.sectionId === id && row.active !== false).length;
       if (!confirm(`${section.title} 섹션과 항목 ${count}개를 삭제할까요?`)) return;
+      if (isSyncConfigured()) {
+        try {
+          await invokeAdminMutation("deleteSectionCascade", { sectionId: id });
+          setSyncStatus("온라인", "online");
+        } catch (error) {
+          console.error(error);
+          setSyncStatus("동기화 오류", "error");
+          toast("섹션 서버 삭제에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+          return;
+        }
+      }
       state.sections = state.sections.filter((row) => row.id !== id);
       state.items = state.items.map((row) => row.sectionId === id ? { ...row, active: false } : row);
-      persistAndSync("items");
-      if (isSyncConfigured()) {
-        await deleteRemoteRows("sections", [id]);
-      }
+      persist();
       render();
     }
 
-    function addChecklistItem(sectionId) {
+    async function addChecklistItem(sectionId) {
       if (!requireAdminWrite()) return;
       const textNode = $(`itemText_${sectionId}`);
       const riskNode = $(`itemRisk_${sectionId}`);
@@ -10875,11 +11008,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         visibilityCondition: normalizeVisibilityCondition(visibilityNode?.value),
         order: activeItems(section.categoryId).filter((row) => row.sectionId === sectionId).length + 1,
       });
-      persistAndSync("items");
+      if (!(await persistAndSync("items"))) return;
       render();
     }
 
-    function saveChecklistItem(id) {
+    async function saveChecklistItem(id) {
       if (!requireAdminWrite()) return;
       const text = $(`editItemText_${id}`).value.trim();
       const risk = $(`editItemRisk_${id}`).value;
@@ -10895,22 +11028,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         toolIds,
         visibilityCondition,
       } : row);
-      persistAndSync("items");
+      if (!(await persistAndSync("items"))) return;
       render();
       toast("점검 항목을 수정했습니다.");
     }
 
-    function deleteChecklistItem(id) {
+    async function deleteChecklistItem(id) {
       if (!requireAdminWrite()) return;
       const row = state.items.find((itemRow) => itemRow.id === id);
       if (!row) return;
       if (!confirm("이 점검 항목을 삭제할까요? 기존 점검 이력은 유지됩니다.")) return;
       state.items = state.items.map((itemRow) => itemRow.id === id ? { ...itemRow, active: false } : itemRow);
-      persistAndSync("items");
+      if (!(await persistAndSync("items"))) return;
       render();
     }
 
-    function addTool() {
+    async function addTool() {
       if (!requireAdminWrite()) return;
       const input = $("newToolName");
       const nature = normalizeToolNature($("newToolNature")?.value);
@@ -10926,12 +11059,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       input.value = "";
       state.toolAddOpen = false;
-      persistAndSync("tools");
+      if (!(await persistAndSync("tools"))) return;
       render();
       toast("공기구/준비물을 추가했습니다.");
     }
 
-    function saveTool(id) {
+    async function saveTool(id) {
       if (!requireAdminWrite()) return;
       const input = $(`toolName_${id}`);
       const name = input?.value.trim() || "";
@@ -10939,12 +11072,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!name) return toast("공기구/준비물 이름을 입력하세요.");
       state.tools = state.tools.map((row) => row.id === id ? { ...row, name, nature } : row);
       state.editToolId = null;
-      persistAndSync("tools");
+      if (!(await persistAndSync("tools"))) return;
       render();
       toast("공기구/준비물을 수정했습니다.");
     }
 
-    function deleteTool(id) {
+    async function deleteTool(id) {
       if (!requireAdminWrite()) return;
       const tool = toolById(id);
       if (!tool) return;
@@ -10954,15 +11087,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.categories = state.categories.map((row) => ({ ...row, toolIds: sanitizeToolIds(row.toolIds).filter((toolId) => toolId !== id) }));
       state.draft.selectedToolIds = sanitizeToolIds(state.draft.selectedToolIds).filter((toolId) => toolId !== id);
       if (state.editToolId === id) state.editToolId = null;
-      persistAndSync(["tools", "items", "categories"]);
+      if (!(await persistAndSync(["tools", "items", "categories"]))) return;
       render();
       toast("공기구/준비물을 삭제했습니다.");
     }
 
-    function toggleRequireToolCheck(categoryId) {
+    async function toggleRequireToolCheck(categoryId) {
       if (!requireAdminWrite()) return;
       state.categories = state.categories.map((row) => row.id === categoryId ? { ...row, requireToolCheck: row.requireToolCheck === false } : row);
-      persistAndSync("categories");
+      if (!(await persistAndSync("categories"))) return;
       render();
     }
 
@@ -10973,7 +11106,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!label) return toast("픽토그램 이름을 입력하세요.");
       if (!file) return toast("이미지 파일을 선택하세요.");
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         state.pictograms.push({
           id: uid("pictogram"),
           label,
@@ -10984,7 +11117,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         });
         $("newPictogramLabel").value = "";
         $("newPictogramFile").value = "";
-        persistAndSync("pictograms");
+        if (!(await persistAndSync("pictograms"))) return;
         render();
         toast("사용자 지정 픽토그램을 추가했습니다.");
       };
@@ -10992,17 +11125,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       reader.readAsDataURL(file);
     }
 
-    function savePictogram(id) {
+    async function savePictogram(id) {
       if (!requireAdminWrite()) return;
       const label = $(`pictogramLabel_${id}`)?.value.trim() || "";
       if (!label) return toast("픽토그램 이름을 입력하세요.");
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, label } : row);
-      persistAndSync("pictograms");
+      if (!(await persistAndSync("pictograms"))) return;
       render();
       toast("픽토그램 이름을 수정했습니다.");
     }
 
-    function deletePictogram(id) {
+    async function deletePictogram(id) {
       if (!requireAdminWrite()) return;
       const pictogram = state.pictograms.find((row) => row.id === id);
       if (!pictogram || pictogram.source !== "custom") return toast("기본 픽토그램은 삭제할 수 없습니다.");
@@ -11011,7 +11144,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const affected = state.categories.some((row) => row.icon === id);
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, deleted: true } : row);
       state.categories = state.categories.map((row) => row.icon === id ? { ...row, icon: fallback } : row);
-      persistAndSync(["pictograms", "categories"]);
+      if (!(await persistAndSync(["pictograms", "categories"]))) return;
       render();
       toast(affected ? "사용 중인 작업 유형은 기본 픽토그램으로 되돌렸습니다." : "픽토그램을 삭제했습니다.");
     }
@@ -11182,24 +11315,56 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function deleteUnsafePhotos(id) {
-      const client = supabaseClient();
       const photos = state.issuePhotos.filter((row) => row.targetType === "unsafe_issue" && row.targetId === id);
-      if (!client || !photos.length) return;
-      const paths = photos.map((photo) => photo.storagePath).filter(Boolean);
-      if (paths.length) {
-        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).remove(paths);
-        if (error) {
-          console.error(error);
-          toast("사진 삭제에 실패했습니다. Storage 정책을 확인하세요.");
-        }
+      if (!photos.length) return true;
+      try {
+        await invokeAdminMutation("deleteIssuePhotos", {
+          ids: photos.map((photo) => photo.id),
+          targetType: "unsafe_issue",
+          targetIds: [id],
+        });
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("사진 삭제에 실패했습니다. 관리자 권한과 Storage 정책을 확인하세요.");
+        return false;
       }
-      await deleteRemoteRows("issuePhotos", photos.map((photo) => photo.id));
     }
 
-    async function persistAndSync(keys = null) {
+    async function syncAdminKeysNow(keys) {
+      const client = supabaseClient();
+      const targetKeys = syncableKeys(keys);
+      if (!client || !targetKeys.length) return false;
+      setSyncStatus("동기화 중", "pending");
+      try {
+        for (const key of targetKeys) {
+          const config = remoteConfigByKey(key);
+          const rows = Array.isArray(state[key]) ? state[key] : [];
+          await upsertTable(client, config, rows);
+        }
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("서버 저장에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+        return false;
+      }
+    }
+
+    async function persistAndSync(keys = null, options = {}) {
+      const adminKeys = syncableKeys(keys).some((key) => ADMIN_REMOTE_KEYS.has(key));
+      if (adminKeys && isSyncConfigured()) {
+        if (!(await syncAdminKeysNow(keys))) return false;
+        persist();
+        return true;
+      }
       persist();
       if (!isSyncConfigured()) return true;
       enqueueSync(keys);
+      if (options.waitForSync || adminKeys) return flushPendingSyncQueue();
       flushPendingSyncQueue();
       return true;
     }
@@ -11345,11 +11510,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         body: {
           action,
           ...payload,
-          adminAuth: adminMutationAuthPayload(),
+          adminSession: adminMutationAuthPayload(),
         },
       });
-      if (error) throw error;
-      if (data && data.error) throw new Error(data.error);
+      if (error || data?.error) {
+        const message = error?.message || data.error;
+        if (/admin_session_|403|jwt/i.test(String(message || ""))) {
+          clearAdminSessionState();
+          setAdminMode(false);
+        }
+        throw new Error(message);
+      }
       return data || { ok: true };
     }
 
@@ -11563,9 +11734,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
+    async function upsertAdminRows(key, rows) {
+      const config = remoteConfigByKey(key);
+      const cleanRows = (Array.isArray(rows) ? rows : [rows]).filter((row) => row && row.id);
+      if (!config || !cleanRows.length) return false;
+      try {
+        const payload = cleanRows.map(config.toDb);
+        await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("서버 저장에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+        return false;
+      }
+    }
+
     async function deleteRemoteShips(ids) {
       const client = supabaseClient();
-      if (!client || !ids.length) return false;
+      if (!ids.length) return true;
+      if (!client) return false;
       try {
         await invokeAdminMutation("deleteRows", { key: "ships", ids });
         setSyncStatus("온라인", "online");
@@ -11581,9 +11770,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     async function deleteRemoteRows(key, ids) {
       const client = supabaseClient();
       const config = remoteConfigByKey(key);
-      if (!client || !config || !ids.length) return false;
+      if (!ids.length) return true;
+      if (!client || !config) return false;
       try {
-        if (ADMIN_REMOTE_KEYS.has(config.key)) {
+        if (ADMIN_REMOTE_KEYS.has(config.key) || PUBLIC_INSERT_ONLY_REMOTE_KEYS.has(config.key)) {
+          if (!canAttemptServerAdminWrite()) throw new Error("admin_session_required");
           await invokeAdminMutation("deleteRows", { key: config.key, ids });
           setSyncStatus("온라인", "online");
           return true;
@@ -11607,6 +11798,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const payload = targetRows.map(config.toDb);
       if (ADMIN_REMOTE_KEYS.has(config.key)) {
         await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        return;
+      }
+      if (PUBLIC_INSERT_ONLY_REMOTE_KEYS.has(config.key)) {
+        const { error } = await client.from(config.table).upsert(payload, { onConflict: "id", ignoreDuplicates: true });
+        if (error) throw error;
         return;
       }
       let { error } = await client.from(config.table).upsert(payload, { onConflict: "id" });

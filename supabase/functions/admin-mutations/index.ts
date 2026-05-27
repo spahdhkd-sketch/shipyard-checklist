@@ -9,10 +9,24 @@ const corsHeaders = {
 
 const PRIVILEGED_POSITIONS = new Set(["대표", "관리", "총무"]);
 const PRIVILEGED_TEAMS = new Set(["관리", "총무"]);
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const ATTEMPT_LOCK_MS = 15 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 5;
+const encoder = new TextEncoder();
 
 type TableConfig = {
   table: string;
   columns: Set<string>;
+};
+
+type TokenPayload = {
+  v: 1;
+  sid: string;
+  workerId: string;
+  nonce: string;
+  iat: number;
+  exp: number;
 };
 
 const ADMIN_TABLES = new Map<string, TableConfig>([
@@ -102,6 +116,53 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "sort_order",
     ]),
   }],
+  ["unsafeIssues", {
+    table: "unsafe_issues",
+    columns: new Set([
+      "id",
+      "ship_no",
+      "content",
+      "worker_id",
+      "worker_name_snapshot",
+      "worker_team_snapshot",
+      "status",
+      "admin_memo",
+      "created_at",
+      "updated_at",
+      "completed_at",
+      "status_history",
+    ]),
+  }],
+  ["missingMaterials", {
+    table: "missing_materials",
+    columns: new Set([
+      "id",
+      "ship_no",
+      "material_name",
+      "content",
+      "worker_id",
+      "worker_name_snapshot",
+      "worker_team_snapshot",
+      "status",
+      "admin_memo",
+      "created_at",
+      "updated_at",
+      "completed_at",
+      "status_history",
+    ]),
+  }],
+  ["issuePhotos", {
+    table: "issue_photos",
+    columns: new Set([
+      "id",
+      "target_type",
+      "target_id",
+      "storage_bucket",
+      "storage_path",
+      "sort_order",
+      "created_at",
+    ]),
+  }],
 ]);
 
 const supabase = createClient(
@@ -121,6 +182,7 @@ function jsonResponse(body: unknown, status = 200) {
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
     },
   });
 }
@@ -158,13 +220,94 @@ function cleanIds(value: unknown) {
     : [];
 }
 
-async function verifiedAdminWorker(payload: Record<string, unknown>) {
-  const auth = rowObject(payload.adminAuth) || {};
-  const workerId = cleanText(auth.workerId, 120);
-  const employeeNo = normalizeEmployeeNo(auth.employeeNo);
-  if (!workerId || !employeeNo) {
-    return { error: jsonResponse({ error: "admin_worker_required" }, 403) };
+function parseTime(value: unknown) {
+  const time = Date.parse(String(value || ""));
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isPrivilegedWorker(worker: Record<string, unknown>) {
+  const position = cleanText(worker.position, 80);
+  const team = cleanText(worker.team, 80);
+  return PRIVILEGED_POSITIONS.has(position) || PRIVILEGED_TEAMS.has(team);
+}
+
+function base64UrlEncode(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecode(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function randomId(prefix: string) {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return `${prefix}_${base64UrlEncode(bytes)}`;
+}
+
+function sessionSecret() {
+  return Deno.env.get("ADMIN_SESSION_SECRET")
+    || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+    || "";
+}
+
+async function hmacSignature(value: string) {
+  const secret = sessionSecret();
+  if (!secret) throw new Error("missing_session_secret");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
+async function sha256(value: string) {
+  const hash = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+function timingSafeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
+  let result = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    result |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
+  return result === 0;
+}
+
+async function signToken(payload: TokenPayload) {
+  const encodedPayload = base64UrlEncode(encoder.encode(JSON.stringify(payload)));
+  const signature = await hmacSignature(encodedPayload);
+  return `v1.${encodedPayload}.${signature}`;
+}
+
+async function readToken(token: string) {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "v1") return null;
+  const expected = await hmacSignature(parts[1]);
+  if (!timingSafeEqual(expected, parts[2])) return null;
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1]))) as TokenPayload;
+    if (payload.v !== 1 || !payload.sid || !payload.workerId || !payload.exp) return null;
+    if (payload.exp <= Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: string) {
+  if (!workerId || !employeeNo) return { error: jsonResponse({ error: "admin_worker_required" }, 403) };
 
   const { data: worker, error } = await supabase
     .from("workers")
@@ -173,18 +316,191 @@ async function verifiedAdminWorker(payload: Record<string, unknown>) {
     .eq("active", true)
     .maybeSingle();
 
-  if (error) return { error: jsonResponse({ error: error.message }, 500) };
+  if (error) {
+    console.error("admin worker lookup failed", error);
+    return { error: jsonResponse({ error: "admin_lookup_failed" }, 500) };
+  }
   if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
     return { error: jsonResponse({ error: "admin_verification_failed" }, 403) };
   }
-
-  const position = cleanText(worker.position, 80);
-  const team = cleanText(worker.team, 80);
-  if (!PRIVILEGED_POSITIONS.has(position) && !PRIVILEGED_TEAMS.has(team)) {
+  if (!isPrivilegedWorker(worker as Record<string, unknown>)) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
 
-  return { worker };
+  return { worker: worker as Record<string, unknown> };
+}
+
+async function readAttempt(bucketKey: string) {
+  const { data, error } = await supabase
+    .from("admin_mutation_attempts")
+    .select("bucket_key,worker_id,fail_count,window_started_at,locked_until")
+    .eq("bucket_key", bucketKey)
+    .maybeSingle();
+  if (error) {
+    console.error("admin attempt lookup failed", error);
+    return { error: jsonResponse({ error: "admin_attempt_lookup_failed" }, 500) };
+  }
+  return { attempt: data as Record<string, unknown> | null };
+}
+
+async function assertAttemptAllowed(bucketKey: string) {
+  const result = await readAttempt(bucketKey);
+  if (result.error) return result;
+  const lockedUntil = parseTime(result.attempt?.locked_until);
+  if (lockedUntil && lockedUntil > Date.now()) {
+    return { error: jsonResponse({ error: "admin_session_rate_limited" }, 429), attempt: result.attempt };
+  }
+  return result;
+}
+
+async function recordFailedAttempt(bucketKey: string, workerId: string, previous?: Record<string, unknown> | null) {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const previousWindowStarted = parseTime(previous?.window_started_at);
+  const inWindow = previousWindowStarted && now - previousWindowStarted < ATTEMPT_WINDOW_MS;
+  const failCount = (inWindow ? Number(previous?.fail_count || 0) : 0) + 1;
+  const { error } = await supabase
+    .from("admin_mutation_attempts")
+    .upsert({
+      bucket_key: bucketKey,
+      worker_id: workerId,
+      fail_count: failCount,
+      window_started_at: inWindow ? previous?.window_started_at : nowIso,
+      locked_until: failCount >= MAX_FAILED_ATTEMPTS ? new Date(now + ATTEMPT_LOCK_MS).toISOString() : null,
+      updated_at: nowIso,
+    }, { onConflict: "bucket_key" });
+  if (error) console.error("admin failed attempt write failed", error);
+}
+
+async function clearAttempts(bucketKey: string) {
+  const { error } = await supabase
+    .from("admin_mutation_attempts")
+    .delete()
+    .eq("bucket_key", bucketKey);
+  if (error) console.error("admin attempt cleanup failed", error);
+}
+
+async function createSession(payload: Record<string, unknown>) {
+  const workerId = cleanText(payload.workerId, 120);
+  const employeeNo = normalizeEmployeeNo(payload.employeeNo);
+  const bucketKey = `worker:${workerId}`;
+  const attempt = await assertAttemptAllowed(bucketKey);
+  if (attempt.error) return attempt.error;
+
+  const verification = await verifyPrivilegedWorkerCredential(workerId, employeeNo);
+  if (verification.error) {
+    if (workerId) await recordFailedAttempt(bucketKey, workerId, attempt.attempt);
+    return verification.error;
+  }
+
+  await clearAttempts(bucketKey);
+  const now = Date.now();
+  const expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
+  const sessionId = randomId("adm");
+  const token = await signToken({
+    v: 1,
+    sid: sessionId,
+    workerId,
+    nonce: randomId("nonce"),
+    iat: now,
+    exp: now + SESSION_TTL_MS,
+  });
+  const tokenHash = await sha256(token);
+  const { error } = await supabase
+    .from("admin_mutation_sessions")
+    .insert({
+      id: sessionId,
+      worker_id: workerId,
+      token_hash: tokenHash,
+      created_at: new Date(now).toISOString(),
+      expires_at: expiresAt,
+    });
+
+  if (error) {
+    console.error("admin session insert failed", error);
+    return jsonResponse({ error: "admin_session_create_failed" }, 500);
+  }
+
+  return jsonResponse({
+    ok: true,
+    session: {
+      token,
+      workerId,
+      expiresAt,
+    },
+  });
+}
+
+async function verifyAdminSession(payload: Record<string, unknown>) {
+  const session = rowObject(payload.adminSession) || {};
+  const token = cleanText(session.token, 4096);
+  if (!token) return { error: jsonResponse({ error: "admin_session_required" }, 403) };
+
+  let tokenPayload: TokenPayload | null = null;
+  try {
+    tokenPayload = await readToken(token);
+  } catch (error) {
+    console.error("admin token verification failed", error);
+  }
+  if (!tokenPayload) return { error: jsonResponse({ error: "admin_session_invalid" }, 403) };
+
+  const tokenHash = await sha256(token);
+  const { data: storedSession, error: sessionError } = await supabase
+    .from("admin_mutation_sessions")
+    .select("id,worker_id,expires_at,revoked_at")
+    .eq("id", tokenPayload.sid)
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.error("admin session lookup failed", sessionError);
+    return { error: jsonResponse({ error: "admin_session_lookup_failed" }, 500) };
+  }
+  if (
+    !storedSession
+    || storedSession.worker_id !== tokenPayload.workerId
+    || parseTime(storedSession.expires_at) <= Date.now()
+    || storedSession.revoked_at
+  ) {
+    return { error: jsonResponse({ error: "admin_session_invalid" }, 403) };
+  }
+
+  const { data: worker, error: workerError } = await supabase
+    .from("workers")
+    .select("id,name,team,position,active")
+    .eq("id", tokenPayload.workerId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (workerError) {
+    console.error("admin session worker lookup failed", workerError);
+    return { error: jsonResponse({ error: "admin_lookup_failed" }, 500) };
+  }
+  if (!worker || !isPrivilegedWorker(worker as Record<string, unknown>)) {
+    return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
+  }
+
+  const { error: updateError } = await supabase
+    .from("admin_mutation_sessions")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", tokenPayload.sid);
+  if (updateError) console.error("admin session touch failed", updateError);
+
+  return { worker: worker as Record<string, unknown>, sessionId: tokenPayload.sid };
+}
+
+async function revokeSession(payload: Record<string, unknown>) {
+  const authorization = await verifyAdminSession(payload);
+  if (authorization.error) return authorization.error;
+  const { error } = await supabase
+    .from("admin_mutation_sessions")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", authorization.sessionId);
+  if (error) {
+    console.error("admin session revoke failed", error);
+    return jsonResponse({ error: "admin_session_revoke_failed" }, 500);
+  }
+  return jsonResponse({ ok: true });
 }
 
 async function upsertRows(payload: Record<string, unknown>) {
@@ -195,11 +511,14 @@ async function upsertRows(payload: Record<string, unknown>) {
     : [];
   if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const authorization = await verifiedAdminWorker(payload);
+  const authorization = await verifyAdminSession(payload);
   if (authorization.error) return authorization.error;
 
   const { error } = await supabase.from(config.table).upsert(rows, { onConflict: "id" });
-  if (error) return jsonResponse({ error: error.message }, 500);
+  if (error) {
+    console.error("admin upsert failed", error);
+    return jsonResponse({ error: "admin_upsert_failed" }, 500);
+  }
   return jsonResponse({ ok: true, mutated: rows.length });
 }
 
@@ -209,12 +528,99 @@ async function deleteRows(payload: Record<string, unknown>) {
   const ids = cleanIds(payload.ids);
   if (!ids.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const authorization = await verifiedAdminWorker(payload);
+  const authorization = await verifyAdminSession(payload);
   if (authorization.error) return authorization.error;
 
   const { error } = await supabase.from(config.table).delete().in("id", ids);
-  if (error) return jsonResponse({ error: error.message }, 500);
+  if (error) {
+    console.error("admin delete failed", error);
+    return jsonResponse({ error: "admin_delete_failed" }, 500);
+  }
   return jsonResponse({ ok: true, mutated: ids.length });
+}
+
+async function deleteCategoryCascade(payload: Record<string, unknown>) {
+  const categoryId = cleanText(payload.categoryId, 120);
+  if (!categoryId) return jsonResponse({ error: "category_required" }, 400);
+  const authorization = await verifyAdminSession(payload);
+  if (authorization.error) return authorization.error;
+
+  const { data, error } = await supabase.rpc("admin_delete_category_cascade", {
+    p_category_id: categoryId,
+  });
+  if (error) {
+    console.error("admin category cascade delete failed", error);
+    return jsonResponse({ error: "admin_category_delete_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, result: data || null });
+}
+
+async function deleteSectionCascade(payload: Record<string, unknown>) {
+  const sectionId = cleanText(payload.sectionId, 120);
+  if (!sectionId) return jsonResponse({ error: "section_required" }, 400);
+  const authorization = await verifyAdminSession(payload);
+  if (authorization.error) return authorization.error;
+
+  const { data, error } = await supabase.rpc("admin_delete_section_cascade", {
+    p_section_id: sectionId,
+  });
+  if (error) {
+    console.error("admin section cascade delete failed", error);
+    return jsonResponse({ error: "admin_section_delete_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, result: data || null });
+}
+
+async function deleteIssuePhotos(payload: Record<string, unknown>) {
+  const authorization = await verifyAdminSession(payload);
+  if (authorization.error) return authorization.error;
+
+  const ids = cleanIds(payload.ids);
+  const targetIds = cleanIds(payload.targetIds);
+  const targetType = cleanText(payload.targetType || "unsafe_issue", 80);
+  if (!ids.length && !targetIds.length) return jsonResponse({ ok: true, mutated: 0 });
+
+  let query = supabase
+    .from("issue_photos")
+    .select("id,target_type,target_id,storage_bucket,storage_path");
+  if (ids.length) query = query.in("id", ids);
+  if (targetIds.length) query = query.eq("target_type", targetType).in("target_id", targetIds);
+
+  const { data: photos, error: selectError } = await query;
+  if (selectError) {
+    console.error("admin photo lookup failed", selectError);
+    return jsonResponse({ error: "admin_photo_lookup_failed" }, 500);
+  }
+  const rows = (photos || []) as Record<string, unknown>[];
+  if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
+
+  const pathsByBucket = new Map<string, string[]>();
+  rows.forEach((row) => {
+    const bucket = cleanText(row.storage_bucket || "issue-photos", 120);
+    const path = cleanText(row.storage_path, 500);
+    if (!path) return;
+    pathsByBucket.set(bucket, [...(pathsByBucket.get(bucket) || []), path]);
+  });
+
+  for (const [bucket, paths] of pathsByBucket.entries()) {
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+    if (error) {
+      console.error("admin photo storage delete failed", error);
+      return jsonResponse({ error: "admin_photo_storage_delete_failed" }, 500);
+    }
+  }
+
+  const rowIds = rows.map((row) => cleanText(row.id, 120)).filter(Boolean);
+  const { error: deleteError } = await supabase
+    .from("issue_photos")
+    .delete()
+    .in("id", rowIds);
+  if (deleteError) {
+    console.error("admin photo metadata delete failed", deleteError);
+    return jsonResponse({ error: "admin_photo_delete_failed" }, 500);
+  }
+
+  return jsonResponse({ ok: true, mutated: rowIds.length });
 }
 
 Deno.serve(async (req) => {
@@ -229,8 +635,13 @@ Deno.serve(async (req) => {
   }
 
   const action = cleanText(payload.action, 80);
+  if (action === "createSession") return createSession(payload);
+  if (action === "revokeSession") return revokeSession(payload);
   if (action === "upsertRows") return upsertRows(payload);
   if (action === "deleteRows") return deleteRows(payload);
+  if (action === "deleteCategoryCascade") return deleteCategoryCascade(payload);
+  if (action === "deleteSectionCascade") return deleteSectionCascade(payload);
+  if (action === "deleteIssuePhotos") return deleteIssuePhotos(payload);
   if (action === "ping") return jsonResponse({ ok: true });
   return jsonResponse({ error: "unknown_action" }, 400);
 });

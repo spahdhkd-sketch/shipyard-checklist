@@ -18,15 +18,22 @@ const migration = read("supabase/migrations/20260527090000_admin_mutation_bounda
 const pkg = JSON.parse(read("package.json"));
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");
-expectMatch(edge, /function verifiedAdminWorker/i, "admin-mutations must verify privileged worker server-side");
+expectMatch(edge, /function verifyAdminSession/i, "admin-mutations must verify short-lived admin sessions server-side");
+expectMatch(edge, /action === "createSession"/, "admin-mutations must issue server-side admin sessions");
 expectMatch(edge, /SUPABASE_SERVICE_ROLE_KEY/, "admin-mutations must use service role only inside the Edge Function");
 expectMatch(edge, /action === "upsertRows"/, "admin-mutations must support whitelisted upserts");
 expectMatch(edge, /action === "deleteRows"/, "admin-mutations must support whitelisted deletes");
+expectMatch(edge, /action === "deleteCategoryCascade"/, "admin-mutations must support category cascade deletes");
+expectMatch(edge, /action === "deleteSectionCascade"/, "admin-mutations must support section cascade deletes");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
+expectNoMatch(edge, /adminAuth/, "admin mutations must not accept replayable worker id plus employee number credentials");
 
 expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(/, "frontend must classify admin-managed remote keys");
+expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(/, "frontend must keep worker-submitted records insert-only through public REST");
 expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes must invoke the Edge Function");
-expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send worker-session auth for admin mutations");
+expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send server-issued admin session auth for admin mutations");
+expectMatch(app, /adminSessionToken/, "frontend must store an admin session token instead of replaying employee numbers");
+expectNoMatch(app, /adminAuth:\s*adminMutationAuthPayload\(\)/, "frontend must not send replayable adminAuth credentials on each mutation");
 expectNoMatch(app, /const ADMIN_PASSWORD\s*=/, "admin password must not remain as a hardcoded frontend constant after Phase 2A");
 expectNoMatch(app, /const RECORD_RESET_PASSWORD\s*=/, "record reset password must not remain as a hardcoded frontend constant after Phase 2A");
 
@@ -46,9 +53,35 @@ expectNoMatch(app, /const RECORD_RESET_PASSWORD\s*=/, "record reset password mus
   );
 });
 
+[
+  "unsafe_issues",
+  "missing_materials",
+  "issue_photos",
+].forEach((table) => {
+  expectMatch(
+    migration,
+    new RegExp(`revoke\\s+update,\\s*delete\\s+on\\s+table\\s+public\\.${table}\\s+from\\s+public,\\s*anon,\\s*authenticated`, "i"),
+    `${table} direct browser update/delete grants should be revoked`,
+  );
+  expectMatch(
+    migration,
+    new RegExp(`grant\\s+select,\\s*insert\\s+on\\s+table\\s+public\\.${table}\\s+to\\s+anon,\\s*authenticated`, "i"),
+    `${table} should remain public select/insert for field submissions`,
+  );
+});
+
+expectMatch(migration, /create table if not exists public\.admin_mutation_sessions/i, "migration should create admin mutation session ledger");
+expectMatch(migration, /create table if not exists public\.admin_mutation_attempts/i, "migration should create admin mutation rate-limit ledger");
+expectMatch(migration, /function public\.admin_delete_category_cascade/i, "migration should create transactional category cascade helper");
+expectMatch(migration, /function public\.admin_delete_section_cascade/i, "migration should create transactional section cascade helper");
+expectMatch(migration, /grant execute on function public\.admin_delete_category_cascade\(text\) to service_role/i, "category cascade helper should only be executable by service role");
+expectMatch(migration, /grant execute on function public\.admin_delete_section_cascade\(text\) to service_role/i, "section cascade helper should only be executable by service role");
 expectMatch(migration, /drop policy if exists "anon all safety categories"/i, "broad category policy should be dropped");
 expectMatch(migration, /drop policy if exists "workers public insert"/i, "workers public insert policy should be dropped");
 expectMatch(migration, /drop policy if exists "workers public update"/i, "workers public update policy should be dropped");
+expectMatch(migration, /drop policy if exists "public all unsafe issues"/i, "broad unsafe issue policy should be dropped");
+expectMatch(migration, /drop policy if exists "public all missing materials"/i, "broad missing material policy should be dropped");
+expectMatch(migration, /drop policy if exists "public all issue photos"/i, "broad issue photo policy should be dropped");
 expectMatch(pkg.scripts.verify, /tests\/admin-mutation-boundary-static\.test\.js/, "verify script should include admin mutation boundary static test");
 
 console.log("admin mutation boundary static tests passed");
