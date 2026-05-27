@@ -17,9 +17,14 @@ fs.mkdirSync(outDir, { recursive: true });
 const app = fs.readFileSync(appPath, "utf8");
 const supabaseUrl = app.match(/SUPABASE_URL\s*=\s*"([^"]+)"/)?.[1];
 const anonKey = app.match(/SUPABASE_ANON_KEY\s*=\s*"([^"]+)"/)?.[1];
+const manualCaptureEmployeeNo = String(process.env.MANUAL_CAPTURE_EMPLOYEE_NO || "").trim();
 
 if (!supabaseUrl || !anonKey) {
   throw new Error("Supabase config not found in app-v2.js");
+}
+
+if (!manualCaptureEmployeeNo) {
+  throw new Error("MANUAL_CAPTURE_EMPLOYEE_NO is required in the local shell for screenshot login");
 }
 
 async function rest(pathname) {
@@ -37,7 +42,7 @@ function storageKey(name) {
   return `shipyardSafetyV1.${name}`;
 }
 
-const workers = await rest("/rest/v1/workers?select=id,name,team,position,employee_no&order=name.asc");
+const workers = await rest("/rest/v1/workers_public?select=id,name,team,position&order=name.asc");
 const sender = workers.find((worker) => ["관리", "총무"].includes(String(worker.team || "").trim()))
   || workers.find((worker) => String(worker.position || "").trim() === "조장")
   || workers[0];
@@ -49,7 +54,7 @@ if (!sender) {
 const session = {
   workerId: sender.id,
   workerName: sender.name || "작업자",
-  employeeNo: String(sender.employee_no || "").trim(),
+  employeeNo: manualCaptureEmployeeNo,
   loggedInAt: Date.now(),
 };
 
