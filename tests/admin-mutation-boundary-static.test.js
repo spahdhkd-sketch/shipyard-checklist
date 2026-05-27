@@ -14,16 +14,16 @@ function expectNoMatch(source, pattern, message) {
 
 const app = read("assets/js/app-v2.js");
 const edge = read("supabase/functions/admin-mutations/index.ts");
-const migration = read("supabase/migrations/20260527090000_admin_mutation_boundary.sql");
-const lintCleanupMigration = read("supabase/migrations/20260527091500_admin_mutation_policy_lint_cleanup.sql");
-const inspectionBoundaryMigration = read("supabase/migrations/20260527093000_inspection_history_insert_only_boundary.sql");
-const workPrepBoundaryMigration = read("supabase/migrations/20260527100000_work_prep_records_rls_boundary.sql");
-const workPrepUpdateShapeMigration = read("supabase/migrations/20260527101000_work_prep_records_update_shape_policy.sql");
-const appStateBoundaryMigration = read("supabase/migrations/20260527102000_app_state_read_only_boundary.sql");
-const issueInsertShapeMigration = read("supabase/migrations/20260527103000_issue_records_insert_shape_policies.sql");
-const workerPushBoundaryMigration = read("supabase/migrations/20260527104000_worker_push_subscriptions_boundary.sql");
-const performanceIndexCleanupMigration = read("supabase/migrations/20260528090000_drop_redundant_unused_indexes.sql");
-const adminSessionFkIndexMigration = read("supabase/migrations/20260528091000_restore_admin_session_worker_fk_index.sql");
+const migration = read("supabase/migrations/20260527090832_admin_mutation_boundary.sql");
+const lintCleanupMigration = read("supabase/migrations/20260527091242_admin_mutation_policy_lint_cleanup.sql");
+const inspectionBoundaryMigration = read("supabase/migrations/20260527093146_inspection_history_insert_only_boundary.sql");
+const workPrepBoundaryMigration = read("supabase/migrations/20260527142709_work_prep_records_rls_boundary.sql");
+const workPrepUpdateShapeMigration = read("supabase/migrations/20260527142910_work_prep_records_update_shape_policy.sql");
+const appStateBoundaryMigration = read("supabase/migrations/20260527143351_app_state_read_only_boundary.sql");
+const issueInsertShapeMigration = read("supabase/migrations/20260527144011_issue_records_insert_shape_policies.sql");
+const workerPushBoundaryMigration = read("supabase/migrations/20260527144418_worker_push_subscriptions_boundary.sql");
+const performanceIndexCleanupMigration = read("supabase/migrations/20260527150339_drop_redundant_unused_indexes.sql");
+const adminSessionFkIndexMigration = read("supabase/migrations/20260527150501_restore_admin_session_worker_fk_index.sql");
 const pkg = JSON.parse(read("package.json"));
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");

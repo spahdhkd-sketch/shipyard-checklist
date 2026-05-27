@@ -15,7 +15,7 @@ function expectNoMatch(source, pattern, message) {
 const app = read("assets/js/app-v2.js");
 const migration = read("supabase/migrations/20260527064035_worker_public_read_path.sql");
 const deleteMigration = read("supabase/migrations/20260527071140_revoke_workers_delete.sql");
-const rpcBoundaryMigration = read("supabase/migrations/20260527144951_security_definer_rpc_boundary.sql");
+const rpcBoundaryMigration = read("supabase/migrations/20260527145253_security_definer_rpc_boundary.sql");
 const manualScreenshots = read("tools/capture-manual-screenshots.mjs");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
