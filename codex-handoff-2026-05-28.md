@@ -2,141 +2,143 @@
 
 ## Read First
 
-- Workspace used here: `C:\Users\User\GS_CHECKLIST\CODEX_VERSION\shipyard-checklist`
-- Branch: `main`
-- User will continue from another desktop's Codex. Start by reading this file, then verify current git status and remote deployment state.
-- Repository instructions require context-mode style work: avoid dumping raw command output; summarize via scripts/tools.
+- Continue from this repository: `https://github.com/spahdhkd-sketch/shipyard-checklist.git`
+- Current working branch: `codex/safety-pictograms-handoff-20260528`
+- Current release tag: `v0.9-20260528`
+- Production URL: `https://gs-safety-checklist.vercel.app`
+- Vercel project: `index-html`
+- Supabase project ref: `yuuroocvxvzgmsdeeiws`
+- Before doing new work, read this file, then run `git status --short --branch`.
 - Do not expose Supabase service role keys, employee numbers, session tokens, or other secrets.
-- Do not bump `APP_VERSION` unless the user explicitly asks.
+- Do not bump `APP_VERSION` unless the user explicitly asks for another deployment.
 
-## Current Objective Completed
-
-The last requested task was:
-
-> Change `safety_pictograms` so the app pulls metadata only, and move image `src` out to Storage or a separate lazy-load path.
-
-Implemented and deployed:
-
-- `safety_pictograms` frontend pull now uses metadata-only columns:
-  - `id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size`
-- `src` is no longer selected into frontend state by the normal remote pull path.
-- New custom pictogram uploads go through `admin-mutations` action `uploadPictogramImage`.
-- Custom pictogram bytes are stored in Supabase Storage bucket `safety-pictograms`.
-- Custom pictogram rendering uses the public lazy image function:
-  - `https://yuuroocvxvzgmsdeeiws.supabase.co/functions/v1/pictogram-image?id=<pictogramId>`
-- Browser roles can read pictogram metadata only; direct `src` select is revoked.
-
-## Supabase State
-
-- Project ref: `yuuroocvxvzgmsdeeiws`
-- Applied migrations:
-  - `20260528001000_safety_pictograms_storage_metadata.sql`
-  - `20260528002000_safety_pictograms_metadata_select_grants.sql`
-- Deployed Edge Functions:
-  - `admin-mutations`
-  - `pictogram-image` with `--no-verify-jwt`
-- Verification already done:
-  - `storage.buckets` has `safety-pictograms`
-  - `public.safety_pictograms` has `storage_bucket`, `storage_path`, `mime_type`, `file_size`
-  - anon REST metadata select returned 200
-  - anon REST `select=src` returned 401 permission error
-  - `pictogram-image?id=__codex_missing__` returned 404 without requiring JWT
-  - Supabase Security Advisor returned `lints: []`
-
-## Vercel State
-
-- Real production alias: `https://gs-safety-checklist.vercel.app`
-- Vercel project that must receive production deploys: `index-html`
-- Latest deployment created in this task:
-  - `https://index-html-23gdwz46a-spahdhkd-3161s-projects.vercel.app`
-- Alias was explicitly moved:
-  - `gs-safety-checklist.vercel.app` now points to `index-html-23gdwz46a-spahdhkd-3161s-projects.vercel.app`
-- Important: there is another Vercel project named `shipyard-checklist`. Do not assume it is the real production target. Production alias belongs to `index-html`.
-
-## Files Changed
-
-Tracked modifications:
-
-- `assets/js/app-v2.js`
-- `supabase/functions/admin-mutations/index.ts`
-- `tests/admin-mutation-boundary-static.test.js`
-- `tests/static-recovery.test.js`
-- `tests/worker-security-static.test.js`
-
-New files:
-
-- `supabase/functions/pictogram-image/index.ts`
-- `supabase/functions/pictogram-image/deno.json`
-- `supabase/migrations/20260528001000_safety_pictograms_storage_metadata.sql`
-- `supabase/migrations/20260528002000_safety_pictograms_metadata_select_grants.sql`
-
-Pre-existing/unrelated untracked files currently present:
-
-- `codex-handoff-2026-05-27.md`
-- `supabase-egress-trace-2026-05-28.md`
-
-## Verification Already Run
-
-All passed:
+## How To Resume On Another Desktop
 
 ```powershell
+git clone https://github.com/spahdhkd-sketch/shipyard-checklist.git
+cd shipyard-checklist
+git fetch origin --tags
+git checkout codex/safety-pictograms-handoff-20260528
+git pull
+Get-Content .\codex-handoff-2026-05-28.md
 npm.cmd run verify
-npm.cmd run harness
-npm.cmd run harness:live
 ```
 
-Expected warnings:
-
-- Dirty worktree warning
-- Deploy-relevant files differ from expected commit
-
-Those warnings are expected because changes are not committed/staged.
-
-## Suggested Start Tomorrow
-
-1. Read this handoff.
-2. Run a concise status check:
+If the user asks for the exact deployed release snapshot:
 
 ```powershell
-git status --short
+git checkout v0.9-20260528
+Get-Content .\codex-handoff-2026-05-28.md
 ```
 
-3. Re-run validation if needed:
+## Current Production Release
+
+- App version: `0.9-20260528`
+- Release tag: `v0.9-20260528`
+- Production deployment id: `dpl_AwXMLiHCgGBA5uEJQzFCvpC5mvBe`
+- Production deployment URL: `https://index-html-nof5fts49-spahdhkd-3161s-projects.vercel.app`
+- Production alias: `https://gs-safety-checklist.vercel.app`
+- Asset token: `20260528-egress-signature-1`
+- Service worker cache: `gs-safety-20260528-egress-signature-1`
+
+Verified after deployment:
+
+- Production `index.html` returns current asset token.
+- Production `assets/js/app-v2.js` contains `APP_VERSION = "0.9-20260528"`.
+- Production `sw.js` contains `gs-safety-20260528-egress-signature-1`.
+- `npm.cmd run verify` passed.
+- Vercel deployment status is `READY`.
+
+## Completed Work On 2026-05-28
+
+- Reduced Supabase egress:
+  - Narrowed frontend Supabase selects to explicit columns.
+  - Limited startup pulls for large tables.
+  - Stopped pulling inspection detail rows and issue photo rows on startup.
+  - Added lazy detail loaders for inspection items and issue photos.
+  - Removed automatic realtime/polling startup refresh loops.
+  - Added administrator/history "load more" behavior.
+- Reduced Storage image egress:
+  - Removed automatic unsafe issue thumbnails from list rows.
+  - Load issue photos only when detail is opened.
+  - Compress unsafe issue photos before upload.
+  - Upload issue photos with `cacheControl: "604800"`.
+- Fixed work-prep worker leakage:
+  - New work order registration no longer inherits selected workers/tools/id from the previous registration draft.
+- Fixed pledge signature clearing:
+  - The signature pad clear action now clears the current draft signature.
+  - Same-day reusable worker signature cache is preserved, so another work order can preload the existing signature.
+- Hardened pictogram and admin mutation boundaries:
+  - Removed legacy arbitrary pictogram `src` paths from admin mutation allowlist/redirect handling.
+- Added egress operation guide:
+  - `docs/ops/supabase-egress-checklist-2026-05-28.md`
+- Added static regression coverage:
+  - `tests/egress-optimization-static.test.js`
+  - Updated harness/static tests for the current release token and version.
+
+## Supabase Remote State
+
+The following Storage policy migration file was added:
+
+```txt
+supabase/migrations/20260528003000_egress_reduction_boundaries.sql
+```
+
+The user manually applied the functional SQL in Supabase SQL Editor on 2026-05-28.
+
+Important note:
+
+- The original `comment on policy ...` statement failed with `ERROR: 42501: must be owner of relation objects`.
+- The user removed only that comment statement and reran the rest successfully.
+- The comment is documentation-only and is not required for behavior.
+
+Applied policy intent:
+
+- Allow browser inserts only into `issue-photos` bucket paths matching `unsafe/%`.
+- Reject object names containing `..`.
+- Remove broad public update/delete policies for issue photos.
+- Keep photo deletion/update behind controlled app/admin paths.
+
+If reapplying manually, use this reduced SQL:
+
+```sql
+drop policy if exists "issue_photos_insert_public" on storage.objects;
+drop policy if exists "issue_photos_delete_public" on storage.objects;
+drop policy if exists "public update issue photos" on storage.objects;
+drop policy if exists "public delete issue photos" on storage.objects;
+
+create policy "issue_photos_insert_public"
+  on storage.objects
+  for insert
+  to anon, authenticated
+  with check (
+    bucket_id = 'issue-photos'
+    and name like 'unsafe/%'
+    and position('..' in name) = 0
+  );
+```
+
+## Files To Know
+
+- Main app runtime: `assets/js/app-v2.js`
+- Service worker: `sw.js`
+- Release record: `VERSION.md`
+- Vercel config: `vercel.json`
+- Egress guide: `docs/ops/supabase-egress-checklist-2026-05-28.md`
+- Storage policy migration: `supabase/migrations/20260528003000_egress_reduction_boundaries.sql`
+- Static egress tests: `tests/egress-optimization-static.test.js`
+- Quality harness: `tools/quality-harness.mjs`
+
+## Local Workspace Caveat
+
+The local workspace may contain an untracked `outputs/` folder from PowerPoint work. It was intentionally not committed and should not be included in app deployment commits unless the user explicitly asks.
+
+## Recommended Next Checks
 
 ```powershell
+git status --short --branch
 npm.cmd run verify
 npm.cmd run harness:live
 ```
 
-4. If the user wants this preserved, commit the current changes. Do not stage unrelated files unless the user asks.
-
-## Useful Checks
-
-Confirm production JS has metadata-only/lazy path:
-
-```powershell
-npm.cmd run harness:live
-```
-
-If manually probing production JS, expect:
-
-- Contains `selectColumns: "id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size"`
-- Contains `/functions/v1/pictogram-image`
-- Does not contain `src: String(reader.result || "")`
-- Does not map `src: row.src` in `safety_pictograms` `fromDb`
-
-Confirm Supabase advisor:
-
-- Security Advisor should be empty: `lints: []`
-
-Confirm REST grant boundary:
-
-- Metadata select on `safety_pictograms` should succeed.
-- `select=src` as anon should fail with permission error.
-
-## Caveats
-
-- Existing legacy `src` values may still exist in the database for old custom pictograms. They are no longer pulled by the frontend and are only used as a fallback by `pictogram-image` when no Storage path exists.
-- The new Storage upload path is only for new custom pictograms. A later cleanup/migration could backfill legacy `src` payloads into Storage, but that was not requested or done.
-- `pictogram-image` is public and intentionally has `--no-verify-jwt`, but it only serves active custom pictogram rows and returns 404 otherwise.
-- The local `.vercel` project link may not expose `projectName` in `project.json`, but deploy output showed it is deploying to `spahdhkd-3161s-projects/index-html`. Still verify before future production deploys.
+`npm.cmd run harness:live` may fail the "git branch is main" check while working on `codex/safety-pictograms-handoff-20260528`; that is expected for this handoff branch. Production asset/version checks should pass.
