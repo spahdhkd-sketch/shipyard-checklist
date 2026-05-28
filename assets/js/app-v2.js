@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "0.8-20260527";
+    const APP_VERSION = "0.9-20260528";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -64,12 +64,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
     const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
     const REMOTE_REACTIVE_PULL_DELAY_MS = 700;
+    const DEFAULT_REMOTE_LIST_LIMIT = 20;
+    const REMOTE_INCREMENTAL_LIMIT = 60;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
     const MAX_SYNC_ATTEMPTS = 5;
     const STORAGE_WARNING_KB = 4600;
     const STORAGE_COMPACT_KB = 3800;
     const PENDING_PHOTO_RETRY_MAX_BYTES = 240 * 1024;
     const PENDING_PHOTO_DATA_URL_MAX_CHARS = 360 * 1024;
+    const ISSUE_PHOTO_UPLOAD_MAX_SIDE = 1440;
+    const ISSUE_PHOTO_UPLOAD_QUALITY = 0.72;
     const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms";
     const PICTOGRAM_IMAGE_MAX_BYTES = 768 * 1024;
     const PICTOGRAM_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -270,6 +274,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_categories",
         key: "categories",
+        selectColumns: "id,label,icon,color,require_tool_check,tool_nature,tool_ids,sort_order",
         toDb: (row) => ({
           id: row.id,
           label: row.label,
@@ -294,12 +299,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_sections",
         key: "sections",
+        selectColumns: "id,category_id,title,sort_order",
         toDb: (row) => ({ id: row.id, category_id: row.categoryId, title: row.title, sort_order: row.order || 0 }),
         fromDb: (row) => ({ id: row.id, categoryId: row.category_id, title: row.title, order: row.sort_order || 0 }),
       },
       {
         table: "safety_items",
         key: "items",
+        selectColumns: "id,category_id,section_id,text,risk,required,active,tool_ids,visibility_condition,sort_order",
         toDb: (row) => ({
           id: row.id,
           category_id: row.categoryId,
@@ -328,6 +335,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_tools",
         key: "tools",
+        selectColumns: "id,category_id,name,nature,deleted,sort_order",
         toDb: (row) => ({
           id: row.id,
           category_id: row.categoryId || null,
@@ -377,6 +385,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_ships",
         key: "ships",
+        selectColumns: "id,no,type,note,process_stage,delivery_type,delivery_date,created_at,sort_order",
         toDb: (row) => ({
           id: row.id,
           no: row.no,
@@ -412,6 +421,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_inspections",
         key: "inspections",
+        selectColumns: "id,category_id,worker,ship_no,date,time,status,warnings,completion,tools,safety_pledge,work_prep_record_id,work_prep_worker_id,created_at",
+        orderBy: "created_at",
+        ascending: false,
+        limit: DEFAULT_REMOTE_LIST_LIMIT,
         toDb: (row) => ({
           id: row.id,
           category_id: row.categoryId,
@@ -446,8 +459,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }),
       },
       {
+        pullOnStartup: false,
         table: "safety_inspection_items",
         key: "inspectionItems",
+        selectColumns: "id,inspection_id,item_id,checked,risk,text,section_title",
         toDb: (row) => ({
           id: row.id,
           inspection_id: row.inspectionId,
@@ -471,6 +486,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         table: "workers",
         readTable: "workers_public",
         key: "workers",
+        selectColumns: "id,name,team,position,active,unsafe_push_target,created_at,updated_at",
         toDb: (row) => ({
           id: row.id,
           name: row.name,
@@ -495,6 +511,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "unsafe_issues",
         key: "unsafeIssues",
+        selectColumns: "id,ship_no,content,worker_id,worker_name_snapshot,worker_team_snapshot,status,admin_memo,created_at,updated_at,completed_at,status_history",
+        orderBy: "created_at",
+        ascending: false,
+        limit: DEFAULT_REMOTE_LIST_LIMIT,
         toDb: (row) => ({
           id: row.id,
           ship_no: row.shipNo,
@@ -527,6 +547,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "missing_materials",
         key: "missingMaterials",
+        selectColumns: "id,ship_no,material_name,content,worker_id,worker_name_snapshot,worker_team_snapshot,status,admin_memo,created_at,updated_at,completed_at,status_history",
+        orderBy: "created_at",
+        ascending: false,
+        limit: DEFAULT_REMOTE_LIST_LIMIT,
         toDb: (row) => ({
           id: row.id,
           ship_no: row.shipNo,
@@ -559,8 +583,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }),
       },
       {
+        pullOnStartup: false,
         table: "issue_photos",
         key: "issuePhotos",
+        selectColumns: "id,target_type,target_id,storage_bucket,storage_path,sort_order,created_at",
         toDb: (row) => ({
           id: row.id,
           target_type: row.targetType,
@@ -583,6 +609,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "work_prep_records",
         key: "workPrepRecords",
+        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at",
+        orderBy: "updated_at",
+        ascending: false,
+        limit: DEFAULT_REMOTE_LIST_LIMIT,
         toDb: (row) => ({
           id: row.id,
           work_date: row.workDate || "",
@@ -871,6 +901,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function applyRemoteTableRows(key, rows) {
+      const config = remoteConfigByKey(key);
+      if (config?.limit || config?.pullOnStartup === false) {
+        state[key] = mergeRecordArrays(state[key], rows);
+        return;
+      }
       if (REMOTE_AUTHORITATIVE_KEYS.has(key)) {
         state[key] = authoritativeRemoteRows(key, rows);
         return;
@@ -979,6 +1014,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         safetyPledge: "",
         pledgeChecks: {},
         pledgeSignature: "",
+        pledgeSignatureCleared: false,
         checks: {},
         selectedToolIds: [],
         toolPrepComplete: false,
@@ -1001,6 +1037,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         status: "preparing",
         ...overrides,
       };
+    }
+
+    function createFreshWorkPrepRegistrationDraft(previous = {}) {
+      return createWorkPrepDraft({
+        workDate: today(),
+        appearanceTime: previous.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME,
+        team: previous.team || "",
+        shipNo: "",
+        categoryId: "",
+        leaderWorkerId: "",
+        workerIds: [],
+        otherTeamWorkerIds: [],
+        toolIds: [],
+        status: "preparing",
+      });
     }
 
     function isSignatureImage(value) {
@@ -1319,9 +1370,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function preloadCachedPledgeSignature() {
       if (state.draft.pledgeSignature) return false;
+      if (state.draft.pledgeSignatureCleared) return false;
       const cached = cachedPledgeSignatureForWorker(state.draft.worker);
       if (!cached) return false;
       state.draft.pledgeSignature = cached;
+      state.draft.pledgeSignatureCleared = false;
       saveJson("draft", state.draft);
       return true;
     }
@@ -2328,6 +2381,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       unsafeSubmitting: false,
       pushTemplateEditorKind: "",
       pledgeTemplateEditing: false,
+      remoteLoadedInspectionItemIds: [],
+      remoteLoadedIssuePhotoTargetIds: [],
+      remoteListLimits: loadJson("remoteListLimits", {}),
     };
     let cachedSupabaseClient = null;
 
@@ -3098,6 +3154,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
       const saveDrawnSignature = () => {
         state.draft.pledgeSignature = canvas.toDataURL("image/png");
+        state.draft.pledgeSignatureCleared = false;
         savePledgeSignatureForWorker(state.draft.worker, state.draft.pledgeSignature);
         if (textInput) textInput.value = "";
         pad?.classList.add("has-signature");
@@ -3434,6 +3491,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (workerName && normalizedWorkerName(state.draft.worker) !== normalizedWorkerName(workerName)) {
         state.draft.worker = workerName;
         state.draft.pledgeSignature = "";
+        state.draft.pledgeSignatureCleared = false;
         draftChanged = true;
       }
       if (state.unsafeDraft.workerId !== worker.id) {
@@ -4238,19 +4296,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function openWorkPrepRegister() {
       if (!canOpenWorkPrepRegister()) return toast("작업 준비 등록은 관리/총무/조장만 사용할 수 있습니다.");
       const previous = state.workPrepDraft || {};
-      state.workPrepDraft = createWorkPrepDraft({
-        id: "",
-        workDate: today(),
-        appearanceTime: previous.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME,
-        team: previous.team || "",
-        shipNo: "",
-        categoryId: "",
-        leaderWorkerId: "",
-        workerIds: [],
-        otherTeamWorkerIds: [],
-        toolIds: [],
-        status: "preparing",
-      });
+      state.workPrepDraft = createFreshWorkPrepRegistrationDraft(previous);
       state.workPrepRegisterOpen = true;
       state.workPrepOtherWorkersOpen = false;
       state.workPrepAppearanceOpen = false;
@@ -4318,7 +4364,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function closeWorkPrepRegister() {
       state.workPrepRegisterOpen = false;
-      state.workPrepDraft = workPrepDraftWithDefaults();
+      state.workPrepDraft = createFreshWorkPrepRegistrationDraft();
       saveWorkPrepDraft();
       render();
       scrollScreenTop();
@@ -4431,7 +4477,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!draft.leaderWorkerId) return toast("조장을 선택하세요.");
       if (tools.length && !draft.toolIds.length) return toast("공기구/준비물을 1개 이상 선택하세요.");
       const saved = upsertWorkPrepRecord(draft);
-      state.workPrepDraft = createWorkPrepDraft({ ...draft, id: saved.id });
+      state.workPrepDraft = createFreshWorkPrepRegistrationDraft(draft);
       saveWorkPrepDraft();
       toast("작업지시서가 저장되었습니다.");
       state.workPrepRegisterOpen = false;
@@ -4863,7 +4909,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${isDeliveryScope
           ? (deliveryRows.length ? renderDeliveryCards(deliveryRows) : `<div class="empty">7일 이내 인도 예정 호선이 없습니다.</div>`)
           : (rows.length ? renderHistoryTable(rows) : `<div class="empty">조건에 맞는 점검 이력이 없습니다.</div>`)}
+        ${isDeliveryScope ? "" : renderHistoryLoadMore(rows)}
       </div>`;
+    }
+
+    function renderHistoryLoadMore(rows) {
+      const limit = remoteListLimit("inspections");
+      if (!isSyncConfigured() || state.historyScope !== "all" || state.historyShipNo || state.historyFilter !== "all") return "";
+      if (!Array.isArray(rows) || rows.length < limit) return "";
+      return `<div class="list-actions" style="margin-top:12px"><button class="btn-light" data-action="load-more-history" type="button">더 보기</button></div>`;
     }
 
     function renderHistoryPledgeStatus() {
@@ -7333,15 +7387,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderUnsafeRecordCard(row) {
-      const photo = unsafePhotosFor(row.id)[0];
-      const photoUrl = photo ? publicPhotoUrl(photo) : "";
       const photoCount = unsafePhotosFor(row.id).length;
       const pendingPhotoCount = pendingPhotoUploadsFor(row.id).length;
       const uploading = isUnsafePhotoUploading(row.id);
       return `<article class="record-card clickable-record" data-unsafe-record-detail="${esc(row.id)}" tabindex="0" role="button" aria-label="${esc(row.shipNo)} 불안전요소 상세 보기">
         <div class="record-card-main">
           <div class="record-card-headline">
-            ${photoUrl ? `<img class="record-thumb" src="${esc(photoUrl)}" alt="불안전요소 사진" />` : ""}
             <div>
               <strong>${esc(row.shipNo)}</strong>
               <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
@@ -8326,6 +8377,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function clearPledgeSignature() {
       state.draft.pledgeSignature = "";
+      state.draft.pledgeSignatureCleared = true;
       saveJson("draft", state.draft);
       render();
     }
@@ -8442,6 +8494,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "reset-unsafe-records": resetUnsafeIssueRecords,
         "reset-material-records": resetMissingMaterialRecords,
         "delete-selected-history": deleteSelectedHistory,
+        "load-more-history": loadMoreHistory,
         "retry-photo-upload": retryPendingPhotoUpload,
       };
       const handler = actions[action];
@@ -8979,17 +9032,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (kind === "materials") openMaterialDetail(id);
     }
 
-    function openUnsafeDetail(id) {
+    async function openUnsafeDetail(id) {
       if (!id) return;
       state.manageTab = "unsafe";
       saveJson("manageTab", state.manageTab);
+      let shouldLoadPhotos = false;
       if (state.view === "manage") {
         state.unsafeDetailId = state.unsafeDetailId === id ? "" : id;
+        shouldLoadPhotos = state.unsafeDetailId === id;
         renderPreservingScroll();
         pushRouteState();
       } else {
         state.unsafeDetailId = id;
+        shouldLoadPhotos = true;
         changeView("manage");
+      }
+      if (!shouldLoadPhotos) return;
+      try {
+        await loadIssuePhotosForDetail(id);
+        if (state.unsafeDetailId === id) renderPreservingScroll();
+      } catch (error) {
+        console.warn("issue photo detail load failed", error);
       }
     }
 
@@ -9082,7 +9145,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       changeView("manage");
     }
 
-    function openHistoryDetail(id) {
+    async function openHistoryDetail(id) {
       if (!id) return;
       state.historyDetailId = id;
       state.selectedHistoryIds = [];
@@ -9093,6 +9156,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } else {
         changeView("history");
       }
+      try {
+        await loadInspectionItemsForDetail(id);
+        if (state.historyDetailId === id) renderPreservingScroll();
+      } catch (error) {
+        console.warn("inspection item detail load failed", error);
+      }
     }
 
     document.addEventListener("input", (event) => {
@@ -9102,7 +9171,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (event.target.id === "worker") {
         const previousWorker = state.draft.worker;
         state.draft.worker = event.target.value;
-        if (normalizedWorkerName(previousWorker) !== normalizedWorkerName(state.draft.worker)) state.draft.pledgeSignature = "";
+        if (normalizedWorkerName(previousWorker) !== normalizedWorkerName(state.draft.worker)) {
+          state.draft.pledgeSignature = "";
+          state.draft.pledgeSignatureCleared = false;
+        }
         preloadCachedPledgeSignature();
         saveJson("draft", state.draft);
         refreshCheckSubmitControls();
@@ -9114,6 +9186,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (event.target.id === "pledgeSignatureText") {
         state.draft.pledgeSignature = event.target.value;
+        state.draft.pledgeSignatureCleared = !state.draft.pledgeSignature.trim();
         savePledgeSignatureForWorker(state.draft.worker, state.draft.pledgeSignature);
         document.querySelector("[data-signature-pad]")?.classList.remove("has-signature");
         const canvas = document.getElementById("pledgeSignaturePad");
@@ -11247,6 +11320,45 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function compressedPhotoName(file) {
+      const stem = String(file?.name || "photo")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^\w-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        || "photo";
+      return `${stem}.jpg`;
+    }
+
+    async function compressUnsafePhotoFile(file) {
+      if (!file || !/^image\/(jpeg|png|webp)$/i.test(photoMimeType(file))) return file;
+      const url = URL.createObjectURL(file);
+      try {
+        const image = await imageFromObjectUrl(url);
+        const width = image.naturalWidth || image.width || 0;
+        const height = image.naturalHeight || image.height || 0;
+        if (!width || !height) return file;
+        const scale = Math.min(1, ISSUE_PHOTO_UPLOAD_MAX_SIDE / Math.max(width, height));
+        if (scale >= 1 && Number(file.size || 0) <= 500 * 1024) return file;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) return file;
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", ISSUE_PHOTO_UPLOAD_QUALITY));
+        if (!blob || blob.size >= Number(file.size || 0)) return file;
+        return new File([blob], compressedPhotoName(file), {
+          type: "image/jpeg",
+          lastModified: file.lastModified || Date.now(),
+        });
+      } catch (error) {
+        console.warn("photo compression failed", error);
+        return file;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
     function fileToDataUrl(file) {
       return new Promise((resolve) => {
         if (!file) return resolve("");
@@ -11297,9 +11409,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!client) throw new Error("사진 업로드 서버 연결이 없습니다.");
       const uploaded = [];
       for (let index = 0; index < files.length; index += 1) {
-        const file = normalizedPhotoFile(files[index]);
+        const file = await compressUnsafePhotoFile(normalizedPhotoFile(files[index]));
         const storagePath = `unsafe/${issueId}/${uid("photoFile")}-${index + 1}.${photoExtension(file)}`;
-        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, { upsert: false, contentType: photoMimeType(file) });
+        const { error } = await client.storage.from(ISSUE_PHOTO_BUCKET).upload(storagePath, file, {
+          upsert: false,
+          contentType: photoMimeType(file),
+          cacheControl: "604800",
+        });
         if (error) throw error;
         uploaded.push({
           id: uid("photo"),
@@ -11441,6 +11557,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function syncableKeys(keys) {
       const values = Array.isArray(keys) ? keys : (keys ? [keys] : []);
       return [...new Set(values.map(String).filter((key) => remoteConfigByKey(key)))];
+    }
+
+    function remoteListLimit(key) {
+      const config = remoteConfigByKey(key);
+      const configured = Number(state.remoteListLimits?.[key] || 0);
+      return Math.max(configured || Number(config?.limit || 0), Number(config?.limit || 0), 0);
+    }
+
+    function setRemoteListLimit(key, limit) {
+      state.remoteListLimits = {
+        ...(state.remoteListLimits || {}),
+        [key]: Math.max(Number(limit || 0), Number(remoteConfigByKey(key)?.limit || 0)),
+      };
+      saveJson("remoteListLimits", state.remoteListLimits);
+    }
+
+    async function loadMoreHistory() {
+      const current = remoteListLimit("inspections") || DEFAULT_REMOTE_LIST_LIMIT;
+      setRemoteListLimit("inspections", current + DEFAULT_REMOTE_LIST_LIMIT);
+      setSyncStatus("추가 이력 불러오는 중", "pending");
+      await pullRemote({ force: true, silent: true, reason: "load-more-history" });
+      renderPreservingScroll();
     }
 
     function saveSyncQueue() {
@@ -11645,7 +11783,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!isSyncConfigured()) return;
       flushPendingSyncQueue();
       scheduleRemoteRefresh("wake", 0);
-      if (!remoteRealtimeConnected()) startRemoteRealtime();
     }
 
     function handleStorageSyncWake(event) {
@@ -11712,8 +11849,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function startRemoteSync() {
-      startRemoteRealtime();
-      startRemotePolling();
+      scheduleRemoteRefresh("startup", 0);
     }
 
     async function pullRemote(options = {}) {
@@ -11727,7 +11863,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.remotePullInFlight = true;
       if (!options.silent) setSyncStatus("서버 확인 중", "pending");
       try {
-        const settled = await Promise.allSettled(REMOTE_TABLES.map((config) => selectTable(client, config)));
+        const pullConfigs = REMOTE_TABLES.filter((config) => config.pullOnStartup !== false);
+        const settled = await Promise.allSettled(pullConfigs.map((config) => selectTable(client, config)));
         const failures = [];
         settled.forEach((result) => {
           if (result.status === "fulfilled") {
@@ -11737,7 +11874,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             console.warn("테이블 pull 실패:", result.reason);
           }
         });
-        if (failures.length === REMOTE_TABLES.length) throw failures[0];
+        if (failures.length === pullConfigs.length) throw failures[0];
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
@@ -11878,9 +12015,47 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function selectTable(client, config) {
       const source = config.readTable || config.table;
-      const { data, error } = await client.from(source).select(config.selectColumns || "*");
+      let query = client.from(source).select(config.selectColumns);
+      if (config.orderBy) query = query.order(config.orderBy, { ascending: config.ascending !== false });
+      const limit = remoteListLimit(config.key);
+      if (limit) query = query.limit(limit);
+      const { data, error } = await query;
       if (error) throw error;
       return { key: config.key, rows: (data || []).map(config.fromDb) };
+    }
+
+    async function loadInspectionItemsForDetail(inspectionId) {
+      const id = String(inspectionId || "").trim();
+      if (!id || state.remoteLoadedInspectionItemIds.includes(id)) return;
+      const client = supabaseClient();
+      const config = remoteConfigByKey("inspectionItems");
+      if (!client || !config) return;
+      const { data, error } = await client
+        .from(config.table)
+        .select(config.selectColumns)
+        .eq("inspection_id", id);
+      if (error) throw error;
+      applyRemoteTableRows(config.key, (data || []).map(config.fromDb));
+      state.remoteLoadedInspectionItemIds = [...new Set([...state.remoteLoadedInspectionItemIds, id])];
+      persist();
+    }
+
+    async function loadIssuePhotosForDetail(targetId) {
+      const id = String(targetId || "").trim();
+      if (!id || state.remoteLoadedIssuePhotoTargetIds.includes(id)) return;
+      const client = supabaseClient();
+      const config = remoteConfigByKey("issuePhotos");
+      if (!client || !config) return;
+      const { data, error } = await client
+        .from(config.table)
+        .select(config.selectColumns)
+        .eq("target_type", "unsafe_issue")
+        .eq("target_id", id)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      applyRemoteTableRows(config.key, (data || []).map(config.fromDb));
+      state.remoteLoadedIssuePhotoTargetIds = [...new Set([...state.remoteLoadedIssuePhotoTargetIds, id])];
+      persist();
     }
 
     boot();

@@ -87,7 +87,6 @@ Deno.serve(async (req) => {
   }
 
   const src = cleanText(row.src, 2 * 1024 * 1024);
-  if (/^https:\/\//i.test(src)) return Response.redirect(src, 302);
   const legacy = parseDataUrl(src);
   if (legacy?.bytes?.length) return imageResponse(req.method === "HEAD" ? null : legacy.bytes, legacy.mimeType);
 

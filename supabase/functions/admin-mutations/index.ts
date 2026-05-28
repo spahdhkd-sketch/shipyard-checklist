@@ -103,7 +103,6 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
     columns: new Set([
       "id",
       "label",
-      "src",
       "source",
       "deleted",
       "sort_order",
