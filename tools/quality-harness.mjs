@@ -13,6 +13,7 @@ const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
 const APP_VERSION = "0.9-20260528";
+const APP_FALLBACK_VERSION = `version ${APP_VERSION.split("-")[0]}`;
 const ASSET_TOKEN = "20260528-egress-signature-1";
 const SW_CACHE = "gs-safety-20260528-egress-signature-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
@@ -149,7 +150,7 @@ function checkHtmlPages() {
     assertContains(html, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, `${page} uses current CSS token`);
     assertContains(html, `assets/js/app-v2.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
     assertContains(html, "assets/js/vendor/supabase-js-2.105.3.min.js", `${page} uses local Supabase vendor bundle`);
-    assertContains(html, "version 0.8", `${page} uses current static fallback version`);
+    assertContains(html, APP_FALLBACK_VERSION, `${page} uses current static fallback version`);
     assertNotContains(html, "assets/css/styles.css", `${page} does not use legacy CSS`);
     assertNotContains(html, "assets/js/app.js", `${page} does not use legacy JS`);
     assertNotContains(html, "version 0.3", `${page} does not use stale fallback version`);
