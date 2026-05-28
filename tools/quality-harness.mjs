@@ -148,6 +148,11 @@ function checkHtmlPages() {
   for (const page of PAGES) {
     const html = read(page);
     assertContains(html, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, `${page} uses current CSS token`);
+    assertContains(html, `assets/css/20-component-table.css?v=${ASSET_TOKEN}`, `${page} uses current table CSS token`);
+    assertContains(html, `assets/css/30-feature-signature.css?v=${ASSET_TOKEN}`, `${page} uses current signature CSS token`);
+    assertContains(html, `assets/css/30-feature-push-management.css?v=${ASSET_TOKEN}`, `${page} uses current push management CSS token`);
+    assertContains(html, `assets/css/30-feature-monthly-worker.css?v=${ASSET_TOKEN}`, `${page} uses current monthly worker CSS token`);
+    assertContains(html, `assets/css/20-component-disabled-reason.css?v=${ASSET_TOKEN}`, `${page} uses current disabled-reason CSS token`);
     assertContains(html, `assets/js/app-v2.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
     assertContains(html, "assets/js/vendor/supabase-js-2.105.3.min.js", `${page} uses local Supabase vendor bundle`);
     assertContains(html, APP_FALLBACK_VERSION, `${page} uses current static fallback version`);
@@ -160,6 +165,7 @@ function checkHtmlPages() {
 
   const notFound = read("404.html");
   assertContains(notFound, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, "404 uses current CSS token");
+  assertContains(notFound, `assets/css/30-feature-not-found.css?v=${ASSET_TOKEN}`, "404 uses current not-found CSS token");
   assertNotContains(notFound, "assets/css/styles.css", "404 does not use legacy CSS");
 }
 
@@ -227,6 +233,12 @@ function checkRuntimeSource() {
 
   assertContains(sw, `const CACHE = "${SW_CACHE}"`, "service worker cache is current");
   assertContains(sw, `styles-v2.css?v=${ASSET_TOKEN}`, "service worker caches current CSS token");
+  assertContains(sw, `20-component-table.css?v=${ASSET_TOKEN}`, "service worker caches current table CSS token");
+  assertContains(sw, `30-feature-not-found.css?v=${ASSET_TOKEN}`, "service worker caches current not-found CSS token");
+  assertContains(sw, `30-feature-signature.css?v=${ASSET_TOKEN}`, "service worker caches current signature CSS token");
+  assertContains(sw, `30-feature-push-management.css?v=${ASSET_TOKEN}`, "service worker caches current push management CSS token");
+  assertContains(sw, `30-feature-monthly-worker.css?v=${ASSET_TOKEN}`, "service worker caches current monthly worker CSS token");
+  assertContains(sw, `20-component-disabled-reason.css?v=${ASSET_TOKEN}`, "service worker caches current disabled-reason CSS token");
   assertContains(sw, `app-v2.js?v=${ASSET_TOKEN}`, "service worker caches current JS token");
   const shellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
     .map((match) => match[1])

@@ -78,6 +78,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const PICTOGRAM_IMAGE_MAX_BYTES = 768 * 1024;
     const PICTOGRAM_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
     const PICTOGRAM_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
+    const PICTOGRAM_HELPERS = typeof window !== "undefined" && window.ShipyardPictogramHelpers
+      ? window.ShipyardPictogramHelpers
+      : {};
+    const SHIP_HELPERS = typeof window !== "undefined" && window.ShipyardShipHelpers
+      ? window.ShipyardShipHelpers
+      : {};
+    const WORKER_HELPERS = typeof window !== "undefined" && window.ShipyardWorkerHelpers
+      ? window.ShipyardWorkerHelpers
+      : {};
+    const DASHBOARD_VIEW = typeof window !== "undefined" && window.ShipyardDashboardView
+      ? window.ShipyardDashboardView
+      : {};
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -1097,15 +1109,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizedWorkerName(workerName) {
+      if (typeof WORKER_HELPERS.normalizedWorkerName === "function") {
+        return WORKER_HELPERS.normalizedWorkerName(workerName);
+      }
       return String(workerName || "").trim();
     }
 
     function normalizeWorkerPosition(position) {
+      if (typeof WORKER_HELPERS.normalizeWorkerPosition === "function") {
+        return WORKER_HELPERS.normalizeWorkerPosition(position);
+      }
       const value = String(position || "").trim();
       return WORKER_POSITIONS.includes(value) ? value : DEFAULT_WORKER_POSITION;
     }
 
     function loginWorkerGroup(worker) {
+      if (typeof WORKER_HELPERS.loginWorkerGroup === "function") {
+        return WORKER_HELPERS.loginWorkerGroup(worker);
+      }
       const position = normalizeWorkerPosition(worker?.position);
       const team = normalizeWorkerTeam(worker?.team);
       if (position === "대표") return "대표";
@@ -1117,11 +1138,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function loginWorkerGroupRank(worker) {
+      if (typeof WORKER_HELPERS.loginWorkerGroupRank === "function") {
+        return WORKER_HELPERS.loginWorkerGroupRank(worker);
+      }
       const group = loginWorkerGroup(worker);
       return LOGIN_WORKER_GROUP_RANK.has(group) ? LOGIN_WORKER_GROUP_RANK.get(group) : LOGIN_WORKER_GROUP_ORDER.length;
     }
 
     function sortWorkersForLogin(workers) {
+      if (typeof WORKER_HELPERS.sortWorkersForLogin === "function") {
+        return WORKER_HELPERS.sortWorkersForLogin(workers);
+      }
       return [...(Array.isArray(workers) ? workers : [])].sort((a, b) =>
         loginWorkerGroupRank(a) - loginWorkerGroupRank(b)
         || String(a.name || "").localeCompare(String(b.name || ""), "ko")
@@ -1129,15 +1156,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function isLeaderWorker(worker) {
+      if (typeof WORKER_HELPERS.isLeaderWorker === "function") {
+        return WORKER_HELPERS.isLeaderWorker(worker);
+      }
       return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
     }
 
     function canWorkerPreEnterAdminMode(worker) {
+      if (typeof WORKER_HELPERS.canWorkerPreEnterAdminMode === "function") {
+        return WORKER_HELPERS.canWorkerPreEnterAdminMode(worker);
+      }
       const position = normalizeWorkerPosition(worker?.position);
       return ADMIN_PREENTRY_WORKER_POSITIONS.has(position);
     }
 
     function workerAdminModeLabel(worker) {
+      if (typeof WORKER_HELPERS.workerAdminModeLabel === "function") {
+        return WORKER_HELPERS.workerAdminModeLabel(worker);
+      }
       const name = String(worker?.name || "").trim();
       return name ? `${name} 권한` : "작업자 권한";
     }
@@ -3640,77 +3676,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderDashboard() {
-      const {
-        todayCount,
-        todayDone,
-        todayPending,
-        todayCompletion,
-        unsafeCount,
-        completion,
-        latest,
-        deliverySoon,
-        openMaterials,
-        activeShips,
-        riskNg,
-        riskWarn,
-        riskOk,
-        riskTotal,
-        processStages,
-      } = dashboardModel();
-      return `<h1 class="sr-only">조선소 안전 체크리스트</h1>
-      <section class="ops-hero" aria-labelledby="dashboardQuickHeading">
-        ${sectionHeading("dashboardQuickHeading", "현장 빠른 실행")}
-        <div class="ops-hero-main">
-          <div class="ops-quick-actions" aria-label="현장 빠른 실행">
-            <button class="ops-quick-action primary" data-view="check" type="button">
-              <span>${navIcon("noteCheck")}</span>
-              <strong>작업 전 점검 시작</strong>
-            </button>
-            <button class="ops-quick-action danger" data-view="unsafe" type="button">
-              <span>${navIcon("warning")}</span>
-              <strong>불안전요소 등록</strong>
-            </button>
-            <button class="ops-quick-action violet" data-view="materials" type="button">
-              <span>${navIcon("board")}</span>
-              <strong>자재누락 등록</strong>
-            </button>
-          </div>
-        </div>
-        <div class="ops-today-panel">
-          <div class="ops-today-head">
-            <span>오늘 점검</span>
-            <strong>${todayDone}/${todayCount || 0}</strong>
-          </div>
-          <div class="ops-progress" role="progressbar" aria-label="오늘 점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${todayCompletion}">
-            <span style="width:${todayCompletion}%"></span>
-          </div>
-          <div class="ops-today-grid">
-            <div><span>대기</span><strong>${todayPending}</strong></div>
-            <div><span>호선</span><strong>${activeShips}</strong></div>
-            <div><span>완료율</span><strong>${todayCompletion}%</strong></div>
-          </div>
-        </div>
-      </section>
-      <section class="ops-status-grid" aria-labelledby="dashboardStatusHeading">
-        ${sectionHeading("dashboardStatusHeading", "오늘 현장 상태")}
-        ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", "", "today")}
-        ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "", "unsafe")}
-        ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", "", "materials")}
-        ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", deliverySoon ? "7일 이내" : "", "delivery")}
-      </section>
-      <section class="ops-grid" aria-labelledby="dashboardProcessHeading">
-        ${sectionHeading("dashboardProcessHeading", "공정 현황")}
-        <div class="panel panel-pad home-section ops-process-card ops-process-card-wide">
-          <div class="section-title">공정 현황 <button class="btn-light" data-view="ships" type="button">보기</button></div>
-          <div class="mini-process">
-            ${processStages.map(({ info, count }) => `<div class="mini-stage" style="--dot:${esc(info.color)}">
-              <span class="mini-stage-dot"></span>
-              <div class="mini-stage-count">${count}</div>
-              <div class="small muted">${esc(info.label)}</div>
-            </div>`).join("")}
-          </div>
-        </div>
-      </section>`;
+      return DASHBOARD_VIEW.renderDashboardView(dashboardModel(), { sectionHeading, navIcon });
     }
 
     function metric(label, value, unit, color) {
@@ -3761,38 +3727,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return state.unsafeIssues.filter((row) => row.status === received).length;
     }
 
-    function statPill(label, value, unit, color, icon = "board", foot = "", scope = "all") {
-      const attrs = scope === "unsafe"
-        ? `data-stat-scope="unsafe" data-action="view-unsafe-list"`
-        : scope === "materials"
-          ? `data-stat-scope="materials" data-action="view-material-list"`
-        : `data-stat-scope="${esc(scope)}" data-history-scope="${esc(scope)}"`;
-      const alertClass = scope === "unsafe" && Number(value) > 0 ? " is-alert" : "";
-      const focusClass = ["today", "unsafe"].includes(scope) ? " is-focus" : "";
-      return `<button class="stat-pill${focusClass}${alertClass}" style="--stat:${color}" ${attrs} type="button">
-        <span class="stat-icon">${statIcon(icon)}</span>
-        <div class="stat-label small muted">${esc(label)}</div>
-        <div class="stat-value" style="color:${color}">${esc(value)}<span class="stat-unit">${esc(unit)}</span></div>
-        <div class="stat-foot ${foot ? "" : "is-empty"}">${foot ? esc(foot) : "&nbsp;"}</div>
-      </button>`;
-    }
-
-    function statIcon(name) {
-      const icons = {
-        shield: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"></path><path d="M9 12l2 2 4-5"></path></svg>`,
-        warning: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path></svg>`,
-        clock: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 2"></path></svg>`,
-        board: navIcon("board"),
-      };
-      return icons[name] || icons.board;
-    }
-
     function progress(pct, color, attrs = "") {
       const value = Math.max(0, Math.min(100, Number(pct) || 0));
       return `<div class="progress" ${attrs} role="progressbar" aria-label="점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}"><span style="--pct:${value}%;--bar:${esc(color)}"></span></div>`;
     }
 
     function normalizeIconKey(id) {
+      if (typeof PICTOGRAM_HELPERS.normalizeIconKey === "function") {
+        return PICTOGRAM_HELPERS.normalizeIconKey(id);
+      }
       return ({
         load: "upperModuleInstallation",
         mounting: "blockAssembly",
@@ -3868,6 +3811,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function pictogramLazyImageSrc(row) {
+      if (typeof PICTOGRAM_HELPERS.pictogramLazyImageSrc === "function") {
+        return PICTOGRAM_HELPERS.pictogramLazyImageSrc(row, {
+          supabaseUrl: SUPABASE_URL,
+          syncConfigured: isSyncConfigured(),
+        });
+      }
       const id = String(row?.id || "").trim();
       if (!id || !isSyncConfigured()) return "";
       const version = encodeURIComponent(row.storagePath || row.updatedAt || row.id);
@@ -3875,6 +3824,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function lineIconName(id, fallbackIcon = "") {
+      if (typeof PICTOGRAM_HELPERS.lineIconName === "function") {
+        return PICTOGRAM_HELPERS.lineIconName(id, fallbackIcon);
+      }
       const key = normalizeIconKey(id);
       const text = `${id || ""} ${key || ""} ${fallbackIcon || ""}`.toLowerCase();
       const label = String(fallbackIcon || "");
@@ -4014,6 +3966,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function workerTeamBadge(team) {
+      if (typeof WORKER_HELPERS.workerTeamBadge === "function") {
+        return WORKER_HELPERS.workerTeamBadge(team);
+      }
       const value = String(team || "").trim();
       if (!value) return `<span class="worker-team-badge is-empty">소속 미지정</span>`;
       const className = value === "선행" ? "is-pre" : value === "후행" ? "is-post" : "is-neutral";
@@ -4021,6 +3976,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function workerRoleBadge(worker) {
+      if (typeof WORKER_HELPERS.workerRoleBadge === "function") {
+        return WORKER_HELPERS.workerRoleBadge(worker);
+      }
       const position = normalizeWorkerPosition(worker?.position);
       const className = PRIVILEGED_WORKER_POSITIONS.has(position) ? "is-leader" : "";
       return `<span class="worker-position-badge ${className}">${esc(position)}</span>`;
@@ -4915,9 +4873,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderHistoryLoadMore(rows) {
       const limit = remoteListLimit("inspections");
-      if (!isSyncConfigured() || state.historyScope !== "all" || state.historyShipNo || state.historyFilter !== "all") return "";
-      if (!Array.isArray(rows) || rows.length < limit) return "";
-      return `<div class="list-actions" style="margin-top:12px"><button class="btn-light" data-action="load-more-history" type="button">더 보기</button></div>`;
+      return DASHBOARD_VIEW.renderHistoryLoadMoreView({
+        visible: isSyncConfigured()
+          && state.historyScope === "all"
+          && !state.historyShipNo
+          && state.historyFilter === "all"
+          && Array.isArray(rows)
+          && rows.length >= limit,
+      });
     }
 
     function renderHistoryPledgeStatus() {
@@ -4953,31 +4916,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderHistoryTable(rows) {
       const canSelect = state.view === "history" && state.adminMode;
       const displayRows = state.view === "dashboard" ? rows.slice(0, 4) : rows;
-      return `<div class="history-grid">
-        ${displayRows.map((row) => {
+      return DASHBOARD_VIEW.renderHistoryTableView({
+        rows: displayRows.map((row) => {
           const cat = categoryById(row.categoryId) || { label: row.categoryLabel || "(삭제된 유형)", icon: row.categoryIcon || "?", color: row.categoryColor || "#607084" };
           const risk = historyRisk(row);
           const completion = Math.max(0, Math.min(100, Number(row.completion) || 0));
-          return `<article class="history-card" style="--accent:${esc(categoryAccent(cat))}" data-history-detail-card="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(cat.label)} 점검 상세내역 보기">
-            <div class="history-card-main">
-              <div class="history-card-top">
-                <span class="history-card-icon">${categoryVisual(cat)}</span>
-                <div class="history-card-actions">
-                  ${canSelect ? `<input class="history-card-check" type="checkbox" aria-label="이력 선택" data-history-check="${row.id}" ${state.selectedHistoryIds.includes(row.id) ? "checked" : ""}>` : ""}
-                  <button class="history-detail-btn" data-history-detail="${row.id}" aria-label="점검 기록 화면 보기" title="점검 기록" type="button">›</button>
-                </div>
-              </div>
-              <div class="history-card-title">${firstSpaceBreakHtml(cat.label)}</div>
-              <div class="history-card-summary">${esc(row.shipNo || "-")} · ${esc(shortHistoryDate(row))}</div>
-              <div class="history-card-risk">
-                <span class="history-completion-pill">완료율 ${esc(completion)}%</span>
-                ${risk.label === "정상" ? "" : badge(risk.tone, risk.label)}
-              </div>
-              <div class="history-progress-track" role="progressbar" aria-label="점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completion}"><span style="width:${completion}%"></span></div>
-            </div>
-          </article>`;
-        }).join("")}
-      </div>`;
+          return {
+            id: row.id,
+            accent: categoryAccent(cat),
+            ariaLabel: `${cat.label} 점검 상세내역 보기`,
+            categoryVisualHtml: categoryVisual(cat),
+            canSelect,
+            selected: state.selectedHistoryIds.includes(row.id),
+            categoryLabelHtml: firstSpaceBreakHtml(cat.label),
+            summary: `${row.shipNo || "-"} · ${shortHistoryDate(row)}`,
+            completion,
+            riskBadgeHtml: risk.label === "정상" ? "" : badge(risk.tone, risk.label),
+          };
+        }),
+      });
     }
 
     function historyRisk(row) {
@@ -5979,17 +5936,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         materials: materialOpen,
       };
       const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "접수 현황을 확인합니다.";
-      return `${pageHead("관리", lead, adminToggleButton())}
-      ${state.adminMode || previewAdmin ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`}
-      <div class="manage-tabs" role="tablist" aria-label="관리 탭">
-        ${visibleTabs.map(([id, label]) => `<button class="seg-btn ${state.manageTab === id ? "active" : ""}" data-manage-tab="${id}" type="button">${esc(label)} <span>${tabCounts[id]}</span></button>`).join("")}
-      </div>
-      <div class="manage-workspace">
-        ${state.manageTab === "workers" ? renderWorkerManager() : ""}
-        ${state.manageTab === "push" ? renderPushManager() : ""}
-        ${state.manageTab === "unsafe" ? renderUnsafeManager() : ""}
-        ${state.manageTab === "materials" ? renderMaterialManager() : ""}
-      </div>`;
+      return DASHBOARD_VIEW.renderManageShellView({
+        pageHeadHtml: pageHead("관리", lead, adminToggleButton()),
+        readOnlyNoticeHtml: state.adminMode || previewAdmin ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`,
+        tabs: visibleTabs.map(([id, label]) => ({
+          id,
+          label,
+          count: tabCounts[id],
+          active: state.manageTab === id,
+        })),
+        activeTab: state.manageTab,
+        panels: {
+          workers: state.manageTab === "workers" ? renderWorkerManager() : "",
+          push: state.manageTab === "push" ? renderPushManager() : "",
+          unsafe: state.manageTab === "unsafe" ? renderUnsafeManager() : "",
+          materials: state.manageTab === "materials" ? renderMaterialManager() : "",
+        },
+      });
     }
 
     function renderWorkerManager() {
@@ -6152,6 +6115,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeWorkerTeam(team) {
+      if (typeof WORKER_HELPERS.normalizeWorkerTeam === "function") {
+        return WORKER_HELPERS.normalizeWorkerTeam(team);
+      }
       const value = String(team || "").trim();
       return WORKER_TEAM_OPTIONS.includes(value) ? value : "";
     }
@@ -7046,10 +7012,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return "";
     }
 
-    function renderWorkerHeatmapCell(status, day = "") {
-      return `<span class="monthly-worker-cell ${esc(status)}" title="${esc(day ? `${day}일 ${monthlyStatusLabel(status)}` : monthlyStatusLabel(status))}" aria-label="${esc(monthlyStatusLabel(status))}">${esc(day)}</span>`;
-    }
-
     function monthlyWorkerCardKey(worker) {
       return normalizedWorkerName(worker?.name || "");
     }
@@ -7075,139 +7037,40 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function renderMonthlyWorkerCalendar(worker, range) {
-      const statuses = new Map(worker.dayStatuses.map((day) => [day.date, day]));
-      const firstWeekday = (new Date(`${range.start}T00:00:00`).getDay() + 6) % 7;
-      const days = [
-        ...Array.from({ length: firstWeekday }, () => null),
-        ...range.dates,
-      ];
-      while (days.length % 7 !== 0) days.push(null);
-      const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
-      return `<div class="monthly-worker-calendar" aria-label="${esc(worker.name)} ${esc(range.monthKey)} 점검 달력">
-        <div class="monthly-worker-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join("")}</div>
-        <div class="monthly-worker-calendar-grid">
-          ${days.map((date) => {
-            if (!date) return `<span class="monthly-worker-calendar-cell blank" aria-hidden="true"></span>`;
-            const day = statuses.get(date) || { day: Number(date.slice(8, 10)), status: "excluded" };
-            return `<span class="monthly-worker-calendar-cell ${esc(day.status)}" title="${esc(`${day.day}일 ${monthlyStatusLabel(day.status)}`)}" aria-label="${esc(`${day.day}일 ${monthlyStatusLabel(day.status)}`)}">${esc(day.day)}</span>`;
-          }).join("")}
-        </div>
-      </div>`;
-    }
-
-    function renderMonthlyWorkerCard(worker, range, expanded) {
-      const key = monthlyWorkerCardKey(worker);
-      return `<article class="monthly-worker-card-item ${expanded ? "is-expanded" : ""}">
-        <button class="monthly-worker-card" data-monthly-worker-toggle="${esc(key)}" aria-expanded="${expanded ? "true" : "false"}" type="button">
-          <span class="monthly-worker-card-main">
-            <span class="monthly-worker-card-person">
-              <strong>${esc(worker.name)}</strong>
-              <em>${esc(worker.team || "-")}</em>
-            </span>
-            <span class="monthly-worker-card-rate ${worker.rate >= 80 ? "good" : worker.rate >= 50 ? "warn" : "danger"}">${worker.rate}%</span>
-          </span>
-          <span class="monthly-worker-card-summary">
-            <span>완료 ${worker.counts.done}</span>
-            <span>미완료 ${worker.counts.partial + worker.counts.missing}</span>
-            <span>대상 ${worker.counts.target}</span>
-          </span>
-        </button>
-        ${expanded ? renderMonthlyWorkerCalendar(worker, range) : ""}
-      </article>`;
-    }
-
-    function renderMonthlyWorkerCardColumns(workers, range, expandedWorkers) {
-      const columns = [[], [], []];
-      workers.forEach((worker, index) => {
-        columns[index % columns.length].push(renderMonthlyWorkerCard(worker, range, expandedWorkers.has(monthlyWorkerCardKey(worker))));
-      });
-      return columns.map((cards) => `<div class="monthly-worker-card-column">${cards.join("")}</div>`).join("");
-    }
-
-    function renderMonthlyWorkerMonthMeta(monthText) {
-      return `<span class="monthly-worker-month-meta"><b class="monthly-worker-month-label ${state.monthlyWorkerMonthHighlight ? "is-highlight" : ""}">${esc(monthText)}</b><em>작업자별 일일 점검 이행 현황</em></span>`;
-    }
-
-    function renderMonthlyRestDaySettings() {
+    function buildMonthlyWorkerAnalyticsModel() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
       const holidayRows = stats.range.dates.map((date) => koreanPublicHolidayInfo(date)).filter(Boolean);
       const customRows = restState.customRestDays.filter((date) => monthKeyForDate(date) === stats.range.monthKey);
-      return `<div class="monthly-rest-panel">
-        <div class="monthly-rest-options">
-          <label class="monthly-rest-toggle">
-            <input type="checkbox" data-monthly-public-holiday-mode ${restState.useKoreanPublicHolidays ? "checked" : ""} />
-            <span>대한민국 국경일/공휴일/대체공휴일 자동 휴무 적용</span>
-          </label>
-          <div class="monthly-rest-add">
-            <input class="input" type="date" data-monthly-custom-rest-date min="${esc(stats.range.start)}" max="${esc(stats.range.end)}" value="${esc(stats.range.start)}" />
-            <button class="btn-light" data-action="add-monthly-rest-day" type="button">현장 휴무 추가</button>
-          </div>
-        </div>
-        <div class="monthly-rest-lists">
-          <div>
-            <strong>자동 휴무</strong>
-            ${holidayRows.length ? holidayRows.map((day) => `<span class="monthly-rest-chip">${esc(day.date.slice(5))} · ${esc(day.name)}</span>`).join("") : `<em>선택 월의 자동 휴무가 없습니다.</em>`}
-          </div>
-          <div>
-            <strong>현장 추가 휴무</strong>
-            ${customRows.length ? customRows.map((date) => `<span class="monthly-rest-chip custom">${esc(date.slice(5))}<button data-delete-monthly-rest-day="${esc(date)}" type="button" aria-label="${esc(date)} 휴무 삭제">×</button></span>`).join("") : `<em>추가된 현장 휴무가 없습니다.</em>`}
-          </div>
-        </div>
-      </div>`;
+      const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
+      return {
+        monthText: `${stats.range.year}년 ${stats.range.month}월`,
+        monthHighlight: state.monthlyWorkerMonthHighlight,
+        restOpen: state.monthlyRestDayPanelOpen,
+        range: stats.range,
+        workers: stats.workers.map((worker) => {
+          const key = monthlyWorkerCardKey(worker);
+          return { ...worker, key, expanded: expandedWorkers.has(key) };
+        }),
+        rate: stats.rate,
+        totals: stats.totals,
+        dueLabel: stats.dueLabel,
+        dueMissing: stats.dueMissing,
+        restPanel: {
+          useKoreanPublicHolidays: restState.useKoreanPublicHolidays,
+          start: stats.range.start,
+          end: stats.range.end,
+          holidayRows,
+          customRows,
+        },
+      };
     }
 
     function renderMonthlyWorkerAnalytics() {
-      const stats = monthlyWorkerInspectionStats();
-      const monthText = `${stats.range.year}년 ${stats.range.month}월`;
-      const restOpen = state.monthlyRestDayPanelOpen;
-      if (!stats.workers.length) {
-        return `<section class="analytics-panel monthly-worker-analytics">
-          <div class="monthly-worker-head">
-            <div><strong>월간 작업자 점검 현황</strong>${renderMonthlyWorkerMonthMeta(monthText)}</div>
-            <div class="monthly-worker-toolbar">
-              <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
-              <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
-              <button class="btn-light" data-monthly-worker-month="next" ${stats.range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
-              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">휴무 설정</button>
-              <button class="btn" data-export-records="monthly-worker-analytics" type="button">월간 내보내기</button>
-            </div>
-          </div>
-          <div class="empty">등록된 작업자가 없습니다. 관리 메뉴에서 작업자를 먼저 추가하세요.</div>
-          ${restOpen ? renderMonthlyRestDaySettings() : ""}
-        </section>`;
-      }
-      const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
-      return `<section class="analytics-panel monthly-worker-analytics">
-        <div class="monthly-worker-head">
-          <div><strong>월간 작업자 점검 현황</strong>${renderMonthlyWorkerMonthMeta(monthText)}</div>
-          <div class="monthly-worker-toolbar">
-            <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
-            <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
-            <button class="btn-light" data-monthly-worker-month="next" ${stats.range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
-            <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>
-            <button class="btn" data-export-records="monthly-worker-analytics" type="button">월간 내보내기</button>
-          </div>
-        </div>
-        <div class="monthly-worker-kpis">
-          ${analyticsKpi("월간 점검률", `${stats.rate}%`, `${stats.totals.done}/${stats.totals.target} 대상일 완료`, "done")}
-          ${analyticsKpi(stats.dueLabel, `${stats.dueMissing}명`, `${stats.range.isCurrentMonth ? "오늘" : "월말"} 기준 누락`, "danger")}
-          ${analyticsKpi("대상 작업자", `${stats.workers.length}명`, `휴무 ${stats.totals.rest}칸 제외`, "ship")}
-        </div>
-        <div class="monthly-worker-layout">
-          <div class="monthly-worker-card-list">
-            ${renderMonthlyWorkerCardColumns(stats.workers, stats.range, expandedWorkers)}
-            <div class="monthly-worker-legend">
-              ${["done", "partial", "missing", "rest", "excluded"].map((status) => `<span>${renderWorkerHeatmapCell(status)} ${monthlyStatusLabel(status)}</span>`).join("")}
-            </div>
-          </div>
-        </div>
-        ${restOpen ? renderMonthlyRestDaySettings() : ""}
-      </section>`;
+      return DASHBOARD_VIEW.renderMonthlyWorkerAnalyticsView(buildMonthlyWorkerAnalyticsModel(), { analyticsKpi });
     }
 
-    function renderAnalyticsDashboard() {
+    function buildAnalyticsDashboardModel() {
       const now = serverNow();
       const weekStart = new Date(now);
       weekStart.setHours(0, 0, 0, 0);
@@ -7256,72 +7119,41 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소 등록", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
         ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
       ].filter((row) => visiblePledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
-      return `<section class="admin-board analytics-board">
-        <div class="admin-board-top">
-          <div>
-            <h2>안전 관리 대시보드</h2>
-            <p>${formatKoreanDate(serverNow())} · ${esc(state.syncText || "로컬 저장")}</p>
-          </div>
-          <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
-            <button class="btn" data-view="check" type="button">새 점검</button>
-          </div>
-        </div>
-        <div class="analytics-kpi-grid">
-          ${analyticsKpi("오늘 점검 완료", todayDone, deltaText(todayDone, yesterdayDone), "done")}
-          ${analyticsKpi("불안전요소 · 미확인", unsafeOpen, unsafeOpen ? `${unsafeReceived}건 접수 · ${unsafeProcessing}건 조치중` : "미확인 없음", "danger")}
-          ${analyticsKpi("자재 누락", materialOpen, materialOpen ? `${materialReceived}건 접수 · ${materialChecking}건 확인중` : "미처리 없음", "warn")}
-          ${analyticsKpi("호선 점검중", state.ships.length, `${activeProcessCount}/${SHIP_WORKFLOW_STAGES.length}단계 분포`, "ship")}
-        </div>
-        ${renderMonthlyWorkerAnalytics()}
-        <div class="analytics-grid">
-          <section class="analytics-panel">
-            <div class="material-table-head">
-              <div><strong>호선 공정 현황</strong><span>전체 ${state.ships.length}척 · ${SHIP_WORKFLOW_STAGES.length}단계 진행률</span></div>
-              <button class="btn-light" data-view="ships" type="button">자세히 →</button>
-            </div>
-            <div class="analytics-process-list">
-              ${processRows.map(({ info, count }) => `<div class="analytics-process-row" style="--stage:${info.color}">
-                <span><i></i><strong>${esc(info.label)}</strong><em>${esc(info.stage === "mounting" ? "Mounting" : info.label)}</em></span>
-                <b>${count}척</b>
-                <div class="analytics-progress" role="progressbar" aria-label="${esc(info.label)} 공정 비율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${analyticsPercent(count, processTotal)}"><i style="width:${analyticsPercent(count, processTotal)}%"></i></div>
-                <strong>${analyticsPercent(count, processTotal)}%</strong>
-              </div>`).join("")}
-            </div>
-          </section>
-          <section class="analytics-panel">
-            <div class="material-table-head">
-              <div><strong>위험도 분포</strong><span>최근 7일 점검 결과</span></div>
-            </div>
-            <div class="risk-bars">
-              <div class="risk-row danger"><span>위험 · NG</span><i><b style="width:${analyticsPercent(riskNg, riskTotal)}%"></b></i><strong>${riskNg}건 · ${analyticsPercent(riskNg, riskTotal)}%</strong></div>
-              <div class="risk-row warn"><span>주의 · Warn</span><i><b style="width:${analyticsPercent(riskWarn, riskTotal)}%"></b></i><strong>${riskWarn}건 · ${analyticsPercent(riskWarn, riskTotal)}%</strong></div>
-              <div class="risk-row ok"><span>정상 · OK</span><i><b style="width:${analyticsPercent(riskOk, riskTotal)}%"></b></i><strong>${riskOk}건 · ${analyticsPercent(riskOk, riskTotal)}%</strong></div>
-            </div>
-            <div class="risk-summary">
-              <div><span>주간 평균</span><strong>${(Math.round(weeklyActivityCount / 7 * 10) / 10).toFixed(1)}건/일</strong></div>
-              <div><span>NG 비율</span><strong>${analyticsPercent(riskNg, riskTotal)}%</strong></div>
-              <div><span>완료율</span><strong>${analyticsPercent(riskOk, riskTotal)}%</strong></div>
-            </div>
-          </section>
-        </div>
-        <section class="analytics-recent-card">
-          <div class="material-table-head">
-            <div><strong>최근 활동 · 불안전요소 등록 & 자재누락</strong><span>행을 선택하면 상세 화면으로 이동합니다</span></div>
-            <div class="material-table-actions"><button class="btn-light" data-action="open-analytics-filters" type="button">필터</button><button class="btn" data-action="open-analytics-detail" type="button">상세 보기</button></div>
-          </div>
-          <div class="analytics-table">
-            <div class="analytics-row analytics-row-head"><span>시각</span><span>호선</span><span>내용</span><span>작업자</span><span>상태</span></div>
-            ${recent.length ? recent.map((row) => `<div class="analytics-row" data-analytics-record-kind="${esc(row.kind)}" data-analytics-record-id="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(row.shipNo || "-")} ${esc(row.type)} 상세 보기">
-              <span>${esc(relativeRecordTime(row.time))}</span>
-              <span><strong>${esc(row.shipNo || "-")}</strong></span>
-              <span><strong>${esc(shortUnsafeTitle(row.content))}</strong><em>${esc(row.type)}</em></span>
-              <span>${esc(row.worker || "-")}</span>
-              <span>${statusChip(row.status)}</span>
-            </div>`).join("") : `<div class="empty">최근 활동이 없습니다.</div>`}
-          </div>
-        </section>
-      </section>`;
+      return {
+        dateLabel: formatKoreanDate(now),
+        syncText: state.syncText || "로컬 저장",
+        todayDone,
+        todayDeltaText: deltaText(todayDone, yesterdayDone),
+        unsafeOpen,
+        unsafeSummary: unsafeOpen ? `${unsafeReceived}건 접수 · ${unsafeProcessing}건 조치중` : "미확인 없음",
+        materialOpen,
+        materialSummary: materialOpen ? `${materialReceived}건 접수 · ${materialChecking}건 확인중` : "미처리 없음",
+        shipCount: state.ships.length,
+        processStageCount: SHIP_WORKFLOW_STAGES.length,
+        processSummary: `${activeProcessCount}/${SHIP_WORKFLOW_STAGES.length}단계 분포`,
+        processRows: processRows.map(({ info, count }) => ({
+          info,
+          count,
+          percent: analyticsPercent(count, processTotal),
+        })),
+        risk: {
+          ng: { count: riskNg, percent: analyticsPercent(riskNg, riskTotal) },
+          warn: { count: riskWarn, percent: analyticsPercent(riskWarn, riskTotal) },
+          ok: { count: riskOk, percent: analyticsPercent(riskOk, riskTotal) },
+        },
+        weeklyAverage: (Math.round(weeklyActivityCount / 7 * 10) / 10).toFixed(1),
+        recent,
+      };
+    }
+
+    function renderAnalyticsDashboard() {
+      return DASHBOARD_VIEW.renderAnalyticsDashboardView(buildAnalyticsDashboardModel(), {
+        analyticsKpi,
+        monthlyWorkerAnalyticsHtml: renderMonthlyWorkerAnalytics(),
+        relativeRecordTime,
+        shortUnsafeTitle,
+        statusChip,
+      });
     }
 
     function renderRecordFilters(kind) {
@@ -7390,80 +7222,53 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const photoCount = unsafePhotosFor(row.id).length;
       const pendingPhotoCount = pendingPhotoUploadsFor(row.id).length;
       const uploading = isUnsafePhotoUploading(row.id);
-      return `<article class="record-card clickable-record" data-unsafe-record-detail="${esc(row.id)}" tabindex="0" role="button" aria-label="${esc(row.shipNo)} 불안전요소 상세 보기">
-        <div class="record-card-main">
-          <div class="record-card-headline">
-            <div>
-              <strong>${esc(row.shipNo)}</strong>
-              <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
-              ${photoCount > 1 ? `<span class="small muted">사진 ${photoCount}장</span>` : ""}
-              ${uploading ? `<span class="small muted">사진 업로드 중</span>` : ""}
-              ${pendingPhotoCount ? `<span class="small muted">사진 업로드 대기 ${pendingPhotoCount}장</span>` : ""}
-            </div>
-          </div>
-          <p>${esc(row.content)}</p>
-          ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
-          ${renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] })}
-        </div>
-        ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
-      </article>`;
+      return DASHBOARD_VIEW.renderUnsafeRecordCardView({
+        id: row.id,
+        shipNo: row.shipNo,
+        content: row.content,
+        status: row.status,
+        workerName: row.workerNameSnapshot,
+        createdAtText: formatDateTime(row.createdAt),
+        photoCount,
+        pendingPhotoCount,
+        uploading,
+        adminMemo: row.adminMemo,
+        timelineHtml: renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] }),
+        adminControlsHtml: renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES),
+      });
     }
 
     function renderUnsafeDetail(row) {
       const photos = unsafePhotosFor(row.id);
       const pendingPhotos = pendingPhotoUploadsFor(row.id);
       const uploading = isUnsafePhotoUploading(row.id);
-      const photoHtml = photos.length
-        ? `<div class="unsafe-detail-photos">${photos.map((photo, index) => {
-            const url = publicPhotoUrl(photo);
-            return url ? `<figure><img class="unsafe-detail-photo" src="${esc(url)}" alt="불안전요소 사진 ${index + 1}" /><figcaption>사진 ${index + 1}</figcaption></figure>` : "";
-          }).join("")}</div>`
-        : uploading
-          ? renderPhotoUploadProgressPanel(row.expectedPhotoCount || 0)
-        : pendingPhotos.length
-          ? renderPendingPhotoUploadPanel(row.id, pendingPhotos)
-          : `<div class="empty">첨부된 사진이 없습니다.</div>`;
-      return `<section class="panel panel-pad unsafe-detail">
-        <div class="detail-header">
-          <button class="btn-light" data-action="back-unsafe-list" type="button">목록</button>
-          ${badge("medium", row.status)}
-        </div>
-        <div class="section-title">불안전요소 상세 기록</div>
-        <div class="detail-grid unsafe-detail-meta-grid">
-          <div><span class="small muted">호선</span><strong>${esc(row.shipNo)}</strong></div>
-          <div><span class="small muted">등록자</span><strong>${esc(row.workerNameSnapshot || "-")}</strong></div>
-          <div class="unsafe-detail-date-meta"><span class="small muted">등록일시</span><strong>${esc(formatDateTime(row.createdAt))}</strong></div>
-          <div class="unsafe-detail-photo-meta" aria-hidden="true"><span class="small muted">사진</span><strong>${photos.length ? `${photos.length}장` : "없음"}</strong></div>
-        </div>
-        <div class="field" style="margin-top:12px">
-          <span class="field-label">내용</span>
-          <div class="readonly-box">${esc(row.content)}</div>
-        </div>
-        <div class="field" style="margin-top:12px">
-          <span class="field-label">첨부 사진</span>
-          ${photoHtml}
-          ${photos.length ? renderPendingPhotoUploadPanel(row.id, pendingPhotos) : ""}
-        </div>
-        ${row.adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(row.adminMemo)}</div></div>` : ""}
-        <div class="field" style="margin-top:12px">
-          <span class="field-label">처리 이력</span>
-          ${renderRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] })}
-        </div>
-        ${renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES)}
-      </section>`;
+      return DASHBOARD_VIEW.renderUnsafeDetailView({
+        statusBadgeHtml: badge("medium", row.status),
+        shipNo: row.shipNo,
+        workerName: row.workerNameSnapshot,
+        createdAtText: formatDateTime(row.createdAt),
+        photoCount: photos.length,
+        content: row.content,
+        adminMemo: row.adminMemo,
+        photos: photos.map((photo) => ({ url: publicPhotoUrl(photo) })),
+        uploadingHtml: uploading ? renderPhotoUploadProgressPanel(row.expectedPhotoCount || 0) : "",
+        pendingPhotoHtml: renderPendingPhotoUploadPanel(row.id, pendingPhotos),
+        timelineHtml: renderRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0] }),
+        adminControlsHtml: renderAdminRecordControls("unsafe", row, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES),
+      });
     }
 
     function renderMaterialRecordCard(row) {
-      return `<article class="record-card">
-        <div class="record-card-main">
-          <strong>${esc(row.shipNo)} · ${esc(row.materialName)}</strong>
-          <span class="small muted">${esc(row.workerNameSnapshot)} · ${esc(formatDateTime(row.createdAt))}</span>
-          <p>${esc(row.content)}</p>
-          ${row.adminMemo ? `<div class="small muted">메모: ${esc(row.adminMemo)}</div>` : ""}
-          ${renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] })}
-        </div>
-        ${renderAdminRecordControls("materials", row, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES)}
-      </article>`;
+      return DASHBOARD_VIEW.renderMaterialRecordCardView({
+        shipNo: row.shipNo,
+        materialName: row.materialName,
+        workerName: row.workerNameSnapshot,
+        createdAtText: formatDateTime(row.createdAt),
+        content: row.content,
+        adminMemo: row.adminMemo,
+        timelineHtml: renderRecordTimeline(row, { compact: true, initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] }),
+        adminControlsHtml: renderAdminRecordControls("materials", row, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES),
+      });
     }
 
     function renderCompletionActions(type) {
@@ -7949,10 +7754,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function shipStageInfo(stage) {
+      if (typeof SHIP_HELPERS.shipStageInfo === "function") {
+        return SHIP_HELPERS.shipStageInfo(stage);
+      }
       return STAGE_META[stage] || STAGE_META.mounting;
     }
 
     function normalizeShipStageInput(value) {
+      if (typeof SHIP_HELPERS.normalizeShipStageInput === "function") {
+        return SHIP_HELPERS.normalizeShipStageInput(value);
+      }
       const raw = String(value || "").trim();
       if (!raw) return "";
       const compact = raw.toLowerCase().replace(/[\s/_-]+/g, "");
@@ -7995,6 +7806,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function effectiveShipStage(ship) {
+      if (typeof SHIP_HELPERS.effectiveShipStage === "function") {
+        return SHIP_HELPERS.effectiveShipStage(ship);
+      }
       return shipStageInfo(ship.processStage || "mounting");
     }
 
@@ -8227,6 +8041,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeShipSortMode(value) {
+      if (typeof SHIP_HELPERS.normalizeShipSortMode === "function") {
+        return SHIP_HELPERS.normalizeShipSortMode(value);
+      }
       const mode = String(value || "").trim();
       return SHIP_SORT_OPTIONS.some(([id]) => id === mode) ? mode : "stage";
     }
@@ -8236,10 +8053,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function compareShipNo(a, b) {
+      if (typeof SHIP_HELPERS.compareShipNo === "function") {
+        return SHIP_HELPERS.compareShipNo(a, b);
+      }
       return String(a.no || "").localeCompare(String(b.no || ""), "ko-KR", { numeric: true, sensitivity: "base" });
     }
 
     function compareShipDate(getDate) {
+      if (typeof SHIP_HELPERS.compareShipDate === "function") {
+        return SHIP_HELPERS.compareShipDate(getDate);
+      }
       return (a, b) => {
         const aDate = dateOnly(getDate(a));
         const bDate = dateOnly(getDate(b));
@@ -8251,6 +8074,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function compareShipStage(a, b) {
+      if (typeof SHIP_HELPERS.compareShipStage === "function") {
+        return SHIP_HELPERS.compareShipStage(a, b);
+      }
       const aStage = SHIP_WORKFLOW_STAGES.indexOf(effectiveShipStage(a).stage);
       const bStage = SHIP_WORKFLOW_STAGES.indexOf(effectiveShipStage(b).stage);
       return (aStage - bStage) || compareShipNo(a, b);

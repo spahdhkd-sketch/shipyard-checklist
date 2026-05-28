@@ -387,9 +387,16 @@ function assertCheck(name, condition) {
     await navigate(client, `${baseUrl}/index.html`);
     await evaluate(client, `(() => {
       localStorage.clear();
+      sessionStorage.clear();
       const prefix = "shipyardSafetyV1.";
       const seed = ${JSON.stringify(seed)};
       Object.entries(seed).forEach(([key, value]) => localStorage.setItem(prefix + key, JSON.stringify(value)));
+      const worker = seed.workers?.[0] || {};
+      sessionStorage.setItem(prefix + "workerSession", JSON.stringify({
+        workerId: worker.id || "worker-1",
+        workerName: worker.name || "김민수",
+        employeeNo: worker.employeeNo || "",
+      }));
     })()`);
 
     await navigate(client, `${baseUrl}/index.html`);
@@ -434,12 +441,14 @@ function assertCheck(name, condition) {
       };
     })()`);
     assertCheck("home today stat hides completion helper text", unsafeHomeStat.todayFoot === "");
-    assertCheck("home today stat uses larger symbol", unsafeHomeStat.todayIconWidth > unsafeHomeStat.deliveryIconWidth);
-    assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전 요소");
+    assertCheck("home today stat renders dashboard symbol", unsafeHomeStat.todayIconWidth > 0);
+    assertCheck("home today stat keeps consistent symbol size", unsafeHomeStat.todayIconWidth === unsafeHomeStat.deliveryIconWidth);
+    assertCheck("home unsafe stat is renamed", unsafeHomeStat.label === "불안전요소");
     assertCheck("home unsafe stat counts received unsafe issues only", unsafeHomeStat.value.includes("1"));
     assertCheck("home unsafe stat keeps urgent helper text", unsafeHomeStat.foot === "즉시 확인");
     assertCheck("home unsafe stat highlights when received issues exist", unsafeHomeStat.highlighted);
-    assertCheck("home unsafe stat uses larger symbol", unsafeHomeStat.unsafeIconWidth > unsafeHomeStat.deliveryIconWidth);
+    assertCheck("home unsafe stat renders alert symbol", unsafeHomeStat.unsafeIconWidth > 0);
+    assertCheck("home unsafe stat keeps consistent symbol size", unsafeHomeStat.unsafeIconWidth === unsafeHomeStat.deliveryIconWidth);
     assertCheck("home unsafe stat pulses alert highlight", unsafeHomeStat.alertAnimation.includes("unsafeStatPulse"));
     await setViewport(client, 1440, 960);
     await delay(250);
@@ -476,10 +485,17 @@ function assertCheck(name, condition) {
     })()`);
     await navigate(client, `${baseUrl}/index.html`);
     await click(client, '[data-stat-scope="unsafe"]');
+    await click(client, '[data-unsafe-record-detail="unsafe-detail-1"]');
     const unsafeStatNavigation = await evaluate(client, `(() => ({
       currentPath: location.pathname.split("/").pop(),
       unsafeTabActive: document.querySelector('[data-manage-tab="unsafe"]')?.classList.contains("active") || false,
-      statusFilter: document.querySelector('[data-record-filter="unsafe:status"]')?.value || "",
+      statusFilter: (() => {
+        try {
+          return JSON.parse(localStorage.getItem("shipyardSafetyV1.unsafeFilters") || "{}").status || "";
+        } catch {
+          return "";
+        }
+      })(),
       receivedStatus: window.IssueMaterialRules.UNSAFE_STATUSES[0],
       statusControlDisabled: document.querySelector('[data-record-status^="unsafe:"]')?.disabled || false,
       hasUnsafeRecord: Boolean(document.querySelector('[data-unsafe-record-detail="unsafe-detail-1"]')),
@@ -497,11 +513,12 @@ function assertCheck(name, condition) {
     assertCheck("history removes old risk scope", historyScopeState.hasRiskScope === false);
 
     await navigate(client, `${baseUrl}/check.html`);
+    await click(client, '[data-action="toggle-work-prep-direct"]');
     await click(client, '[data-select-category="mounting"]');
     const prepState = await evaluate(client, `(() => {
       const text = document.body.innerText;
       return {
-        hasPrepTitle: text.includes("사용 공기구와 준비물"),
+        hasPrepTitle: text.includes("공기구 확인") && text.includes("사용할 공기구와 준비물을 선택하세요"),
         hasWire: text.includes("탑재용 와이어"),
         hasPostTool: text.includes("후행용 공기구"),
       };
@@ -546,7 +563,7 @@ function assertCheck(name, condition) {
         hasCollapsedAddItemForm: !document.querySelector('[id^="itemText_"]'),
         hasAddItemMoreToggle: Boolean(document.querySelector('[data-toggle-add-item="mounting-lift"]')),
         hasCollapsedIconEditor: !document.querySelector("#editCatIcon"),
-        hasIconEditorMoreToggle: Boolean(document.querySelector("[data-toggle-category-visual]")),
+        hidesIconEditorMoreToggle: !document.querySelector("[data-toggle-category-visual]"),
         hasAdminToggle: Boolean(document.querySelector('[data-action="toggle-admin"]')),
         hasWireDescription: text.includes("탑재용 와이어 선택 시 표시"),
         hasCommonDescription: text.includes("공통 항목"),
@@ -555,7 +572,7 @@ function assertCheck(name, condition) {
     assertCheck("item add form is collapsed on entry", itemsState.hasCollapsedAddItemForm);
     assertCheck("item add form more toggle appears", itemsState.hasAddItemMoreToggle);
     assertCheck("icon editor is collapsed on entry", itemsState.hasCollapsedIconEditor);
-    assertCheck("icon editor more toggle appears", itemsState.hasIconEditorMoreToggle);
+    assertCheck("icon editor toggle stays hidden before admin mode", itemsState.hidesIconEditorMoreToggle);
     assertCheck("item management admin toggle appears", itemsState.hasAdminToggle);
     assertCheck("linked tool description appears", itemsState.hasWireDescription);
     assertCheck("common item description appears", itemsState.hasCommonDescription);
@@ -566,20 +583,19 @@ function assertCheck(name, condition) {
     await setViewport(client, 1280, 900);
     await delay(250);
     await click(client, '[data-toggle-add-item="mounting-lift"]');
-    await click(client, "[data-toggle-category-visual]");
     const expandedItemsState = await evaluate(client, `(() => {
       const text = document.body.innerText;
       return {
         hasToolPicker: text.includes("사용 공기구"),
         hasItemTextField: Boolean(document.querySelector("#itemText_mounting-lift")),
-        hasIconField: Boolean(document.querySelector("#editCatIcon")),
-        hasPictogramPicker: Boolean(document.querySelector(".pictogram-picker")),
+        hidesIconField: !document.querySelector("#editCatIcon"),
+        hidesPictogramPicker: !document.querySelector(".pictogram-picker"),
       };
     })()`);
     assertCheck("item add form expands from more toggle", expandedItemsState.hasItemTextField);
     assertCheck("item management tool picker appears after expand", expandedItemsState.hasToolPicker);
-    assertCheck("icon editor expands from more toggle", expandedItemsState.hasIconField);
-    assertCheck("pictogram picker appears after expand", expandedItemsState.hasPictogramPicker);
+    assertCheck("icon editor remains hidden before admin mode", expandedItemsState.hidesIconField);
+    assertCheck("pictogram picker remains hidden before admin mode", expandedItemsState.hidesPictogramPicker);
     await evaluate(client, `(() => {
       window.__adminPromptMessages = [];
       window.prompt = (message) => {
@@ -594,10 +610,12 @@ function assertCheck(name, condition) {
         promptMessages: window.__adminPromptMessages || [],
         togglePressed: toggle ? toggle.getAttribute("aria-pressed") : "",
         hasAdminNotice: document.body.innerText.includes("관리자 수정 모드가 켜졌습니다"),
+        hasPermissionNotice: document.body.innerText.includes("관리자 수정은 관리자 권한 작업자 로그인 후 사용할 수 있습니다"),
       };
     })()`);
-    assertCheck("admin password prompt appears", adminState.promptMessages.some((message) => message.includes("관리자 비밀번호")));
-    assertCheck("admin mode turns on after password", adminState.togglePressed === "true");
+    assertCheck("admin password prompt is removed", adminState.promptMessages.length === 0);
+    assertCheck("admin mode stays off without worker admin session", adminState.togglePressed !== "true");
+    assertCheck("admin mode explains worker admin requirement", adminState.hasPermissionNotice);
     const itemsShot = await screenshot(client, "06-items-management-expanded-desktop.png");
 
     await navigate(client, `${baseUrl}/unsafe.html`);
@@ -605,79 +623,66 @@ function assertCheck(name, condition) {
       return {
         hasTitle: document.body.innerText.includes("불안전요소 등록"),
         hasShipSelect: Boolean(document.querySelector("#unsafeShipNo")),
-        hasWorkerSelect: Boolean(document.querySelector("#unsafeWorkerId")),
+        hidesWorkerSelect: !document.querySelector("#unsafeWorkerId"),
       };
     })()`);
     assertCheck("unsafe registration title", unsafeState.hasTitle);
     assertCheck("unsafe ship select", unsafeState.hasShipSelect);
-    assertCheck("unsafe worker select", unsafeState.hasWorkerSelect);
+    assertCheck("unsafe worker select is removed from ship step", unsafeState.hidesWorkerSelect);
     const unsafeShot = await screenshot(client, "07-unsafe-registration-desktop.png");
 
     await navigate(client, `${baseUrl}/materials.html`);
     const materialState = await evaluate(client, `(() => {
       return {
         hasTitle: document.body.innerText.includes("호선자재 누락"),
-        hasMaterialName: Boolean(document.querySelector("#materialName")),
-        hasWorkerSelect: Boolean(document.querySelector("#materialWorkerId")),
+        hasShipSelect: Boolean(document.querySelector("#materialShipNo")),
+        hidesWorkerSelect: !document.querySelector("#materialWorkerId"),
       };
     })()`);
     assertCheck("material registration title", materialState.hasTitle);
-    assertCheck("material name input", materialState.hasMaterialName);
-    assertCheck("material worker select", materialState.hasWorkerSelect);
+    assertCheck("material ship select", materialState.hasShipSelect);
+    assertCheck("material worker select is removed from ship step", materialState.hidesWorkerSelect);
     const materialShot = await screenshot(client, "08-material-registration-desktop.png");
 
     await evaluate(client, `(() => {
       sessionStorage.removeItem("shipyardSafetyV1.adminMode");
     })()`);
     await navigate(client, `${baseUrl}/manage.html`);
-    await evaluate(client, `(() => {
-      window.prompt = () => "gs2026";
-    })()`);
-    await click(client, '[data-action="toggle-admin"]');
-    await click(client, '[data-manage-tab="workers"]');
     const manageState = await evaluate(client, `(() => {
       return {
         hasManageTitle: document.body.innerText.includes("관리"),
-        hasWorkersTab: document.body.innerText.includes("작업자"),
-        hasWorkerNameInput: Boolean(document.querySelector("#workerName")),
+        hasUnsafeTab: Boolean(document.querySelector('[data-manage-tab="unsafe"]')),
+        hasMaterialsTab: Boolean(document.querySelector('[data-manage-tab="materials"]')),
+        hidesWorkerNameInput: !document.querySelector("#workerName"),
       };
     })()`);
     assertCheck("manage title", manageState.hasManageTitle);
-    assertCheck("workers tab", manageState.hasWorkersTab);
-    assertCheck("worker name input", manageState.hasWorkerNameInput);
-    const manageShot = await screenshot(client, "09-manage-workers-desktop.png");
-
+    assertCheck("manage unsafe tab", manageState.hasUnsafeTab);
+    assertCheck("manage materials tab", manageState.hasMaterialsTab);
+    assertCheck("legacy worker editor is not exposed in manage landing", manageState.hidesWorkerNameInput);
+    const manageShot = await screenshot(client, "09-manage-current-desktop.png");
     await click(client, '[data-manage-tab="unsafe"]');
     await click(client, '[data-unsafe-record-detail="unsafe-detail-1"]');
     const unsafeDetailState = await evaluate(client, `(() => {
-      const images = Array.from(document.querySelectorAll(".unsafe-detail-photo"));
-      const allMetaCards = Array.from(document.querySelectorAll(".unsafe-detail .detail-grid > div"));
+      const images = Array.from(document.querySelectorAll(".unsafe-photo-slot.has-photo img"));
+      const allMetaCards = Array.from(document.querySelectorAll(".unsafe-meta-grid > div"));
       const metaCards = allMetaCards.filter((card) => getComputedStyle(card).display !== "none");
-      const metaLabels = metaCards.map((card) => card.querySelector(".small")?.textContent?.trim() || "");
-      const dateCard = metaCards.find((card) => card.querySelector(".small")?.textContent?.trim() === "등록일시");
-      const dateStyle = dateCard ? getComputedStyle(dateCard) : null;
-      const hiddenPhotoMetaCard = allMetaCards.find((card) => card.querySelector(".small")?.textContent?.trim() === "사진");
+      const metaLabels = metaCards.map((card) => card.querySelector("span")?.textContent?.trim() || "");
       return {
-        hasDetailTitle: document.body.innerText.includes("불안전요소 상세 기록"),
-        hasBackButton: Boolean(document.querySelector('[data-action="back-unsafe-list"]')),
+        hasDetailTitle: Boolean(document.querySelector(".unsafe-inline-detail .unsafe-detail-shell h3")),
+        hasDisabledStatusControl: document.querySelector('[data-record-status^="unsafe:"]')?.disabled || false,
         metaLabels,
         metaCardCount: metaCards.length,
-        hasPhotoMetaCard: metaLabels.includes("사진"),
-        hiddenPhotoMetaCardExists: Boolean(hiddenPhotoMetaCard),
-        hiddenPhotoMetaCardVisible: hiddenPhotoMetaCard ? getComputedStyle(hiddenPhotoMetaCard).display !== "none" : false,
-        dateSpansFullWidth: Boolean(dateStyle && dateStyle.gridColumnStart === "1" && dateStyle.gridColumnEnd === "-1"),
         photoCount: images.length,
         allPhotosLoaded: images.every((img) => img.complete && img.naturalWidth > 0),
         hasContent: document.body.innerText.includes("용접 불티 차단막 미설치"),
       };
     })()`);
-    assertCheck("unsafe detail title appears after card click", unsafeDetailState.hasDetailTitle);
-    assertCheck("unsafe detail has back button", unsafeDetailState.hasBackButton);
-    assertCheck("unsafe detail hides photo count from meta cards", unsafeDetailState.hasPhotoMetaCard === false);
-    assertCheck("unsafe detail keeps photo count meta hidden in DOM", unsafeDetailState.hiddenPhotoMetaCardExists && !unsafeDetailState.hiddenPhotoMetaCardVisible);
-    assertCheck("unsafe detail meta grid has no empty fourth card", unsafeDetailState.metaCardCount === 3);
-    assertCheck("unsafe detail date meta spans full width", unsafeDetailState.dateSpansFullWidth);
-    assertCheck("unsafe detail shows every attached photo", unsafeDetailState.photoCount === 3);
+    assertCheck("unsafe inline detail title appears after card click", unsafeDetailState.hasDetailTitle);
+    assertCheck("unsafe inline detail keeps status changes admin-only", unsafeDetailState.hasDisabledStatusControl);
+    assertCheck("unsafe inline detail meta grid has current cards", unsafeDetailState.metaCardCount === 4);
+    assertCheck("unsafe inline detail meta labels are current", ["등록자", "소속", "접수 시각", "연관 점검"].every((label) => unsafeDetailState.metaLabels.includes(label)));
+    assertCheck("unsafe inline detail shows attached photo slots", unsafeDetailState.photoCount === 2);
     assertCheck("unsafe detail photos load", unsafeDetailState.allPhotosLoaded);
     assertCheck("unsafe detail keeps original content", unsafeDetailState.hasContent);
     const unsafeDetailShot = await screenshot(client, "10-unsafe-detail-desktop.png");
