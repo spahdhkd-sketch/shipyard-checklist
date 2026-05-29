@@ -11,7 +11,7 @@ codex-handoff-2026-05-28.md
 Current deployed release:
 
 - Branch: `codex/safety-pictograms-handoff-20260528`
-- Tag: `v0.9-20260528`
+- Tag: `v1.0-20260529`
 - Production: `https://gs-safety-checklist.vercel.app`
 
 Quick resume:

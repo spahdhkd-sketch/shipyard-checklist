@@ -9,6 +9,7 @@ const corsHeaders = {
 };
 
 const LEADER_WORKER_POSITION = "조장";
+const FOREMAN_WORKER_POSITION = "반장";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") || "",
@@ -78,7 +79,7 @@ function booleanValue(value: unknown, fallback = false) {
 function canSendPledgeNotifications(worker: Record<string, unknown>) {
   const team = cleanText(worker.team, 40);
   const position = cleanText(worker.position, 40);
-  return [LEADER_WORKER_POSITION, "관리", "총무"].includes(position) || team === "관리" || team === "총무";
+  return [LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"].includes(position) || team === "관리" || team === "총무";
 }
 
 function validSubscription(value: unknown) {

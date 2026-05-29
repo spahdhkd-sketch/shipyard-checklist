@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "0.9-20260528";
+    const APP_VERSION = "1.0-20260529";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -1069,9 +1069,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const HIDDEN_PLEDGE_ANALYTICS_WORKER_NAMES = new Set(["김광수", "허지원", "김준혁", "김경제"]);
     const DEFAULT_WORKER_POSITION = "작업자";
     const LEADER_WORKER_POSITION = "조장";
-    const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, "대표", "관리", "총무"];
+    const FOREMAN_WORKER_POSITION = "반장";
+    const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "대표", "관리", "총무"];
     const ADMIN_PREENTRY_WORKER_POSITIONS = new Set(["대표", "관리", "총무"]);
-    const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, "관리", "총무"]);
+    const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION]);
+    const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"]);
     const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
     const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
     const LOGIN_WORKER_GROUP_RANK = new Map(LOGIN_WORKER_GROUP_ORDER.map((group, index) => [group, index]));
@@ -1105,6 +1107,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return WORKER_POSITIONS.includes(value) ? value : DEFAULT_WORKER_POSITION;
     }
 
+    function workerDisplayPosition(worker) {
+      const position = normalizeWorkerPosition(worker?.position);
+      const name = normalizedWorkerName(worker?.name);
+      if (name === "백승기" && position === LEADER_WORKER_POSITION) return FOREMAN_WORKER_POSITION;
+      return position;
+    }
+
     function loginWorkerGroup(worker) {
       const position = normalizeWorkerPosition(worker?.position);
       const team = normalizeWorkerTeam(worker?.team);
@@ -1129,7 +1138,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function isLeaderWorker(worker) {
-      return normalizeWorkerPosition(worker?.position) === LEADER_WORKER_POSITION;
+      return LEADER_EQUIVALENT_WORKER_POSITIONS.has(normalizeWorkerPosition(worker?.position));
     }
 
     function canWorkerPreEnterAdminMode(worker) {
@@ -1177,16 +1186,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return [...ids].filter((id) => state.workers.some((worker) => worker.id === id));
     }
 
+    function workPrepCounterpartTeam(team) {
+      const value = String(team || "").trim();
+      if (value === "선행") return "후행";
+      if (value === "후행") return "선행";
+      return "";
+    }
+
     function normalizeOtherTeamWorkPrepWorkerIds(draft) {
       const leaderId = String(draft.leaderWorkerId || "");
+      const counterpartTeam = workPrepCounterpartTeam(draft.team);
       const ids = new Set(Array.isArray(draft.otherTeamWorkerIds) ? draft.otherTeamWorkerIds : []);
       ids.delete(leaderId);
       ids.delete("");
-      return [...ids].filter((id) => state.workers.some((worker) => worker.id === id));
+      return [...ids].filter((id) => state.workers.some((worker) => worker.id === id && worker.team === counterpartTeam));
     }
 
     function syncWorkPrepWorkerBucketsToTeam(draft) {
       const team = String(draft.team || "");
+      const counterpartTeam = workPrepCounterpartTeam(team);
       const leaderId = String(draft.leaderWorkerId || "");
       const selectedIds = new Set([
         ...(Array.isArray(draft.workerIds) ? draft.workerIds : []),
@@ -1199,7 +1217,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const worker = state.workers.find((row) => row.id === id);
         if (!worker) return;
         if (team && worker.team === team) draft.workerIds.push(id);
-        else draft.otherTeamWorkerIds.push(id);
+        else if (counterpartTeam && worker.team === counterpartTeam) draft.otherTeamWorkerIds.push(id);
       });
       return draft;
     }
@@ -1306,8 +1324,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return {
         done: submittedIds.size,
         total: participantIds.length,
+        submittedIds: [...submittedIds],
         complete: Boolean(participantIds.length) && submittedIds.size >= participantIds.length,
       };
+    }
+
+    function hasSubmittedWorkPrepInspection(record, workerId) {
+      const id = String(workerId || "").trim();
+      if (!id) return false;
+      return workPrepSubmissionProgress(record).submittedIds.includes(id);
     }
 
     function updateWorkPrepRecordUsageFromSubmissions(recordId) {
@@ -4022,8 +4047,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function workerRoleBadge(worker) {
       const position = normalizeWorkerPosition(worker?.position);
+      const label = workerDisplayPosition(worker);
       const className = PRIVILEGED_WORKER_POSITIONS.has(position) ? "is-leader" : "";
-      return `<span class="worker-position-badge ${className}">${esc(position)}</span>`;
+      return `<span class="worker-position-badge ${className}">${esc(label)}</span>`;
     }
 
     function workerBadgeRow(worker) {
@@ -4336,6 +4362,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!category) return toast("작업 유형을 찾을 수 없습니다.");
       const currentWorker = currentWorkerSessionWorker();
       if (!isWorkPrepParticipant(record, currentWorker?.id)) return toast("작업지시서에 등록된 조장/작업자만 점검을 시작할 수 있습니다.");
+      if (hasSubmittedWorkPrepInspection(record, currentWorker?.id)) return toast("이미 이 작업지시서 점검을 제출했습니다.");
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
       const workerName = currentWorker?.name || leader?.name || state.draft.worker || "";
       const workPrepWorkerId = currentWorker?.id || leader?.id || "";
@@ -4436,9 +4463,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function otherTeamWorkPrepWorkers(draft) {
       const leaderId = String(draft.leaderWorkerId || "");
+      const counterpartTeam = workPrepCounterpartTeam(draft.team);
       return state.workers
-        .filter((worker) => worker.team !== draft.team)
-        .filter((worker) => !isLeaderWorker(worker))
+        .filter((worker) => counterpartTeam && worker.team === counterpartTeam)
         .filter((worker) => worker.id !== leaderId)
         .sort((a, b) => String(a.team || "").localeCompare(String(b.team || ""), "ko") || String(a.name || "").localeCompare(String(b.name || ""), "ko"));
     }
@@ -4532,8 +4559,34 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const isUsed = status === "used";
       const currentWorker = currentWorkerSessionWorker();
       const canStartCheck = isWorkPrepParticipant(record, currentWorker?.id);
-      const checkDisabled = !isUsed && status !== "ordered" && !canStartCheck;
+      const currentWorkerSubmitted = hasSubmittedWorkPrepInspection(record, currentWorker?.id);
+      const checkDisabled = !isUsed && (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted));
       const buttonAction = status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep";
+      const submittedIds = new Set(submissionProgress.submittedIds || []);
+      const pendingWorkers = workPrepParticipantWorkerIds(record)
+        .filter((id) => !submittedIds.has(id))
+        .map((id) => state.workers.find((worker) => worker.id === id))
+        .filter(Boolean);
+      const pendingNames = pendingWorkers.map((worker) => worker.name || "이름 없음");
+      const pendingNameLimit = 4;
+      const hiddenPendingCount = Math.max(0, pendingNames.length - pendingNameLimit);
+      const pendingNamesHtml = pendingNames.length
+        ? `<span>${pendingNames.slice(0, pendingNameLimit).map(esc).join(" · ")}${hiddenPendingCount ? ` 외 ${hiddenPendingCount}명` : ""}</span>`
+        : "";
+      const summaryHtml = status === "ordered"
+        ? `<div class="work-prep-submission-summary neutral"><strong>작업 준비 전</strong></div>`
+        : (isUsed || submissionProgress.complete)
+          ? `<div class="work-prep-submission-summary done"><strong>전원 점검 완료</strong></div>`
+          : `<div class="work-prep-submission-summary pending"><strong>미점검 ${pendingNames.length}명</strong>${pendingNamesHtml}</div>`;
+      const buttonLabel = status === "ordered"
+        ? "준비 시작"
+        : isUsed
+          ? WORK_PREP_STATUS_LABELS.used
+          : currentWorkerSubmitted
+            ? "제출 완료"
+            : canStartCheck
+              ? "점검 시작"
+              : "점검 대기";
       return `<article class="work-prep-record-card status-${esc(status)}" data-work-prep-record="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 수정`)}">
         <div class="work-prep-record-top">
           <div>
@@ -4550,8 +4603,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <span>${esc(record.team || "-")}</span>
         </div>
         <div class="work-prep-record-actions">
-          <small>${status === "ordered" ? "준비 시작 전 작업지시" : isUsed ? "점검 제출 완료" : canStartCheck ? "등록 인원 점검 시작 가능" : "등록 인원 점검 대기"}</small>
-          <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${status === "ordered" ? "준비 시작" : isUsed ? WORK_PREP_STATUS_LABELS.used : canStartCheck ? "점검 시작" : "점검 대기"}</button>
+          ${summaryHtml}
+          <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${esc(buttonLabel)}</button>
         </div>
       </article>`;
     }
@@ -6140,7 +6193,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <input type="checkbox" data-admin-push-worker="${esc(worker.id)}" ${checked ? "checked" : ""} />
         <span>
           <strong>${esc(worker.name)}</strong>
-          <em>${esc(worker.team || "소속 없음")} · ${esc(normalizeWorkerPosition(worker.position))}</em>
+          <em>${esc(worker.team || "소속 없음")} · ${esc(workerDisplayPosition(worker))}</em>
         </span>
         ${workerPushSubscriptionBadgeHtml(worker.id)}
       </label>`;
