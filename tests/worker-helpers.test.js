@@ -5,7 +5,7 @@ const path = require("path");
 const helpers = require("../assets/js/worker-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260528-egress-signature-1";
+const ASSET_TOKEN = "20260529-workprep-progress-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
 const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
@@ -16,6 +16,7 @@ assert.strictEqual(helpers.normalizedWorkerName(null), "");
 
 assert.strictEqual(helpers.normalizeWorkerPosition("대표"), "대표");
 assert.strictEqual(helpers.normalizeWorkerPosition(" 조장 "), "조장");
+assert.strictEqual(helpers.normalizeWorkerPosition(" 반장 "), "반장");
 assert.strictEqual(helpers.normalizeWorkerPosition("bad-position"), "작업자");
 
 assert.strictEqual(helpers.normalizeWorkerTeam("선행"), "선행");
@@ -41,6 +42,7 @@ assert.deepStrictEqual(helpers.sortWorkersForLogin(workers).map((worker) => work
 assert.deepStrictEqual(workers.map((worker) => worker.id), ["w5", "w4", "w2", "w1", "w3", "w6"], "sortWorkersForLogin does not mutate input");
 
 assert.strictEqual(helpers.isLeaderWorker({ position: "조장" }), true);
+assert.strictEqual(helpers.isLeaderWorker({ position: "반장" }), true);
 assert.strictEqual(helpers.isLeaderWorker({ position: "관리" }), false);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "관리" }), true);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "조장" }), false);
@@ -53,6 +55,8 @@ assert.strictEqual(helpers.workerTeamBadge("후행"), '<span class="worker-team-
 assert.strictEqual(helpers.workerTeamBadge("<관리>"), '<span class="worker-team-badge is-neutral">&lt;관리&gt;</span>');
 
 assert.strictEqual(helpers.workerRoleBadge({ position: "작업자" }), '<span class="worker-position-badge ">작업자</span>');
+assert.strictEqual(helpers.workerRoleBadge({ position: "반장" }), '<span class="worker-position-badge is-leader">반장</span>');
+assert.strictEqual(helpers.workerRoleBadge({ name: "백승기", position: "조장" }), '<span class="worker-position-badge is-leader">반장</span>');
 assert.strictEqual(helpers.workerRoleBadge({ position: "총무" }), '<span class="worker-position-badge is-leader">총무</span>');
 assert.strictEqual(helpers.workerRoleBadge({ position: "<bad>" }), '<span class="worker-position-badge ">작업자</span>');
 

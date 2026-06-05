@@ -1,18 +1,18 @@
-﻿# Version
+# Version
 
-Current version: `0.9-20260528`
+Current version: `1.0-20260529`
 
-Recorded at: `2026-05-28 18:24:54 +09:00`
+Recorded at: `2026-05-29 13:00:45 +09:00`
 
 Baseline commit: `99e363e`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version reduces Supabase egress by narrowing browser selects, limiting startup pulls, lazy-loading detail rows/photos, disabling automatic realtime/polling startup, compressing uploaded issue photos, and adding an operations checklist.
-- It fixes work-prep draft leakage so a newly created work order does not inherit the previous work order's selected workers.
-- It fixes pledge signature clearing so the current signature pad can be cleared without deleting the worker's reusable same-day signature cache.
-- It tightens pictogram/admin mutation and issue-photo storage boundaries.
+- This version updates work-prep participant selection so 선행/후행 조장 flows only show the counterpart production team and exclude 관리 from 타 소속 작업자.
+- It adds 반장 as a 조장-equivalent role, while displaying 백승기 as 반장.
+- It prevents completed participants from starting the same work-prep inspection again and shows 제출 완료 instead.
+- It adds inline 미점검 인원/전원 점검 완료 status text to work order cards.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

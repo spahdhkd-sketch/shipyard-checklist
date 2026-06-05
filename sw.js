@@ -1,4 +1,4 @@
-const CACHE = "gs-safety-20260528-egress-signature-1";
+const CACHE = "gs-safety-20260529-workprep-progress-1";
 const SHELL = [
   "/",
   "/index.html",
@@ -6,21 +6,21 @@ const SHELL = [
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
   "/assets/icons/notification-icon.png",
-  "/assets/css/styles-v2.css?v=20260528-egress-signature-1",
-  "/assets/css/20-component-table.css?v=20260528-egress-signature-1",
-  "/assets/css/30-feature-not-found.css?v=20260528-egress-signature-1",
-  "/assets/css/30-feature-signature.css?v=20260528-egress-signature-1",
-  "/assets/css/30-feature-push-management.css?v=20260528-egress-signature-1",
-  "/assets/css/30-feature-monthly-worker.css?v=20260528-egress-signature-1",
-  "/assets/css/20-component-disabled-reason.css?v=20260528-egress-signature-1",
+  "/assets/css/styles-v2.css?v=20260529-workprep-progress-1",
+  "/assets/css/20-component-table.css?v=20260529-workprep-progress-1",
+  "/assets/css/30-feature-not-found.css?v=20260529-workprep-progress-1",
+  "/assets/css/30-feature-signature.css?v=20260529-workprep-progress-1",
+  "/assets/css/30-feature-push-management.css?v=20260529-workprep-progress-1",
+  "/assets/css/30-feature-monthly-worker.css?v=20260529-workprep-progress-1",
+  "/assets/css/20-component-disabled-reason.css?v=20260529-workprep-progress-1",
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
-  "/assets/js/checklist-rules.js?v=20260528-egress-signature-1",
-  "/assets/js/issue-material-rules.js?v=20260528-egress-signature-1",
-  "/assets/js/pictogram-helpers.js?v=20260528-egress-signature-1",
-  "/assets/js/ship-helpers.js?v=20260528-egress-signature-1",
-  "/assets/js/worker-helpers.js?v=20260528-egress-signature-1",
-  "/assets/js/dashboard-view.js?v=20260528-egress-signature-1",
-  "/assets/js/app-v2.js?v=20260528-egress-signature-1"
+  "/assets/js/checklist-rules.js?v=20260529-workprep-progress-1",
+  "/assets/js/issue-material-rules.js?v=20260529-workprep-progress-1",
+  "/assets/js/pictogram-helpers.js?v=20260529-workprep-progress-1",
+  "/assets/js/ship-helpers.js?v=20260529-workprep-progress-1",
+  "/assets/js/worker-helpers.js?v=20260529-workprep-progress-1",
+  "/assets/js/dashboard-view.js?v=20260529-workprep-progress-1",
+  "/assets/js/app-v2.js?v=20260529-workprep-progress-1"
 ];
 
 self.addEventListener("install", (event) => {

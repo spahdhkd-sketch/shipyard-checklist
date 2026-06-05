@@ -2733,8 +2733,7 @@
       background: #f8fafc;
     }
 
-    .work-prep-record-top,
-    .work-prep-record-actions {
+    .work-prep-record-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -2807,15 +2806,44 @@
     }
 
     .work-prep-record-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 10px;
       padding-top: 10px;
       border-top: 1px solid #eef2f7;
     }
 
-    .work-prep-record-actions small {
+    .work-prep-submission-summary {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
       color: #536273;
+      line-height: 1.25;
+    }
+
+    .work-prep-submission-summary strong {
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .work-prep-submission-summary span {
+      color: #7a3238;
       font-size: 12px;
       font-weight: 800;
-      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .work-prep-submission-summary.pending strong {
+      color: #b43d45;
+    }
+
+    .work-prep-submission-summary.done strong {
+      color: #16724a;
+    }
+
+    .work-prep-submission-summary.neutral strong {
+      color: #536273;
     }
 
     .work-prep-record-actions .btn,
@@ -2825,6 +2853,17 @@
       padding: 0 14px;
       border-radius: 8px;
       font-size: 12px;
+    }
+
+    @media (max-width: 620px) {
+      .work-prep-record-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .work-prep-record-actions .btn,
+      .work-prep-record-actions .btn-light {
+        width: 100%;
+      }
     }
 
     .material-ship-stack,

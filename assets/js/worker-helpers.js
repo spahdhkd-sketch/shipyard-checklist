@@ -9,10 +9,12 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, function buildWorkerHelpers() {
   const DEFAULT_WORKER_POSITION = "작업자";
   const LEADER_WORKER_POSITION = "조장";
-  const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, "대표", "관리", "총무"];
+  const FOREMAN_WORKER_POSITION = "반장";
+  const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "대표", "관리", "총무"];
   const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
   const ADMIN_PREENTRY_WORKER_POSITIONS = new Set(["대표", "관리", "총무"]);
-  const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, "관리", "총무"]);
+  const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION]);
+  const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"]);
   const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
   const LOGIN_WORKER_GROUP_RANK = new Map(LOGIN_WORKER_GROUP_ORDER.map((group, index) => [group, index]));
 
@@ -33,6 +35,13 @@
   function normalizeWorkerPosition(position) {
     const value = String(position || "").trim();
     return WORKER_POSITIONS.includes(value) ? value : DEFAULT_WORKER_POSITION;
+  }
+
+  function workerDisplayPosition(worker) {
+    const position = normalizeWorkerPosition(worker && worker.position);
+    const name = normalizedWorkerName(worker && worker.name);
+    if (name === "백승기" && position === LEADER_WORKER_POSITION) return FOREMAN_WORKER_POSITION;
+    return position;
   }
 
   function normalizeWorkerTeam(team) {
@@ -64,7 +73,7 @@
   }
 
   function isLeaderWorker(worker) {
-    return normalizeWorkerPosition(worker && worker.position) === LEADER_WORKER_POSITION;
+    return LEADER_EQUIVALENT_WORKER_POSITIONS.has(normalizeWorkerPosition(worker && worker.position));
   }
 
   function canWorkerPreEnterAdminMode(worker) {
@@ -86,17 +95,20 @@
 
   function workerRoleBadge(worker) {
     const position = normalizeWorkerPosition(worker && worker.position);
+    const label = workerDisplayPosition(worker);
     const className = PRIVILEGED_WORKER_POSITIONS.has(position) ? "is-leader" : "";
-    return `<span class="worker-position-badge ${className}">${esc(position)}</span>`;
+    return `<span class="worker-position-badge ${className}">${esc(label)}</span>`;
   }
 
   return {
     DEFAULT_WORKER_POSITION,
     LEADER_WORKER_POSITION,
+    FOREMAN_WORKER_POSITION,
     WORKER_POSITIONS,
     WORKER_TEAM_OPTIONS,
     normalizedWorkerName,
     normalizeWorkerPosition,
+    workerDisplayPosition,
     normalizeWorkerTeam,
     loginWorkerGroup,
     loginWorkerGroupRank,
