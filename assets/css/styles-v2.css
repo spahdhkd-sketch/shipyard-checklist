@@ -410,11 +410,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      flex-wrap: wrap;
+      column-gap: 12px;
+      row-gap: 6px;
       margin-top: 0;
       padding: 0;
       border-radius: 0;
       font-size: 12px;
+      min-height: 30px;
       background: transparent;
       color: #fff;
     }
@@ -423,11 +426,19 @@
       display: inline-flex;
       align-items: center;
       gap: 7px;
+      flex: 1 1 126px;
       min-width: 0;
       font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .sync-status-copy span:last-child {
+      overflow-wrap: anywhere;
     }
 
     .sidebar-logout-btn {
+      flex: 0 0 auto;
+      margin-left: auto;
       min-height: 30px;
       padding: 0 12px;
       border: 1px solid rgba(255,255,255,.22);
@@ -440,8 +451,8 @@
     }
 
     .sidebar-worker-session {
-      margin-top: 9px;
-      padding-top: 8px;
+      margin-top: 10px;
+      padding-top: 9px;
       border-top: 1px solid rgba(255,255,255,.13);
       color: #fff;
       line-height: 1.45;
@@ -1334,6 +1345,9 @@
     body.screen-mobile .mobile-header,
     body.preview-mobile .mobile-header {
       padding: 8px 14px 12px !important;
+      width: min(448px, 100%);
+      max-width: 448px;
+      margin-right: auto;
     }
 
     body.screen-mobile .phone-status,
@@ -8353,18 +8367,32 @@
       padding: 10px 18px 18px;
       background: var(--color-sidebar);
       color: #fff;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
     }
 
     .phone-status {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+      width: 100%;
+      min-width: 0;
       height: 22px;
       font-size: 12px;
       font-weight: 800;
       color: rgba(255,255,255,.95);
       margin-bottom: 10px;
+    }
+
+    .phone-status > span:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .appbar {
@@ -8407,11 +8435,15 @@
     }
 
     .home-version-badge {
+      position: static;
+      z-index: 45;
       display: inline-flex;
       align-items: center;
       gap: 5px;
       flex: 0 0 auto;
       min-height: 24px;
+      max-width: 78px;
+      overflow: hidden;
       padding: 3px 8px;
       border: 1px solid rgba(191, 219, 254, .9);
       border-radius: 999px;
@@ -8420,6 +8452,7 @@
       font-size: 11px;
       line-height: 1;
       font-weight: 900;
+      white-space: nowrap;
     }
 
     .home-sub {

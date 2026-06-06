@@ -1,5 +1,7 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
     const APP_VERSION = "1.1-20260606";
+    const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
+    const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
@@ -78,6 +80,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms";
     const PICTOGRAM_IMAGE_MAX_BYTES = 768 * 1024;
     const PICTOGRAM_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+    const SYNC_STATUS_LABELS = {
+      "로컬 저장": {
+        default: "임시저장됨 · 연결 시 전송",
+        compact: "임시저장",
+      },
+      "동기화 대기": {
+        default: "전송 대기 중",
+        compact: "전송 대기",
+      },
+      "서버 확인 중": {
+        default: "서버 확인 중",
+        compact: "확인 중",
+      },
+      "동기화 중": {
+        default: "동기화 중",
+        compact: "동기화 중",
+      },
+      "온라인": {
+        default: "동기화 완료",
+        compact: "동기화 완료",
+      },
+      "동기화 오류": {
+        default: "동기화 실패 — 다시 시도해주세요",
+        compact: "동기화 실패",
+      },
+    };
+    const GENERIC_WORKER_LABELS = new Set(["작업자", "로그인 전"]);
     const PICTOGRAM_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
     const PICTOGRAM_HELPERS = typeof window !== "undefined" && window.ShipyardPictogramHelpers
       ? window.ShipyardPictogramHelpers
@@ -1927,7 +1956,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (state.pushRegistrationSubmitting) return;
       if (pushRegisteredForCurrentWorker()) return toast("이미 등록된 휴대폰 알림 구독이 있습니다.");
       const client = supabaseClient();
-      if (!client) return toast("서버 동기화 연결이 필요합니다.");
+      if (!client) return toast("서버 연결이 필요합니다 — 잠시 후 다시 시도해주세요.");
 
       const employeeNo = normalizeEmployeeNo(state.workerSession?.employeeNo || "");
       if (!employeeNo) {
@@ -1937,7 +1966,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return toast("사번을 입력하고 등록을 눌러주세요.");
       }
       const remoteStatus = await refreshWorkerPushSubscriptionStatus({ force: true });
-      if (remoteStatus?.registered) return toast("Supabase에 이미 등록된 휴대폰 알림 구독이 있습니다.");
+      if (remoteStatus?.registered) return toast("이 기기는 이미 알림 등록이 되어 있습니다.");
       if (!(await ensureBrowserNotificationPermission())) return;
 
       state.pushRegistrationSubmitting = true;
@@ -2104,7 +2133,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function sendAdminPush() {
       if (state.adminPushSending) return;
-      if (!state.adminMode) return toast("관리자 모드가 필요합니다.");
+      if (!state.adminMode) return toast("관리자만 사용할 수 있는 기능입니다.");
       if (!canSendPledgeNotifications()) return toast("조장, 관리, 총무 작업자 로그인에서 발송할 수 있습니다.");
       const targets = adminPushTargetWorkers();
       if (!targets.length) return toast("발송 대상 작업자를 선택하세요.");
@@ -2429,6 +2458,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toastTimer: null,
       syncMode: "offline",
       syncText: "로컬 저장",
+      serviceWorkerVersion: "",
+      serviceWorkerCache: "",
       pendingSyncQueue: normalizePendingSyncQueue(loadJson("pendingSyncQueue", [])),
       syncRetryTimer: null,
       syncFlushInFlight: false,
@@ -2596,6 +2627,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       prepareInitialManageFilters();
       applyRouteFiltersFromQuery();
       applyScreenMode();
+      requestServiceWorkerVersion();
       updateHeaderClock();
       render();
       replaceRouteState();
@@ -3017,10 +3049,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       [["syncBadge", "syncText"], ["mobileSyncBadge", "mobileSyncText"]].forEach(([badgeId, textId]) => {
         const badge = $(badgeId);
         const label = $(textId);
-        const labelText = badgeId === "mobileSyncBadge" && text === "로컬 저장" ? "저장됨" : text;
+        const labelText = syncStatusLabel(text, badgeId === "mobileSyncBadge");
         if (badge) badge.className = `${badgeId === "mobileSyncBadge" ? "sync-chip" : "sync-badge"} ${mode}`;
         if (label) label.textContent = labelText;
       });
+    }
+
+    function syncStatusLabel(text, compact = false) {
+      const fallback = String(text || "").trim() || "상태 확인 중";
+      const labels = SYNC_STATUS_LABELS[fallback];
+      if (!labels) return fallback;
+      return compact ? labels.compact : labels.default;
     }
 
     function isNarrowViewport() {
@@ -3362,7 +3401,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       const label = currentWorkerSessionLabel();
       if (name) name.textContent = label;
-      if (greeting) greeting.textContent = `${label}님 안전한 하루 되세요!`;
+      if (greeting) greeting.textContent = "안전한 하루 되세요.";
       updatePushRegistrationControls();
       refreshWorkerPushSubscriptionStatus().catch((error) => console.warn("push status refresh failed", error));
     }
@@ -3399,7 +3438,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         button.disabled = loggedIn && (registered || checking || registering || !supported);
         button.textContent = registering ? "알림 등록 중" : checking ? "알림 상태 확인 중" : registered ? registeredLabel : needsEmployeeNo ? "사번 확인 후 등록" : `${pushDeviceName()} 알림 등록`;
         button.title = registered
-          ? `Supabase에 등록된 알림 구독 ${registeredDeviceCount}건이 확인되어 등록 버튼을 비활성화했습니다`
+          ? `서버에 등록된 알림 ${registeredDeviceCount}건이 확인되어 등록 버튼을 비활성화했습니다`
           : needsEmployeeNo
           ? "사번을 한 번 더 확인한 뒤 이 기기에 Push 알림을 등록합니다"
           : supported ? "이 기기로 작업자 Push 알림을 받습니다" : "이 브라우저는 Push 알림을 지원하지 않습니다";
@@ -3461,9 +3500,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const time = $("phoneTime");
       const date = $("homeDateLabel");
       const version = $("homeVersionLabel");
-      if (time) time.textContent = localTime(serverNow());
-      if (date) date.textContent = formatKoreanDate(serverNow());
-      if (version) version.innerHTML = `<span class="sync-dot" aria-hidden="true"></span><span>${esc(appVersionLabel())}</span>`;
+      const now = serverNow();
+      if (time) time.textContent = formatHeaderTime(now);
+      if (date) date.textContent = formatKoreanDate(now);
+      if (version) {
+        version.innerHTML = `<span class="sync-dot" aria-hidden="true"></span><span>${esc(appVersionLabel())}</span>`;
+        version.title = serviceWorkerVersionTitle();
+      }
       syncMobileHeaderState();
     }
 
@@ -3488,13 +3531,70 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function appVersionLabel() {
-      return `version ${String(APP_VERSION).split("-")[0]}`;
+      return APP_VERSION_LABEL;
+    }
+
+    function serviceWorkerVersionTitle() {
+      const workerVersion = state.serviceWorkerVersion || "확인 중";
+      const cacheVersion = state.serviceWorkerCache || "확인 중";
+      return `앱 ${APP_VERSION} · 서비스워커 ${workerVersion} · 캐시 ${cacheVersion}`;
+    }
+
+    function requestServiceWorkerVersion() {
+      if (!("serviceWorker" in navigator)) return;
+      let finished = false;
+      const receiveVersion = (event) => {
+        const data = event.data || {};
+        if (data.type !== "GS_SW_VERSION") return;
+        state.serviceWorkerVersion = String(data.appVersion || "").trim();
+        state.serviceWorkerCache = String(data.cache || data.assetToken || "").trim();
+        finished = true;
+        updateHeaderClock();
+      };
+      const sendVersionRequest = () => {
+        try {
+          navigator.serviceWorker.controller?.postMessage({ type: "GS_GET_VERSION" });
+        } catch (error) {
+          console.warn("service worker version request failed", error);
+        }
+      };
+      navigator.serviceWorker.addEventListener("message", receiveVersion);
+      sendVersionRequest();
+      navigator.serviceWorker.ready
+        .then((registration) => {
+          registration.update?.().catch((error) => console.warn("service worker update check failed", error));
+          sendVersionRequest();
+        })
+        .catch((error) => console.warn("service worker ready failed", error));
+      setTimeout(() => {
+        if (!finished) updateHeaderClock();
+        navigator.serviceWorker.removeEventListener("message", receiveVersion);
+      }, 2500);
     }
 
     function formatKoreanDate(date) {
-      const parts = kstDateParts(date);
-      const weekday = kstWeekdayFormatter.format(date).replace("요일", "");
-      return `${parts.year}.${pad2(parts.month)}.${pad2(parts.day)} (${weekday})`;
+      const safeDate = validDateOrNow(date);
+      try {
+        const parts = kstDateParts(safeDate);
+        const weekday = kstWeekdayFormatter.format(safeDate).replace("요일", "");
+        return `${parts.year}.${pad2(parts.month)}.${pad2(parts.day)} (${weekday})`;
+      } catch {
+        const local = validDateOrNow(new Date());
+        return `${local.getFullYear()}.${pad2(local.getMonth() + 1)}.${pad2(local.getDate())}`;
+      }
+    }
+
+    function formatHeaderTime(date) {
+      try {
+        return localTime(validDateOrNow(date));
+      } catch {
+        return "시간 확인 필요";
+      }
+    }
+
+    function validDateOrNow(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      return Number.isFinite(date.getTime()) ? date : new Date();
     }
 
     function serverNow() {
@@ -3616,9 +3716,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function homeGreetingText() {
-      return isWorkerLoggedIn()
-        ? `${currentWorkerSessionLabel()}님 안전한 하루 되세요!`
-        : "안전한 하루 되세요!";
+      if (!isWorkerLoggedIn()) return "안전한 하루 되세요.";
+      const label = currentWorkerSessionLabel();
+      return GENERIC_WORKER_LABELS.has(label)
+        ? "안전한 하루 되세요."
+        : `${label}님, 안전한 하루 되세요.`;
     }
 
     function renderLogin() {
@@ -5131,7 +5233,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function historyTimeParts(value) {
       const raw = String(value || "").trim();
       const match = raw.match(/^(\d{1,2}):(\d{2})/);
-      if (!match) return { period: "", text: raw || "--:--" };
+      if (!match) return { period: "", text: raw || "시간 미기록" };
       const hour = Number(match[1]);
       const minute = match[2];
       const period = hour < 12 ? "오전" : "오후";
@@ -6132,7 +6234,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const readOnlyList = !state.adminMode && readOnlyTabs.has(state.manageTab);
       if (!state.adminMode && !previewAdmin && !readOnlyList) {
         return pageHead("관리", "관리자 모드에서 사용할 수 있습니다.", adminToggleButton())
-          + `<div class="notice danger">관리자 모드가 필요합니다.</div>`;
+        + `<div class="notice danger">관리자만 사용할 수 있는 기능입니다.</div>`;
       }
       const visibleTabs = state.adminMode || previewAdmin ? tabs : tabs.filter(([id]) => readOnlyTabs.has(id));
       const unsafeOpen = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
@@ -6233,7 +6335,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const preview = adminPushNotificationPreview();
       const canSend = state.adminMode && canSendPledgeNotifications() && targetWorkers.length > 0 && draft.title.trim() && draft.body.trim() && !state.adminPushSending;
       const disabledReason = !state.adminMode
-        ? "관리자 모드가 필요합니다."
+        ? "관리자만 사용할 수 있는 기능입니다."
         : !canSendPledgeNotifications()
           ? "조장, 관리, 총무 작업자 로그인에서 발송할 수 있습니다."
           : !targetWorkers.length
@@ -6343,7 +6445,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return {
           className: "is-checking",
           text: "알림 확인 중",
-          title: "Supabase 구독 상태를 확인하고 있습니다",
+          title: "서버 알림 등록 상태를 확인하고 있습니다",
         };
       }
       if (status.registered) {
@@ -6351,20 +6453,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return {
           className: "is-registered",
           text: `알림 ${registeredCount}대`,
-          title: `Supabase에 등록된 브라우저 알림 구독 ${registeredCount}건`,
+          title: `서버에 등록된 브라우저 알림 ${registeredCount}건`,
         };
       }
       if (checked) {
         return {
           className: "is-empty",
           text: "알림 없음",
-          title: "Supabase에 등록된 브라우저 알림 구독이 없습니다",
+          title: "서버에 등록된 브라우저 알림이 없습니다",
         };
       }
       return {
         className: "is-unknown",
         text: "알림 확인 전",
-        title: "아직 Supabase 구독 상태를 확인하지 않았습니다",
+        title: "아직 서버 알림 등록 상태를 확인하지 않았습니다",
       };
     }
 
@@ -7353,7 +7455,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       ].filter((row) => visiblePledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
       return {
         dateLabel: formatKoreanDate(now),
-        syncText: state.syncText || "로컬 저장",
+        syncText: syncStatusLabel(state.syncText || "로컬 저장"),
         todayDone,
         todayDeltaText: deltaText(todayDone, yesterdayDone),
         unsafeOpen,
@@ -9792,7 +9894,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         toast("관리자 수정 모드가 켜졌습니다.");
         return true;
       }
-      toast("관리자 수정은 관리자 권한 작업자 로그인 후 사용할 수 있습니다.");
+      toast("관리자만 수정할 수 있습니다 — 관리자 권한 작업자로 로그인해주세요.");
       return false;
     }
 
@@ -9808,13 +9910,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function requireAdmin() {
       if (state.adminMode) return true;
-      toast("관리자 권한 작업자로 로그인하세요.");
+      toast("관리자 권한 작업자로 로그인해주세요.");
       return false;
     }
 
     function requireRecordResetPassword(label) {
       if (requireAdminWrite()) return true;
-      toast(`${label} 이력 초기화는 관리자 권한 작업자 로그인 후 사용할 수 있습니다.`);
+      toast(`${label} 이력 초기화는 관리자 권한 작업자로 로그인한 뒤 사용할 수 있습니다.`);
       return false;
     }
 
@@ -9895,7 +9997,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (canAttemptServerAdminWrite()) return true;
       clearAdminSessionState();
       setAdminMode(false);
-      toast("서버 저장은 관리자 권한 작업자 로그인 후 사용할 수 있습니다.");
+      toast("관리자만 저장할 수 있습니다 — 관리자 권한 작업자로 로그인해주세요.");
       return false;
     }
 
@@ -11084,7 +11186,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         } catch (error) {
           console.error(error);
           setSyncStatus("동기화 오류", "error");
-          toast("작업 유형 서버 삭제에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+          toast("작업 유형 삭제 실패 — 권한과 연결 상태를 확인해주세요.");
           return;
         }
       }
@@ -11147,7 +11249,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         } catch (error) {
           console.error(error);
           setSyncStatus("동기화 오류", "error");
-          toast("섹션 서버 삭제에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+          toast("섹션 삭제 실패 — 권한과 연결 상태를 확인해주세요.");
           return;
         }
       }
@@ -11332,7 +11434,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("픽토그램 업로드에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+        toast("픽토그램 업로드 실패 — 권한과 연결 상태를 확인해주세요.");
       }
     }
 
@@ -11582,7 +11684,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("사진 삭제에 실패했습니다. 관리자 권한과 Storage 정책을 확인하세요.");
+        toast("사진 삭제 실패 — 권한과 연결 상태를 확인해주세요.");
         return false;
       }
     }
@@ -11603,7 +11705,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("서버 저장에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+        toast("저장 실패 — 권한과 연결 상태를 확인해주세요.");
         return false;
       }
     }
@@ -11817,7 +11919,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         console.error(error);
         if (!options.preserveQueue) {
           setSyncStatus("동기화 오류", "error");
-          toast("동기화에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+          toast("동기화 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
         }
         return false;
       }
@@ -11960,7 +12062,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        if (!options.silent) toast("서버 데이터를 가져오지 못했습니다.");
+        if (!options.silent) toast("데이터를 불러오지 못했습니다 — 잠시 후 다시 시도해주세요.");
       } finally {
         state.remotePullInFlight = false;
       }
@@ -12008,7 +12110,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("서버 저장에 실패했습니다. 관리자 권한과 네트워크를 확인하세요.");
+        toast("저장 실패 — 권한과 연결 상태를 확인해주세요.");
         return false;
       }
     }
@@ -12024,7 +12126,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("호선 서버 삭제에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+        toast("호선 삭제 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
         return false;
       }
     }
@@ -12048,7 +12150,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         setSyncStatus("동기화 오류", "error");
-        toast("서버 삭제에 실패했습니다. Supabase 테이블과 RLS 정책을 확인하세요.");
+        toast("삭제 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
         return false;
       }
     }

@@ -5,7 +5,7 @@ const path = require("path");
 const helpers = require("../assets/js/ship-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260606-workprep-manage-history-1";
+const ASSET_TOKEN = "20260606-copy-polish-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
 const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
@@ -72,6 +72,6 @@ assert(app.includes("window.ShipyardShipHelpers"), "app-v2 reads ship helper glo
 assert(app.includes("SHIP_HELPERS.compareShipStage"), "app-v2 delegates ship stage compare");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes(`/assets/js/ship-helpers.js?v=${ASSET_TOKEN}`), "service worker caches ship helper");
+assert(sw.includes("/assets/js/ship-helpers.js?v=${ASSET_TOKEN}"), "service worker caches ship helper");
 
 console.log("ship helper tests passed");

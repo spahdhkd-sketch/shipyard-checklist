@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260606-workprep-manage-history-1";
+const ASSET_TOKEN = "20260606-copy-polish-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/js/worker-helpers.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/js/dashboard-view.js?v=${ASSET_TOKEN}`;
@@ -358,6 +358,6 @@ assert(!app.includes("function statPill("), "statPill moved out of app-v2");
 assert(!app.includes("function statIcon("), "statIcon moved out of app-v2");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes(`/assets/js/dashboard-view.js?v=${ASSET_TOKEN}`), "service worker caches dashboard view");
+assert(sw.includes("/assets/js/dashboard-view.js?v=${ASSET_TOKEN}"), "service worker caches dashboard view");
 
 console.log("dashboard view tests passed");

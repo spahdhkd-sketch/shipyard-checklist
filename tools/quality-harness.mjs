@@ -13,9 +13,9 @@ const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
 const APP_VERSION = "1.1-20260606";
-const APP_FALLBACK_VERSION = `version ${APP_VERSION.split("-")[0]}`;
-const ASSET_TOKEN = "20260606-workprep-manage-history-1";
-const SW_CACHE = "gs-safety-20260606-workprep-manage-history-1";
+const VERSION_LOADING_COPY = "버전 확인 중";
+const ASSET_TOKEN = "20260606-copy-polish-1";
+const SW_CACHE = "gs-safety-20260606-copy-polish-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -155,7 +155,7 @@ function checkHtmlPages() {
     assertContains(html, `assets/css/20-component-disabled-reason.css?v=${ASSET_TOKEN}`, `${page} uses current disabled-reason CSS token`);
     assertContains(html, `assets/js/app-v2.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
     assertContains(html, "assets/js/vendor/supabase-js-2.105.3.min.js", `${page} uses local Supabase vendor bundle`);
-    assertContains(html, APP_FALLBACK_VERSION, `${page} uses current static fallback version`);
+    assertContains(html, VERSION_LOADING_COPY, `${page} shows version loading copy before JS`);
     assertNotContains(html, "assets/css/styles.css", `${page} does not use legacy CSS`);
     assertNotContains(html, "assets/js/app.js", `${page} does not use legacy JS`);
     assertNotContains(html, "version 0.3", `${page} does not use stale fallback version`);
@@ -231,15 +231,18 @@ function checkRuntimeSource() {
   assertMatch(styles, /@media \(max-width: 920px\) \{[\s\S]*\.ship-sort-bar \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(112px, 38%\);/, "mobile ship search and sort share one row");
   assertMatch(styles, /\.ship-sort-bar \.btn-light \{[\s\S]*grid-column: 1 \/ -1;/, "ship save-order button stays below search/sort");
 
-  assertContains(sw, `const CACHE = "${SW_CACHE}"`, "service worker cache is current");
-  assertContains(sw, `styles-v2.css?v=${ASSET_TOKEN}`, "service worker caches current CSS token");
-  assertContains(sw, `20-component-table.css?v=${ASSET_TOKEN}`, "service worker caches current table CSS token");
-  assertContains(sw, `30-feature-not-found.css?v=${ASSET_TOKEN}`, "service worker caches current not-found CSS token");
-  assertContains(sw, `30-feature-signature.css?v=${ASSET_TOKEN}`, "service worker caches current signature CSS token");
-  assertContains(sw, `30-feature-push-management.css?v=${ASSET_TOKEN}`, "service worker caches current push management CSS token");
-  assertContains(sw, `30-feature-monthly-worker.css?v=${ASSET_TOKEN}`, "service worker caches current monthly worker CSS token");
-  assertContains(sw, `20-component-disabled-reason.css?v=${ASSET_TOKEN}`, "service worker caches current disabled-reason CSS token");
-  assertContains(sw, `app-v2.js?v=${ASSET_TOKEN}`, "service worker caches current JS token");
+  assertContains(sw, `const APP_VERSION = "${APP_VERSION}"`, "service worker app version is current");
+  assertContains(sw, `const ASSET_TOKEN = "${ASSET_TOKEN}"`, "service worker asset token is current");
+  assertContains(sw, "const CACHE = `gs-safety-${ASSET_TOKEN}`", "service worker cache is derived from asset token");
+  assertContains(sw, "GS_SW_VERSION", "service worker exposes version message");
+  assertContains(sw, "styles-v2.css?v=${ASSET_TOKEN}", "service worker caches CSS through asset token");
+  assertContains(sw, "20-component-table.css?v=${ASSET_TOKEN}", "service worker caches table CSS through asset token");
+  assertContains(sw, "30-feature-not-found.css?v=${ASSET_TOKEN}", "service worker caches not-found CSS through asset token");
+  assertContains(sw, "30-feature-signature.css?v=${ASSET_TOKEN}", "service worker caches signature CSS through asset token");
+  assertContains(sw, "30-feature-push-management.css?v=${ASSET_TOKEN}", "service worker caches push management CSS through asset token");
+  assertContains(sw, "30-feature-monthly-worker.css?v=${ASSET_TOKEN}", "service worker caches monthly worker CSS through asset token");
+  assertContains(sw, "20-component-disabled-reason.css?v=${ASSET_TOKEN}", "service worker caches disabled-reason CSS through asset token");
+  assertContains(sw, "app-v2.js?v=${ASSET_TOKEN}", "service worker caches JS through asset token");
   const shellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
     .map((match) => match[1])
     .filter((asset) => asset.startsWith("/assets/"))
@@ -305,7 +308,9 @@ async function checkLiveProduction() {
     add("live CSS responds 200", cssLive.status === 200, String(cssLive.status));
     add("live CSS has compact ship date fix", /\.ship-date-field \.input \{[\s\S]*max-width: 100%;/.test(cssLive.text));
     add("live service worker responds 200", swLive.status === 200, String(swLive.status));
-    add("live service worker cache is current", swLive.text.includes(`const CACHE = "${SW_CACHE}"`));
+    add("live service worker app version is current", swLive.text.includes(`const APP_VERSION = "${APP_VERSION}"`));
+    add("live service worker asset token is current", swLive.text.includes(`const ASSET_TOKEN = "${ASSET_TOKEN}"`));
+    add("live service worker exposes version message", swLive.text.includes("GS_SW_VERSION"));
     add("live 404 uses current CSS token", notFoundLive.text.includes(`assets/css/styles-v2.css?v=${ASSET_TOKEN}`));
 
     const duplicateRootRedirects = await Promise.all(
