@@ -1,5 +1,6 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
     const APP_VERSION = "1.1-20260606";
+    const STORAGE_VERSION_KEY = "storageVersion";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -832,6 +833,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return false;
       }
     };
+    function refreshVersionedLocalCache() {
+      try {
+        const versionKey = storeKey(STORAGE_VERSION_KEY);
+        const savedVersion = localStorage.getItem(versionKey);
+        if (savedVersion === APP_VERSION) return false;
+
+        const legacyStorage = !savedVersion;
+        REMOTE_TABLES.forEach((config) => localStorage.removeItem(storeKey(config.key)));
+        localStorage.removeItem(storeKey("lastRemotePullAt"));
+        localStorage.removeItem(storeKey("remoteListLimits"));
+        localStorage.setItem(versionKey, APP_VERSION);
+        if (legacyStorage) console.info("Legacy local cache cleared for current app version.");
+        return true;
+      } catch (error) {
+        console.warn("Local storage version check failed", error);
+        return false;
+      }
+    }
+    refreshVersionedLocalCache();
     function estimateLocalStorageKb() {
       let total = 0;
       try {
