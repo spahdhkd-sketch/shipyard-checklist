@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.0-20260529";
+    const APP_VERSION = "1.1-20260606";
     const SUPABASE_URL = "https://yuuroocvxvzgmsdeeiws.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
@@ -1321,6 +1321,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return updated;
     }
 
+    async function deleteWorkPrepRecord(recordId) {
+      const record = workPrepRecordById(recordId);
+      if (!record) return toast("삭제할 작업지시서를 찾을 수 없습니다.");
+      if (!canOpenWorkPrepRegister()) return toast("작업지시서를 삭제할 권한이 없습니다.");
+      const progress = workPrepSubmissionProgress(record);
+      if (progress.done > 0 || normalizeWorkPrepStatus(record.status) === "used") {
+        return toast("이미 점검이 진행된 작업지시서는 삭제할 수 없습니다.");
+      }
+      const category = categoryById(record.categoryId);
+      const title = `${record.shipNo || "-"} ${category ? workLabel(category) : "작업지시서"}`;
+      if (!window.confirm(`${title} 작업지시서를 삭제할까요?\n삭제 후 복구할 수 없습니다.`)) return;
+      if (isSyncConfigured() && !(await deleteRemoteRows("workPrepRecords", [record.id]))) return;
+      state.workPrepRecords = state.workPrepRecords.filter((row) => row.id !== record.id);
+      if (state.workPrepDraft?.id === record.id) {
+        state.workPrepDraft = createFreshWorkPrepRegistrationDraft(state.workPrepDraft);
+      }
+      saveWorkPrepRecords();
+      renderPreservingScroll();
+      toast("작업지시서를 삭제했습니다.");
+    }
+
     function workPrepParticipantWorkerIds(record) {
       const ids = new Set([
         String(record?.leaderWorkerId || ""),
@@ -2373,6 +2394,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pledgeShipCollapsed: false,
       workPrepRegisterOpen: false,
       workPrepRecords: loadWorkPrepRecords(),
+      selectedWorkPrepDate: "",
+      workPrepDateManuallySelected: false,
       workPrepDirectOpen: false,
       workPrepOtherWorkersOpen: false,
       workPrepAppearanceOpen: false,
@@ -2435,6 +2458,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       adminPushDraft: createAdminPushDraft(loadJson("adminPushDraft", {})),
       adminPushSending: false,
       unsafeDetailId: "",
+      materialDetailId: "",
       lastUnsafeIssueId: "",
       lastMaterialId: "",
       lastInspectionId: "",
@@ -4483,18 +4507,45 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return localDate(parsed);
     }
 
-    function shouldShowNextWorkPrepDate(todayDate, appearanceTime) {
-      const [hour, minute] = String(appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME).split(":").map(Number);
-      const now = new Date();
-      const threshold = new Date(now);
-      threshold.setHours(Number.isFinite(hour) ? hour : 15, Number.isFinite(minute) ? minute : 0, 0, 0);
-      return localDate(now) === todayDate && now >= threshold;
+    function isWorkPrepRestDate(date) {
+      const parsed = new Date(`${date}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return false;
+      const day = parsed.getDay();
+      return day === 0 || day === 6 || Boolean(isMonthlyRestDay(date));
     }
 
-    function workPrepRecordsForDate(date) {
+    function workPrepOpenDate(workDate) {
+      const parsed = new Date(`${workDate}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return "";
+      let openDate = addDaysToLocalDate(workDate, -1);
+      let guard = 0;
+      while (openDate && isWorkPrepRestDate(openDate) && guard < 14) {
+        openDate = addDaysToLocalDate(openDate, -1);
+        guard += 1;
+      }
+      return openDate;
+    }
+
+    function workPrepOpenDateTime(record) {
+      const openDate = workPrepOpenDate(record?.workDate || "");
+      if (!openDate) return null;
+      const [rawHour, rawMinute] = String(record?.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME).split(":").map(Number);
+      const hour = Number.isFinite(rawHour) ? rawHour : 15;
+      const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
+      const openAt = new Date(`${openDate}T${pad2(hour)}:${pad2(minute)}:00`);
+      return Number.isNaN(openAt.getTime()) ? null : openAt;
+    }
+
+    function shouldShowUpcomingWorkPrepRecord(record, now = new Date()) {
+      const workDate = String(record?.workDate || "");
+      if (!workDate || workDate <= localDate(now)) return false;
+      const openAt = workPrepOpenDateTime(record);
+      return Boolean(openAt) && now >= openAt;
+    }
+
+    function sortWorkPrepRecords(records = []) {
       const workerTeam = String(currentWorkerSessionWorker()?.team || "").trim();
-      return state.workPrepRecords
-        .filter((record) => record.workDate === date)
+      return [...records]
         .sort((a, b) => {
           if (workerTeam) {
             const teamDiff = (String(b.team || "").trim() === workerTeam ? 1 : 0) - (String(a.team || "").trim() === workerTeam ? 1 : 0);
@@ -4504,6 +4555,40 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           if (statusDiff) return statusDiff;
           return String(a.shipNo || "").localeCompare(String(b.shipNo || ""), "ko");
         });
+    }
+
+    function workPrepRecordsForDate(date) {
+      return sortWorkPrepRecords(state.workPrepRecords.filter((record) => record.workDate === date));
+    }
+
+    function visibleUpcomingWorkPrepRecords(todayDate = today(), now = new Date()) {
+      return sortWorkPrepRecords(state.workPrepRecords.filter((record) => record.workDate > todayDate && shouldShowUpcomingWorkPrepRecord(record, now)));
+    }
+
+    function workPrepVisibleDateOptions(todayDate = today(), now = new Date()) {
+      const dates = new Set([todayDate]);
+      visibleUpcomingWorkPrepRecords(todayDate, now).forEach((record) => {
+        if (record.workDate) dates.add(record.workDate);
+      });
+      return [...dates].filter(Boolean).sort();
+    }
+
+    function selectedWorkPrepDisplayDate(dateOptions, fallbackDate) {
+      const options = Array.isArray(dateOptions) ? dateOptions.filter(Boolean) : [];
+      const selected = String(state.selectedWorkPrepDate || "");
+      if (state.workPrepDateManuallySelected && selected && options.includes(selected)) return selected;
+      const fallback = options.includes(fallbackDate) ? fallbackDate : options[0] || fallbackDate || today();
+      state.selectedWorkPrepDate = fallback;
+      state.workPrepDateManuallySelected = false;
+      return fallback;
+    }
+
+    function selectWorkPrepDate(date) {
+      const options = workPrepVisibleDateOptions();
+      if (!options.includes(date)) return;
+      state.selectedWorkPrepDate = date;
+      state.workPrepDateManuallySelected = true;
+      renderPreservingScroll();
     }
 
     function renderWorkPrepCard(record) {
@@ -4519,6 +4604,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const canStartCheck = isWorkPrepParticipant(record, currentWorker?.id);
       const currentWorkerSubmitted = hasSubmittedWorkPrepInspection(record, currentWorker?.id);
       const checkDisabled = !isUsed && (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted));
+      const canDelete = canOpenWorkPrepRegister();
+      const deleteDisabled = !canDelete || isUsed || submissionProgress.done > 0;
       const buttonAction = status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep";
       const submittedIds = new Set(submissionProgress.submittedIds || []);
       const pendingWorkers = workPrepParticipantWorkerIds(record)
@@ -4562,16 +4649,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         <div class="work-prep-record-actions">
           ${summaryHtml}
-          <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${esc(buttonLabel)}</button>
+          <div class="work-prep-record-buttons">
+            ${canDelete ? `<button class="btn-danger" ${deleteDisabled ? "disabled" : `data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}"`} type="button" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 삭제`)}">삭제</button>` : ""}
+            <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${esc(buttonLabel)}</button>
+          </div>
         </div>
       </article>`;
     }
 
     function renderWorkPrepDateSection(date, records, options = {}) {
       if (!records.length && !options.force) return "";
+      const dateOptions = Array.isArray(options.dateOptions) && options.dateOptions.length ? options.dateOptions : [date];
+      const currentIndex = Math.max(0, dateOptions.indexOf(date));
+      const prevDate = currentIndex > 0 ? dateOptions[currentIndex - 1] : "";
+      const nextDate = currentIndex < dateOptions.length - 1 ? dateOptions[currentIndex + 1] : "";
       return `<section class="work-prep-date-section ${options.next ? "next-date" : ""}">
         <div class="section-head">
-          <h2>${esc(workPrepDateSectionTitle(date))}</h2>
+          <div class="work-prep-date-nav">
+            <button class="work-prep-date-arrow" data-action="select-work-prep-date" data-work-prep-date="${esc(prevDate)}" ${prevDate ? "" : "disabled"} type="button" aria-label="이전 작업지시서 날짜">&laquo;</button>
+            <h2>${esc(workPrepDateSectionTitle(date))}</h2>
+            <button class="work-prep-date-arrow" data-action="select-work-prep-date" data-work-prep-date="${esc(nextDate)}" ${nextDate ? "" : "disabled"} type="button" aria-label="다음 작업지시서 날짜">&raquo;</button>
+          </div>
           <span class="count">${records.length}건</span>
         </div>
         <div class="work-prep-record-stack">
@@ -4730,12 +4828,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!state.selectedCategoryId) {
         const categories = state.categories.sort(byOrder);
         const todayDate = today();
-        const appearanceTime = state.workPrepDraft.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME;
-        const nextDate = addDaysToLocalDate(todayDate, 1);
-        const todayRecords = workPrepRecordsForDate(todayDate);
-        const nextRecords = workPrepRecordsForDate(nextDate);
-        const showNext = shouldShowNextWorkPrepDate(todayDate, appearanceTime);
-        const workPrepSections = `${showNext ? renderWorkPrepDateSection(nextDate, nextRecords, { next: true, force: nextRecords.length > 0 }) : ""}${renderWorkPrepDateSection(todayDate, todayRecords, { force: true })}`;
+        const dateOptions = workPrepVisibleDateOptions(todayDate);
+        const firstUpcomingDate = dateOptions.find((date) => date !== todayDate) || "";
+        const selectedDate = selectedWorkPrepDisplayDate(dateOptions, firstUpcomingDate || todayDate);
+        const selectedRecords = workPrepRecordsForDate(selectedDate);
+        const workPrepSections = renderWorkPrepDateSection(selectedDate, selectedRecords, { next: selectedDate !== todayDate, force: true, dateOptions });
         const prepEntry = canOpenWorkPrepRegister() ? `<section class="work-prep-entry-card">
           <div>
             <strong>작업 준비 등록</strong>
@@ -4884,12 +4981,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.historyDetailId = null;
       }
       state.historyScope = normalizeHistoryScope(state.historyScope);
-      const scopeButtons = [
-        ["all", "전체 이력"],
-        ["today", "오늘 점검"],
-        ["delivery", "인도 예정"],
-      ];
-      const filterButtons = [["all", "전체"], ...state.categories.sort(byOrder).map((cat) => [cat.id, cat.label])];
+      state.historyFilter = "all";
       const rows = filteredHistoryRows();
       const deliveryRows = upcomingDeliveryShips();
       const selectedCount = state.selectedHistoryIds.filter((id) => rows.some((row) => row.id === id)).length;
@@ -4907,12 +4999,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${isDeliveryScope ? "" : `<button class="btn-danger" data-action="delete-selected-history" ${state.adminMode && selectedCount ? "" : "disabled"} type="button">선택 삭제 ${selectedCount ? `(${selectedCount})` : ""}</button>`}
         ${isDeliveryScope ? "" : `<button class="btn-danger" data-action="reset-history" type="button">이력 초기화</button>`}
       `)}
-      <div class="segmented" style="margin-bottom:12px">
-        ${scopeButtons.map(([id, label]) => `<button class="seg-btn ${state.historyScope === id ? "active" : ""}" data-history-scope="${id}" type="button">${esc(label)}</button>`).join("")}
-      </div>
-      ${isDeliveryScope ? "" : `<div class="segmented" style="margin-bottom:12px">
-        ${filterButtons.map(([id, label]) => `<button class="seg-btn ${state.historyFilter === id ? "active" : ""}" data-history-filter="${id}" type="button">${esc(label)}</button>`).join("")}
-      </div>`}
       ${isDeliveryScope || !state.historyShipNo ? "" : renderShipFilterNotice("history", state.historyShipNo)}
       ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 이메일 로그인 후 사용할 수 있습니다.</div>`)}
       ${isDeliveryScope ? "" : renderHistoryPledgeStatus()}
@@ -4974,20 +5060,69 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           const cat = categoryById(row.categoryId) || { label: row.categoryLabel || "(삭제된 유형)", icon: row.categoryIcon || "?", color: row.categoryColor || "#607084" };
           const risk = historyRisk(row);
           const completion = Math.max(0, Math.min(100, Number(row.completion) || 0));
+          const worker = historyWorkerForRow(row);
+          const time = historyTimeParts(row.time);
+          const ship = state.ships.find((item) => sameShipNo(item.no, row.shipNo));
+          const stage = ship ? effectiveShipStage(ship) : stageForCategory(cat);
           return {
             id: row.id,
             accent: categoryAccent(cat),
+            stageColor: stage?.color || categoryAccent(cat),
+            stageBg: stage?.bg || "#fff",
             ariaLabel: `${cat.label} 점검 상세내역 보기`,
             categoryVisualHtml: categoryVisual(cat),
             canSelect,
             selected: state.selectedHistoryIds.includes(row.id),
-            categoryLabelHtml: firstSpaceBreakHtml(cat.label),
-            summary: `${row.shipNo || "-"} · ${shortHistoryDate(row)}`,
+            shipNo: row.shipNo || "-",
+            workLabel: historyListWorkLabel(cat.label || "-"),
+            workerName: row.worker || worker?.name || "-",
+            workerPosition: workerDisplayPosition(worker || { position: row.workerPosition || "" }),
+            workerTeam: normalizeWorkerTeam(worker?.team || row.workerTeam || ""),
+            dateText: row.date || "",
+            timePeriod: time.period,
+            timeText: time.text,
+            statusLabel: historyStatusLabel(row.status || (completion >= 100 ? "완료" : "확인 필요")),
             completion,
             riskBadgeHtml: risk.label === "정상" ? "" : badge(risk.tone, risk.label),
           };
         }),
       });
+    }
+
+    function historyWorkerForRow(row) {
+      const workerId = String(row.workerId || "").trim();
+      const workerName = String(row.worker || "").trim();
+      return state.workers.find((worker) => worker.id === workerId)
+        || state.workers.find((worker) => normalizedWorkerName(worker.name) === normalizedWorkerName(workerName))
+        || null;
+    }
+
+    function historyListWorkLabel(value) {
+      const label = String(value || "").trim();
+      return ({
+        "탑재 작업": "탑재",
+        "선행 설치 작업": "선행 설치",
+        "후행 설치 작업": "후행 설치",
+        "DP설치작업": "DP설치",
+        "DP 설치 작업": "DP 설치",
+      })[label] || label;
+    }
+
+    function historyTimeParts(value) {
+      const raw = String(value || "").trim();
+      const match = raw.match(/^(\d{1,2}):(\d{2})/);
+      if (!match) return { period: "", text: raw || "--:--" };
+      const hour = Number(match[1]);
+      const minute = match[2];
+      const period = hour < 12 ? "오전" : "오후";
+      const displayHour = hour % 12 || 12;
+      return { period, text: `${displayHour}:${minute}` };
+    }
+
+    function historyStatusLabel(status) {
+      const value = String(status || "").trim();
+      if (value === "완료") return "점검 완료";
+      return value || "확인 필요";
     }
 
     function historyRisk(row) {
@@ -6613,6 +6748,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const received = state.missingMaterials.filter((row) => row.status === statuses[0]).length;
       const checking = state.missingMaterials.filter((row) => row.status === statuses[1]).length;
       const done = state.missingMaterials.filter((row) => row.status === statuses[2]).length;
+      const activeId = sorted.some((row) => row.id === state.materialDetailId) ? state.materialDetailId : "";
       return `<section class="admin-board material-board">
         <div class="admin-board-top">
           <div>
@@ -6654,7 +6790,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               <div class="material-row material-row-head">
                 <span></span><span>호선</span><span>자재명</span><span>수량</span><span>등록자</span><span>등록 시각</span><span>상태</span><span>액션</span>
               </div>
-              ${sorted.length ? sorted.map(renderMaterialTableRow).join("") : `<div class="empty">표시할 자재 누락 기록이 없습니다.</div>`}
+              ${sorted.length ? sorted.map((row) => {
+                const active = row.id === activeId;
+                return `${renderMaterialTableRow(row, active)}${active ? renderMaterialInlineDetail(row) : ""}`;
+              }).join("") : `<div class="empty">표시할 자재 누락 기록이 없습니다.</div>`}
             </div>
           </section>
         </div>
@@ -6674,10 +6813,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return group.records.length ? Math.round(group.records.filter((row) => row.status === doneStatus).length / group.records.length * 100) : 0;
     }
 
-    function renderMaterialTableRow(row) {
+    function renderMaterialTableRow(row, active = false) {
       const token = `materials:${row.id}`;
       const canEdit = state.adminMode || isRedesignPreviewPage();
-      return `<div class="material-row">
+      return `<div class="material-row ${active ? "active" : ""}" data-material-record-detail="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(`${row.shipNo || "-"} ${row.materialName || "자재누락"} 상세 보기`)}">
         <span><input type="checkbox" aria-label="자재 기록 선택" ${canEdit ? "" : "disabled"} /></span>
         <span><strong>${esc(row.shipNo || "-")}</strong><em>${esc(shipStageForNo(row.shipNo))}</em></span>
         <span><strong>${esc(row.materialName || "-")}</strong><em>${esc(row.content || "내용 없음")}</em></span>
@@ -6688,9 +6827,29 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <span class="material-row-actions">
           <textarea data-record-memo="${esc(token)}" hidden>${esc(row.adminMemo || "")}</textarea>
           <button class="btn-light" data-save-record="${esc(token)}" ${canEdit ? "" : "disabled"} type="button">저장</button>
-          <button class="btn" data-material-record-detail="${esc(row.id)}" type="button">상세 →</button>
         </span>
       </div>`;
+    }
+
+    function renderMaterialInlineDetail(row) {
+      return `<article class="material-inline-detail" aria-label="${esc(row.shipNo || "")} 자재누락 상세">
+        ${renderMaterialProcessingDetail(row)}
+      </article>`;
+    }
+
+    function renderMaterialProcessingDetail(row) {
+      return DASHBOARD_VIEW.renderMaterialDetailView({
+        statusBadgeHtml: badge("medium", row.status),
+        shipNo: row.shipNo,
+        materialName: row.materialName,
+        quantityText: materialQuantity(row),
+        workerName: row.workerNameSnapshot,
+        createdAtText: formatDateTime(row.createdAt),
+        content: row.content,
+        adminMemo: row.adminMemo,
+        timelineHtml: renderRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] }),
+        adminControlsHtml: renderAdminRecordControls("materials", row, ISSUE_MATERIAL_RULES.MATERIAL_STATUSES),
+      });
     }
 
     function renderMaterialGroup(group) {
@@ -8345,6 +8504,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "export-ships": exportShips,
         "start-work-prep-record": () => startWorkPrepRecord(workPrepRecordId()),
         "start-check-from-work-prep": () => startCheckFromWorkPrepRecord(workPrepRecordId()),
+        "delete-work-prep-record": () => deleteWorkPrepRecord(workPrepRecordId()),
+        "select-work-prep-date": () => selectWorkPrepDate(event.target.closest("[data-work-prep-date]")?.dataset.workPrepDate || ""),
         "toggle-work-prep-appearance": () => {
           state.workPrepAppearanceOpen = !state.workPrepAppearanceOpen;
           renderPreservingScroll();
@@ -8439,6 +8600,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
       if (unsafeCard && !event.target.closest("button,input,label,select,textarea")) {
         openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
+        return;
+      }
+
+      const materialCard = event.target.closest("[data-material-record-detail]");
+      if (materialCard && !event.target.closest("button,input,label,select,textarea")) {
+        openMaterialDetail(materialCard.dataset.materialRecordDetail);
         return;
       }
 
@@ -8630,6 +8797,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (button.dataset.view === "manage") {
           state.manageTab = "unsafe";
           state.unsafeDetailId = "";
+          state.materialDetailId = "";
           setUnsafeStatusFilter("");
           saveJson("manageTab", state.manageTab);
           changeView("manage");
@@ -8713,6 +8881,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (button.dataset.manageTab) {
         state.manageTab = button.dataset.manageTab;
         state.unsafeDetailId = "";
+        state.materialDetailId = "";
         if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
         if (state.manageTab === "materials") resetMaterialShipFilter();
         saveJson("manageTab", state.manageTab);
@@ -8721,6 +8890,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "back-unsafe-list") {
         state.unsafeDetailId = "";
+        render();
+        scrollScreenTop();
+      }
+      if (button.dataset.action === "back-material-list") {
+        state.materialDetailId = "";
         render();
         scrollScreenTop();
       }
@@ -8987,19 +9161,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const row = state.missingMaterials.find((item) => item.id === id);
       if (!row) return;
       state.manageTab = "materials";
-      state.materialFilters.shipNo = row.shipNo || "";
-      state.materialFilters.status = row.status || "";
-      state.materialFilters.materialName = "";
       saveJson("manageTab", state.manageTab);
-      saveJson("materialFilters", state.materialFilters);
       if (state.view === "manage") {
-        render();
-        scrollScreenTop();
+        state.materialDetailId = state.materialDetailId === id ? "" : id;
+        renderPreservingScroll();
         pushRouteState();
       } else {
+        state.materialFilters.shipNo = row.shipNo || "";
+        state.materialFilters.status = row.status || "";
+        state.materialFilters.materialName = "";
+        saveJson("materialFilters", state.materialFilters);
+        state.materialDetailId = id;
         changeView("manage");
       }
-      toast("자재 누락 목록에서 해당 항목을 표시했습니다.");
     }
 
     function selectPledgeWorker(id) {

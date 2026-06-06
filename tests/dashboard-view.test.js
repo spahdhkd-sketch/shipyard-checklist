@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260529-workprep-progress-1";
+const ASSET_TOKEN = "20260606-workprep-manage-history-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/js/worker-helpers.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/js/dashboard-view.js?v=${ASSET_TOKEN}`;
@@ -237,6 +237,29 @@ assert(materialCardHtml.includes("메모: 입고 예정"));
 assert(materialCardHtml.includes('data-test-timeline="materials"'));
 assert(materialCardHtml.includes('data-test-controls="materials"'));
 
+const materialDetailHtml = dashboardView.renderMaterialDetailView({
+  statusBadgeHtml: '<span class="badge medium">확인중</span>',
+  shipNo: "S-400",
+  materialName: "와셔",
+  quantityText: "12개",
+  workerName: "이자재",
+  createdAtText: "2026-05-29 13:00",
+  content: "와셔 부족",
+  adminMemo: "구매 요청 완료",
+  timelineHtml: '<ol data-test-detail-timeline="materials"></ol>',
+  adminControlsHtml: '<div data-test-detail-controls="materials"></div>',
+});
+assert(materialDetailHtml.includes('<section class="panel panel-pad material-detail">'));
+assert(materialDetailHtml.includes('data-action="back-material-list"'));
+assert(materialDetailHtml.includes('<span class="badge medium">확인중</span>'));
+assert(materialDetailHtml.includes("<strong>S-400</strong>"));
+assert(materialDetailHtml.includes("<strong>와셔</strong>"));
+assert(materialDetailHtml.includes("<strong>12개</strong>"));
+assert(materialDetailHtml.includes("와셔 부족"));
+assert(materialDetailHtml.includes("구매 요청 완료"));
+assert(materialDetailHtml.includes('data-test-detail-timeline="materials"'));
+assert(materialDetailHtml.includes('data-test-detail-controls="materials"'));
+
 const historyLoadMoreHtml = dashboardView.renderHistoryLoadMoreView({ visible: true });
 assert(historyLoadMoreHtml.includes('data-action="load-more-history"'));
 assert(historyLoadMoreHtml.includes("더 보기"));
@@ -247,28 +270,42 @@ const historyTableHtml = dashboardView.renderHistoryTableView({
     {
       id: "history-1",
       accent: "#123456",
+      stageColor: "#8F5E35",
+      stageBg: "#F8F1E8",
       ariaLabel: "화기 작업 점검 상세내역 보기",
       categoryVisualHtml: '<span data-test-icon>🔥</span>',
       canSelect: true,
       selected: true,
-      categoryLabelHtml: "화기<br>작업",
-      summary: "S-400 · 2026-05-29",
+      shipNo: "S-400",
+      workLabel: "화기 작업",
+      workerName: "김작업",
+      workerTeam: "선행",
+      dateText: "2026-05-29",
+      timePeriod: "오후",
+      timeText: "6:24",
+      statusLabel: "점검 완료",
       completion: 80,
-      riskBadgeHtml: '<span class="badge warn">주의</span>',
     },
   ],
 });
-assert(historyTableHtml.includes('<div class="history-grid">'));
+assert(historyTableHtml.includes('<div class="history-list">'));
+assert(historyTableHtml.includes('class="history-list-card"'));
 assert(historyTableHtml.includes('data-history-detail-card="history-1"'));
 assert(historyTableHtml.includes('aria-label="화기 작업 점검 상세내역 보기"'));
-assert(historyTableHtml.includes('style="--accent:#123456"'));
+assert(historyTableHtml.includes('style="--accent:#123456;--stage:#8F5E35;--stage-bg:#F8F1E8"'));
 assert(historyTableHtml.includes('data-history-check="history-1" checked'));
 assert(historyTableHtml.includes('data-history-detail="history-1"'));
-assert(historyTableHtml.includes("화기<br>작업"));
-assert(historyTableHtml.includes("S-400 · 2026-05-29"));
-assert(historyTableHtml.includes("완료율 80%"));
-assert(historyTableHtml.includes('aria-valuenow="80"'));
-assert(historyTableHtml.includes('<span class="badge warn">주의</span>'));
+assert(historyTableHtml.includes('<span data-test-icon>🔥</span>'));
+assert(historyTableHtml.includes("history-worker-badge is-pre"));
+assert(historyTableHtml.includes("history-list-status-stack"));
+assert(historyTableHtml.includes("S-400"));
+assert(historyTableHtml.includes("화기 작업"));
+assert(historyTableHtml.includes("김작업"));
+assert(historyTableHtml.includes("선행"));
+assert(!historyTableHtml.includes("조장"));
+assert(historyTableHtml.includes("오후 6:24"));
+assert(historyTableHtml.includes("2026-05-29"));
+assert(historyTableHtml.includes("점검 완료"));
 
 const htmlFiles = fs.readdirSync(ROOT).filter((file) => file.endsWith(".html"));
 for (const file of htmlFiles) {

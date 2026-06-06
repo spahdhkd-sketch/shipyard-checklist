@@ -2653,6 +2653,39 @@
       letter-spacing: 0;
     }
 
+    .work-prep-date-nav {
+      display: grid;
+      grid-template-columns: 34px minmax(0, auto) 34px;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .work-prep-date-nav h2 {
+      text-align: center;
+    }
+
+    .work-prep-date-arrow {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #c8d6e6;
+      border-radius: 9px;
+      background: #fff;
+      color: #0f3f6f;
+      cursor: pointer;
+      font-size: 17px;
+      font-weight: 900;
+      line-height: 1;
+      box-shadow: 0 8px 16px rgba(29, 63, 99, .08);
+    }
+
+    .work-prep-date-arrow:disabled {
+      background: #eef3f8;
+      color: #9aa8b8;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
     .work-prep-direct-section {
       margin: 18px 0 0;
     }
@@ -2846,8 +2879,16 @@
       color: #536273;
     }
 
+    .work-prep-record-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .work-prep-record-actions .btn,
-    .work-prep-record-actions .btn-light {
+    .work-prep-record-actions .btn-light,
+    .work-prep-record-actions .btn-danger {
       flex: 0 0 auto;
       min-height: 36px;
       padding: 0 14px;
@@ -2860,8 +2901,14 @@
         grid-template-columns: 1fr;
       }
 
+      .work-prep-record-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .work-prep-record-actions .btn,
-      .work-prep-record-actions .btn-light {
+      .work-prep-record-actions .btn-light,
+      .work-prep-record-actions .btn-danger {
         width: 100%;
       }
     }
@@ -4274,6 +4321,15 @@
       background: #fff;
     }
 
+    .material-row[data-material-record-detail] {
+      cursor: pointer;
+    }
+
+    .material-row.active {
+      border-color: rgba(25, 111, 92, .34);
+      background: #f3fbf8;
+    }
+
     .material-row-head {
       min-height: 40px;
       background: #f3f6fa;
@@ -4302,6 +4358,25 @@
       min-width: 86px;
       height: 36px;
       padding-inline: 10px;
+    }
+
+    .material-inline-detail {
+      margin: -1px 0 16px;
+      padding-left: 12px;
+      border-left: 3px solid #1f8a70;
+    }
+
+    .material-detail {
+      border-color: rgba(31, 138, 112, .18);
+      box-shadow: 0 14px 36px rgba(15, 47, 78, .08);
+    }
+
+    .material-detail-meta-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .material-detail .admin-record-controls {
+      margin-top: 14px;
     }
 
     .pledge-kpi,
@@ -4915,6 +4990,15 @@
       .material-row-actions .btn-light {
         flex: 1 1 0;
         min-height: 42px;
+      }
+
+      .material-inline-detail {
+        margin: -6px 0 14px;
+        padding-left: 8px;
+      }
+
+      .material-detail-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .material-kpi strong,
@@ -7811,6 +7895,244 @@
       width: 18px;
       height: 18px;
       accent-color: #fff;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .history-list-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: center;
+      min-width: 0;
+    }
+
+    .history-list-row.has-check {
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 5px;
+      margin-left: -8px;
+    }
+
+    .history-list-card {
+      position: relative;
+      min-width: 0;
+      border: 1px solid color-mix(in srgb, var(--stage, #d7e3ee) 28%, #d7e3ee);
+      border-left: 8px solid var(--stage, #d7e3ee);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 8px 20px rgba(23, 32, 51, .06);
+      cursor: pointer;
+      overflow: hidden;
+      transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+    }
+
+    .history-list-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 26px rgba(23, 32, 51, .09);
+      transform: translateY(-1px);
+    }
+
+    .history-list-main {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 72px minmax(110px, 1fr) 54px 58px;
+      align-items: center;
+      gap: 6px;
+      min-height: 80px;
+      padding: 10px;
+    }
+
+    .history-list-ship {
+      min-width: 0;
+      color: var(--stage, #07162f);
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .history-list-work {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      color: #0d2236;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.05;
+    }
+
+    .history-list-work > span:last-child {
+      overflow: hidden;
+      min-width: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-list-icon {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 0;
+      display: inline-flex;
+      width: 80px;
+      height: 80px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--accent, var(--color-brand-primary));
+      opacity: .34;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .history-list-icon svg,
+    .history-list-icon img {
+      width: 66px;
+      height: 66px;
+      object-fit: contain;
+    }
+
+    .history-list-worker {
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 2px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .history-list-worker strong {
+      display: block;
+      min-width: 0;
+      max-width: 54px;
+      color: #07162f;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-worker-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 0 6px;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .history-worker-badge.is-pre {
+      border-color: #bae6fd;
+      background: #e0f2fe;
+      color: #075985;
+    }
+
+    .history-worker-badge.is-post {
+      border-color: #fed7aa;
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .history-worker-badge.is-neutral {
+      border-color: #ccfbf1;
+      background: #f0fdfa;
+      color: #0f766e;
+    }
+
+    .history-list-status-stack {
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .history-list-card .history-card-check {
+      position: static;
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      justify-self: center;
+    }
+
+    .history-list-time {
+      display: grid;
+      justify-items: center;
+      min-width: 0;
+      color: #12382a;
+      background: transparent;
+      font-family: inherit;
+      line-height: 1.05;
+    }
+
+    .history-list-time strong,
+    .history-list-time span {
+      display: block;
+      white-space: nowrap;
+    }
+
+    .history-list-time strong {
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .history-list-time span {
+      margin-top: 1px;
+      color: #445b6e;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .history-status-btn {
+      min-height: 29px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 999px;
+      color: #1d4ed8;
+      background: #e0f2fe;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .history-status-btn:hover {
+      background: #cfeeff;
+    }
+
+    @media (max-width: 920px) {
+      .history-list-main {
+        grid-template-columns: 72px minmax(110px, 1fr) 54px 58px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .history-list-main {
+        grid-template-columns: 72px minmax(110px, 1fr) 54px 58px;
+        gap: 6px;
+        padding: 10px;
+      }
+
+      .history-list-worker strong {
+        max-width: 60px;
+      }
     }
 @media (max-width: 920px) {
       .ship-card {

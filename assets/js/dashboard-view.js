@@ -510,6 +510,45 @@
       </article>`;
   }
 
+  function renderMaterialDetailView(model = {}) {
+    const {
+      statusBadgeHtml = "",
+      shipNo = "",
+      materialName = "",
+      quantityText = "",
+      workerName = "",
+      createdAtText = "",
+      content = "",
+      adminMemo = "",
+      timelineHtml = "",
+      adminControlsHtml = "",
+    } = model;
+    return `<section class="panel panel-pad material-detail">
+        <div class="detail-header">
+          <button class="btn-light" data-action="back-material-list" type="button">목록</button>
+          ${statusBadgeHtml}
+        </div>
+        <div class="section-title">자재누락 상세 기록</div>
+        <div class="detail-grid material-detail-meta-grid">
+          <div><span class="small muted">호선</span><strong>${esc(shipNo)}</strong></div>
+          <div><span class="small muted">자재명</span><strong>${esc(materialName || "-")}</strong></div>
+          <div><span class="small muted">수량</span><strong>${esc(quantityText || "-")}</strong></div>
+          <div><span class="small muted">등록자</span><strong>${esc(workerName || "-")}</strong></div>
+          <div class="material-detail-date-meta"><span class="small muted">등록일시</span><strong>${esc(createdAtText)}</strong></div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">요청 내용</span>
+          <div class="readonly-box">${esc(content || "내용 없음")}</div>
+        </div>
+        ${adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(adminMemo)}</div></div>` : ""}
+        <div class="field" style="margin-top:12px">
+          <span class="field-label">처리 이력</span>
+          ${timelineHtml}
+        </div>
+        ${adminControlsHtml}
+      </section>`;
+  }
+
   function renderHistoryLoadMoreView(model = {}) {
     if (!model.visible) return "";
     return `<div class="list-actions" style="margin-top:12px"><button class="btn-light" data-action="load-more-history" type="button">더 보기</button></div>`;
@@ -517,25 +556,39 @@
 
   function renderHistoryTableView(model = {}) {
     const rows = model.rows || [];
-    return `<div class="history-grid">
-        ${rows.map((row) => `<article class="history-card" style="--accent:${esc(row.accent)}" data-history-detail-card="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(row.ariaLabel)}">
-            <div class="history-card-main">
-              <div class="history-card-top">
-                <span class="history-card-icon">${row.categoryVisualHtml || ""}</span>
-                <div class="history-card-actions">
-                  ${row.canSelect ? `<input class="history-card-check" type="checkbox" aria-label="이력 선택" data-history-check="${esc(row.id)}" ${row.selected ? "checked" : ""}>` : ""}
-                  <button class="history-detail-btn" data-history-detail="${esc(row.id)}" aria-label="점검 기록 화면 보기" title="점검 기록" type="button">›</button>
+    return `<div class="history-list">
+        ${rows.map((row) => {
+          const teamClass = row.workerTeam === "선행"
+            ? "is-pre"
+            : row.workerTeam === "후행"
+              ? "is-post"
+              : row.workerTeam
+                ? "is-neutral"
+                : "";
+          return `<div class="history-list-row ${row.canSelect ? "has-check" : ""}">
+            ${row.canSelect ? `<input class="history-card-check" type="checkbox" aria-label="이력 선택" data-history-check="${esc(row.id)}" ${row.selected ? "checked" : ""}>` : ""}
+            <article class="history-list-card" style="--accent:${esc(row.accent)};--stage:${esc(row.stageColor || row.accent)};--stage-bg:${esc(row.stageBg || "#fff")}" data-history-detail-card="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(row.ariaLabel)}">
+              <span class="history-list-icon" aria-hidden="true">${row.categoryVisualHtml || ""}</span>
+              <div class="history-list-main">
+                <strong class="history-list-ship">${esc(row.shipNo || "-")}</strong>
+                <div class="history-list-work">
+                  <span>${esc(row.workLabel || "-")}</span>
+                </div>
+                <div class="history-list-worker">
+                  ${row.workerTeam ? `<span class="history-worker-badge ${esc(teamClass)}">${esc(row.workerTeam)}</span>` : ""}
+                  <strong>${esc(row.workerName || "-")}</strong>
+                </div>
+                <div class="history-list-status-stack">
+                  <button class="history-status-btn" data-history-detail="${esc(row.id)}" type="button">${esc(row.statusLabel || "점검 완료")}</button>
+                  <div class="history-list-time">
+                    <strong>${row.timePeriod ? `${esc(row.timePeriod)} ` : ""}${esc(row.timeText || "--:--")}</strong>
+                    <span>${esc(row.dateText || "-")}</span>
+                  </div>
                 </div>
               </div>
-              <div class="history-card-title">${row.categoryLabelHtml || ""}</div>
-              <div class="history-card-summary">${esc(row.summary)}</div>
-              <div class="history-card-risk">
-                <span class="history-completion-pill">완료율 ${esc(row.completion)}%</span>
-                ${row.riskBadgeHtml || ""}
-              </div>
-              <div class="history-progress-track" role="progressbar" aria-label="점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(row.completion)}"><span style="width:${esc(row.completion)}%"></span></div>
-            </div>
-          </article>`).join("")}
+            </article>
+          </div>`;
+        }).join("")}
       </div>`;
   }
 
@@ -545,6 +598,7 @@
     renderHistoryLoadMoreView,
     renderHistoryTableView,
     renderManageShellView,
+    renderMaterialDetailView,
     renderMaterialRecordCardView,
     renderMonthlyWorkerAnalyticsView,
     renderUnsafeDetailView,

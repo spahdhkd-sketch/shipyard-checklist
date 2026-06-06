@@ -1,18 +1,18 @@
 # Version
 
-Current version: `1.0-20260529`
+Current version: `1.1-20260606`
 
-Recorded at: `2026-05-29 13:00:45 +09:00`
+Recorded at: `2026-06-06 21:27:11 +09:00`
 
-Baseline commit: `99e363e`
+Baseline commit: `bdb712d`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version updates work-prep participant selection so 선행/후행 조장 flows only show the counterpart production team and exclude 관리 from 타 소속 작업자.
-- It adds 반장 as a 조장-equivalent role, while displaying 백승기 as 반장.
-- It prevents completed participants from starting the same work-prep inspection again and shows 제출 완료 instead.
-- It adds inline 미점검 인원/전원 점검 완료 status text to work order cards.
+- This version redesigns mobile 점검이력 rows with a compact one-row card, stage-colored status, larger category icon treatment, and a tighter worker/status area.
+- It fixes 작업 전 점검 작업지시서 visibility for upcoming workdays, adds date navigation, and allows mistaken work orders to be deleted before inspection starts.
+- It adds 자재누락 상세보기 panels in 관리 메뉴 and opens the detail view by clicking the row/card content, matching 불안전요소 behavior.
+- It adds regression coverage for work-prep visibility, work-order deletion, history row rendering, and material detail rendering.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

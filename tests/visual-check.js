@@ -133,6 +133,7 @@ const seed = {
       shipNo: "H-101",
       worker: "김민수",
       date: "2026-05-15",
+      time: "18:24",
       status: "완료",
       warnings: 9,
       createdAt: "2026-05-15T07:30:00.000Z",
@@ -148,7 +149,7 @@ const seed = {
     toolPrepComplete: false,
   },
   workers: [
-    { id: "worker-1", name: "김민수", team: "배관팀", createdAt: "2026-05-15T00:00:00.000Z", updatedAt: "2026-05-15T00:00:00.000Z" },
+    { id: "worker-1", name: "김민수", team: "선행", position: "조장", createdAt: "2026-05-15T00:00:00.000Z", updatedAt: "2026-05-15T00:00:00.000Z" },
   ],
   unsafeIssues: [
     {
@@ -509,8 +510,32 @@ function assertCheck(name, condition) {
     await navigate(client, `${baseUrl}/history.html`);
     const historyScopeState = await evaluate(client, `(() => ({
       hasRiskScope: Boolean(document.querySelector('[data-history-scope="risk"]')),
+      hasAnyScopeButton: Boolean(document.querySelector('[data-history-scope]')),
+      hasAnyFilterButton: Boolean(document.querySelector('[data-history-filter]')),
+      hasHistoryList: Boolean(document.querySelector(".history-list")),
+      hasHistoryCard: Boolean(document.querySelector(".history-list-card")),
+      hasHistoryIcon: Boolean(document.querySelector(".history-list-icon")),
+      hasShipNo: document.body.innerText.includes("H-101"),
+      hasWorkLabel: document.body.innerText.includes("탑재"),
+      hasWorkerName: document.body.innerText.includes("김민수"),
+      hasWorkerTeam: document.body.innerText.includes("선행"),
+      hasWorkerRole: document.body.innerText.includes("조장"),
+      hasTime: document.body.innerText.includes("오후 6:24"),
+      hasStatusButton: Boolean(document.querySelector(".history-status-btn")),
+      hasStatusStack: Boolean(document.querySelector(".history-list-status-stack")),
+      hasStageColor: Boolean(document.querySelector(".history-list-card[style*='--stage']")),
     }))()`);
     assertCheck("history removes old risk scope", historyScopeState.hasRiskScope === false);
+    assertCheck("history removes old scope buttons", historyScopeState.hasAnyScopeButton === false);
+    assertCheck("history removes old category filter buttons", historyScopeState.hasAnyFilterButton === false);
+    assertCheck("history uses compact list layout", historyScopeState.hasHistoryList && historyScopeState.hasHistoryCard);
+    assertCheck("history keeps category icon in compact row", historyScopeState.hasHistoryIcon);
+    assertCheck("history compact row shows ship and work", historyScopeState.hasShipNo && historyScopeState.hasWorkLabel);
+    assertCheck("history compact row shows worker team only", historyScopeState.hasWorkerName && historyScopeState.hasWorkerTeam && !historyScopeState.hasWorkerRole);
+    assertCheck("history compact row shows formatted time", historyScopeState.hasTime);
+    assertCheck("history compact row has status action", historyScopeState.hasStatusButton && historyScopeState.hasStatusStack);
+    assertCheck("history compact row reflects ship stage color", historyScopeState.hasStageColor);
+    const historyShot = await screenshot(client, "11-history-compact-list-mobile.png");
 
     await navigate(client, `${baseUrl}/check.html`);
     await click(client, '[data-action="toggle-work-prep-direct"]');
