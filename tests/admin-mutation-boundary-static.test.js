@@ -38,6 +38,7 @@ expectMatch(edge, /action === "deleteCategoryCascade"/, "admin-mutations must su
 expectMatch(edge, /action === "deleteSectionCascade"/, "admin-mutations must support section cascade deletes");
 expectMatch(edge, /action === "uploadPictogramImage"/, "admin-mutations must upload custom pictograms through Storage");
 expectMatch(edge, /const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms"/, "admin-mutations should use the safety pictogram bucket");
+expectMatch(edge, /const PRIVILEGED_POSITIONS = new Set\(\["\\uBC18\\uC7A5", "\\uB300\\uD45C", "\\uAD00\\uB9AC", "\\uCD1D\\uBB34"\]\)/, "admin-mutations must allow foreman workers to create admin sessions");
 expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "admin-mutations should write pictogram bytes to Storage");
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");

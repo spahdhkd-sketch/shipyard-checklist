@@ -45,6 +45,7 @@ assert.strictEqual(helpers.isLeaderWorker({ position: "조장" }), true);
 assert.strictEqual(helpers.isLeaderWorker({ position: "반장" }), true);
 assert.strictEqual(helpers.isLeaderWorker({ position: "관리" }), false);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "관리" }), true);
+assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "반장" }), true);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "조장" }), false);
 assert.strictEqual(helpers.workerAdminModeLabel({ name: "  김관리  " }), "김관리 권한");
 assert.strictEqual(helpers.workerAdminModeLabel({}), "작업자 권한");

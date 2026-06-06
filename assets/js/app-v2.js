@@ -1083,7 +1083,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const LEADER_WORKER_POSITION = "조장";
     const FOREMAN_WORKER_POSITION = "반장";
     const WORKER_POSITIONS = [DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "대표", "관리", "총무"];
-    const ADMIN_PREENTRY_WORKER_POSITIONS = new Set(["대표", "관리", "총무"]);
+    const ADMIN_PREENTRY_WORKER_POSITIONS = new Set([FOREMAN_WORKER_POSITION, "대표", "관리", "총무"]);
     const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION]);
     const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"]);
     const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
@@ -5261,13 +5261,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         stage,
         ships: ships.filter((ship) => effectiveShipStage(ship).stage === stage),
       }));
-      return `${renderProcessBoard(grouped)}
+      const bulkShipAddPanel = state.adminMode ? `
       <div class="panel panel-pad" style="margin-bottom:14px">
         <div class="section-title">
           <span>호선 일괄 추가</span>
-          <button class="toggle ${state.adminMode ? "active" : ""}" data-action="toggle-admin" type="button" aria-pressed="${state.adminMode ? "true" : "false"}">
-            <span class="toggle-track"></span><span>수정 ${state.adminMode ? "ON" : "OFF"}</span>
-          </button>
         </div>
         <div class="grid-2">
           <div class="field">
@@ -5283,14 +5280,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               <label for="newShipCustom">기타 선종</label>
               <input class="input" id="newShipCustom" placeholder="기타 선택 시 입력" />
             </div>
-            <button class="btn" data-action="add-ship" ${state.adminMode ? "" : "disabled"} type="button">일괄 추가</button>
+            <button class="btn" data-action="add-ship" type="button">일괄 추가</button>
           </div>
         </div>
-      </div>
+      </div>` : "";
+      return `${renderProcessBoard(grouped)}
+      ${bulkShipAddPanel}
       <div class="panel panel-pad">
         <div class="section-title">
           <span>호선 정보 카드</span>
           <span class="ship-data-actions">
+            ${adminToggleButton()}
             <button class="btn-light" data-action="import-ships" type="button">엑셀 불러오기</button>
             <button class="btn-light" data-action="export-ships" ${state.ships.length ? "" : "disabled"} type="button">엑셀 내보내기</button>
           </span>

@@ -380,7 +380,7 @@ assert.match(app, /const DEFAULT_WORKER_POSITION = "작업자"/);
 assert.match(app, /const LEADER_WORKER_POSITION = "조장"/);
 assert.match(app, /const FOREMAN_WORKER_POSITION = "반장"/);
 assert.match(app, /const WORKER_POSITIONS = \[DEFAULT_WORKER_POSITION, LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "대표", "관리", "총무"\]/);
-assert.match(app, /const ADMIN_PREENTRY_WORKER_POSITIONS = new Set\(\["대표", "관리", "총무"\]\)/);
+assert.match(app, /const ADMIN_PREENTRY_WORKER_POSITIONS = new Set\(\[FOREMAN_WORKER_POSITION, "대표", "관리", "총무"\]\)/);
 assert.match(app, /const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set\(\[LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION\]\)/);
 assert.match(app, /const WORKER_TEAM_OPTIONS = \["선행", "후행", "관리"\]/);
 assert.match(app, /const LOGIN_WORKER_GROUP_ORDER = \["대표", "관리", "선행", "후행", "총무"\]/);
@@ -422,6 +422,9 @@ assert.doesNotMatch(app, /호선 추가\/삭제는 수정 모드를 ON으로 전
 assert.doesNotMatch(app, /수정 모드를 켜면/);
 assert.doesNotMatch(app, /관리자 로그인 후 가능합니다/);
 assert.ok(app.includes('${value || state.adminMode ? "" : `<span class="ship-date-empty">미입력</span>`}'));
+assert.match(app, /const bulkShipAddPanel = state\.adminMode \? `/);
+assert.match(app, /<span>호선 일괄 추가<\/span>/);
+assert.match(app, /\$\{bulkShipAddPanel\}[\s\S]*<span>호선 정보 카드<\/span>[\s\S]*\$\{adminToggleButton\(\)\}/);
 assert.match(styles, /\.ship-date-field \.input \{[\s\S]*width: 100%;[\s\S]*min-width: 0;[\s\S]*max-width: 100%;/);
 assert.match(styles, /\.ship-date-field \.input\[type="date"\] \{[\s\S]*font-size: 11px;/);
 assert.match(styles, /@media \(max-width: 920px\) \{[\s\S]*\.ship-sort-bar \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(112px, 38%\);/);
