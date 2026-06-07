@@ -233,6 +233,45 @@
       position: relative;
     }
 
+    .login-worker-selector {
+      display: grid;
+      gap: 10px;
+    }
+
+    .login-account-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 76px;
+      padding: 12px;
+      border: 1px solid var(--color-brand-secondary-border);
+      border-radius: 8px;
+      background: var(--color-brand-secondary);
+    }
+
+    .login-account-copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .login-account-copy > span {
+      color: var(--color-brand-primary);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .login-account-action {
+      min-height: 46px;
+      white-space: nowrap;
+    }
+
+    .login-worker-change {
+      width: 100%;
+      min-height: 44px;
+    }
+
     .login-worker-trigger,
     .login-worker-option {
       width: 100%;
@@ -255,6 +294,11 @@
     }
 
     .login-worker-picker.open .login-worker-trigger {
+      border-color: var(--color-brand-primary);
+      box-shadow: 0 0 0 3px var(--color-brand-focus-ring);
+    }
+
+    .login-worker-trigger.open {
       border-color: var(--color-brand-primary);
       box-shadow: 0 0 0 3px var(--color-brand-focus-ring);
     }
@@ -330,6 +374,44 @@
       border-radius: 8px;
       background: #fff;
       box-shadow: 0 18px 42px rgba(23, 32, 51, .18);
+    }
+
+    .login-worker-search-panel {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid #d8e2ee;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .login-worker-search-panel label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .login-worker-search-input {
+      min-height: 46px !important;
+    }
+
+    .login-worker-options-inline {
+      position: static;
+      max-height: min(320px, 38vh);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .login-worker-empty {
+      padding: 12px;
+      border: 1px dashed #cbd6e4;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
     }
 
     .login-worker-option {
@@ -3644,6 +3726,14 @@
 
       .login-card {
         padding: 18px;
+      }
+
+      .login-account-strip {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .login-account-action {
+        width: 100%;
       }
 
       .login-session-panel {

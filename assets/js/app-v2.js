@@ -1058,6 +1058,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         sessionStorage.removeItem(storeKey("workerSession"));
       } catch {}
     };
+    const loadLastLoginWorkerId = () => {
+      try {
+        return localStorage.getItem(storeKey("lastLoginWorkerId")) || "";
+      } catch {
+        return "";
+      }
+    };
+    const saveLastLoginWorkerId = (workerId) => {
+      try {
+        if (workerId) {
+          localStorage.setItem(storeKey("lastLoginWorkerId"), workerId);
+        } else {
+          localStorage.removeItem(storeKey("lastLoginWorkerId"));
+        }
+      } catch {}
+    };
     const normalizeEmployeeNo = (value) => String(value || "").trim();
     const adminSessionLooksActive = (session) => Boolean(
       session
@@ -2501,6 +2517,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       loginSubmitting: false,
       loginWorkerId: "",
       loginWorkerPickerOpen: false,
+      loginWorkerSearch: "",
+      lastLoginWorkerId: loadLastLoginWorkerId(),
       unsafeDraft: createUnsafeDraft(loadJson("unsafeDraft", {})),
       materialDraft: createMaterialDraft(loadJson("materialDraft", {})),
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
@@ -3189,6 +3207,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         page.innerHTML = renderLogin();
         setSyncStatus(state.syncText, state.syncMode);
         ensureRenderedAccessibility();
+        applyLoginWorkerSearchFilter();
         restoreFocusedFieldState(focusedFieldState);
         return;
       }
@@ -3346,6 +3365,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function applyClientSearchFilters() {
       applyShipSearchFilter();
       applyToolSearchFilter();
+      applyLoginWorkerSearchFilter();
+    }
+
+    function applyLoginWorkerSearchFilter() {
+      const rows = Array.from(document.querySelectorAll("[data-login-worker-search-item]"));
+      if (!rows.length) return;
+      const query = normalizeSearchQuery(state.loginWorkerSearch);
+      let visibleCount = 0;
+      rows.forEach((row) => {
+        const matches = !query || (row.dataset.loginWorkerSearchText || "").includes(query);
+        row.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
+      const empty = document.querySelector("[data-login-worker-search-empty]");
+      if (empty) empty.hidden = visibleCount > 0;
     }
 
     function applyShipSearchFilter() {
@@ -3727,6 +3761,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const workers = [...sortWorkersForLogin(state.workers)];
       const disabled = !workers.length || state.loginSubmitting;
       const selectedWorker = workers.find((worker) => worker.id === state.loginWorkerId);
+      const rememberedWorker = rememberedLoginWorker(workers);
+      const effectiveWorker = selectedWorker || rememberedWorker;
+      const shouldAutofocusEmployeeNo = Boolean(effectiveWorker && !state.loginWorkerPickerOpen);
       return `<section class="login-screen" aria-labelledby="loginTitle">
         <div class="login-hero">
           <div class="login-brand">
@@ -3743,20 +3780,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           </div>
         </div>
         <form class="login-card" data-login-form>
-          <div class="field">
-            <label for="loginWorkerId">아이디</label>
-            <input id="loginWorkerId" type="hidden" value="${esc(selectedWorker?.id || "")}" required />
-            ${renderLoginWorkerPicker(workers, selectedWorker, disabled)}
+          <div class="field login-worker-field">
+            <label for="loginWorkerId">작업자</label>
+            <input id="loginWorkerId" name="username" autocomplete="username" type="hidden" value="${esc(effectiveWorker?.id || "")}" required />
+            ${renderLoginWorkerSelector(workers, selectedWorker, rememberedWorker, effectiveWorker, disabled)}
           </div>
           <div class="field">
-            <label for="loginEmployeeNo">비밀번호</label>
-            <input class="input" id="loginEmployeeNo" type="password" inputmode="text" autocomplete="current-password" autocapitalize="characters" placeholder="사번 입력" ${disabled ? "disabled" : ""} required />
+            <label for="loginEmployeeNo">사번</label>
+            <input class="input" id="loginEmployeeNo" type="password" inputmode="text" autocomplete="current-password" autocapitalize="characters" placeholder="사번 입력" ${shouldAutofocusEmployeeNo ? "autofocus" : ""} ${disabled ? "disabled" : ""} required />
           </div>
           <button class="btn login-submit" type="submit" ${disabled ? "disabled" : ""}>${state.loginSubmitting ? "확인 중" : "로그인"}</button>
           <button class="btn-light login-refresh" data-action="refresh-workers" type="button" ${state.loginSubmitting ? "disabled" : ""}>작업자 목록 새로고침</button>
           <div class="login-help">${workers.length ? "사번이 등록되지 않은 작업자는 관리자에게 사번 등록을 요청하세요." : "작업자 목록을 불러오는 중입니다."}</div>
         </form>
       </section>`;
+    }
+
+    function rememberedLoginWorker(workers) {
+      const workerId = state.lastLoginWorkerId || "";
+      if (!workerId) return null;
+      return workers.find((worker) => worker.id === workerId && worker.active !== false) || null;
     }
 
     function renderLoginWorkerLabel(worker, placeholder = "작업자 선택") {
@@ -3767,18 +3810,53 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </span>`;
     }
 
-    function renderLoginWorkerPicker(workers, selectedWorker, disabled) {
+    function renderLoginWorkerSelector(workers, selectedWorker, rememberedWorker, effectiveWorker, disabled) {
+      const hasWorker = Boolean(effectiveWorker);
+      const accountLabel = effectiveWorker?.id === rememberedWorker?.id ? "내 계정" : "선택한 작업자";
+      return `<div class="login-worker-selector" data-login-worker-picker>
+        ${hasWorker ? `
+          <div class="login-account-strip">
+            <div class="login-account-copy">
+              <span>${accountLabel}</span>
+              ${renderLoginWorkerLabel(effectiveWorker)}
+            </div>
+            <button class="btn login-account-action" data-login-remember-worker="${esc(effectiveWorker.id)}" type="button" ${disabled ? "disabled" : ""}>${esc(effectiveWorker.name)}으로 계속</button>
+          </div>
+        ` : renderLoginWorkerTrigger(null, disabled)}
+        ${hasWorker ? `
+          <button class="btn-light login-worker-change" data-action="toggle-login-worker-picker" type="button" aria-expanded="${state.loginWorkerPickerOpen ? "true" : "false"}" ${disabled ? "disabled" : ""}>다른 작업자 선택</button>
+        ` : ""}
+        ${state.loginWorkerPickerOpen && !disabled ? renderLoginWorkerSearchPanel(workers, selectedWorker || effectiveWorker) : ""}
+      </div>`;
+    }
+
+    function renderLoginWorkerTrigger(selectedWorker, disabled) {
       const expanded = state.loginWorkerPickerOpen && !disabled;
-      return `<div class="login-worker-picker ${expanded ? "open" : ""}" data-login-worker-picker>
-        <button class="login-worker-trigger" data-action="toggle-login-worker-picker" type="button" aria-haspopup="listbox" aria-expanded="${expanded ? "true" : "false"}" ${disabled ? "disabled" : ""}>
-          ${renderLoginWorkerLabel(selectedWorker)}
-          <span class="login-worker-chevron" aria-hidden="true"></span>
-        </button>
-        ${expanded ? `<div class="login-worker-options" role="listbox" aria-label="작업자 선택">
-          ${workers.map((worker) => `<button class="login-worker-option ${worker.id === selectedWorker?.id ? "selected" : ""}" data-login-worker-select="${esc(worker.id)}" type="button" role="option" aria-selected="${worker.id === selectedWorker?.id ? "true" : "false"}">
+      return `<button class="login-worker-trigger ${expanded ? "open" : ""}" data-action="toggle-login-worker-picker" type="button" aria-haspopup="listbox" aria-expanded="${expanded ? "true" : "false"}" ${disabled ? "disabled" : ""}>
+        ${renderLoginWorkerLabel(selectedWorker)}
+        <span class="login-worker-chevron" aria-hidden="true"></span>
+      </button>`;
+    }
+
+    function loginWorkerSearchText(worker) {
+      return normalizeSearchQuery([
+        worker?.name,
+        worker?.team,
+        workerDisplayPosition(worker),
+        loginWorkerGroup(worker),
+      ].filter(Boolean).join(" "));
+    }
+
+    function renderLoginWorkerSearchPanel(workers, selectedWorker) {
+      return `<div class="login-worker-search-panel">
+        <label for="loginWorkerSearch">작업자 검색</label>
+        <input class="input login-worker-search-input" id="loginWorkerSearch" data-login-worker-search value="${esc(state.loginWorkerSearch)}" placeholder="이름 검색" autocomplete="off" />
+        <div class="login-worker-options login-worker-options-inline" role="listbox" aria-label="작업자 선택">
+          ${workers.map((worker) => `<button class="login-worker-option ${worker.id === selectedWorker?.id ? "selected" : ""}" data-login-worker-select="${esc(worker.id)}" data-login-worker-search-item data-login-worker-search-text="${esc(loginWorkerSearchText(worker))}" type="button" role="option" aria-selected="${worker.id === selectedWorker?.id ? "true" : "false"}">
             ${renderLoginWorkerLabel(worker)}
           </button>`).join("")}
-        </div>` : ""}
+        </div>
+        <div class="login-worker-empty" data-login-worker-search-empty hidden>검색 결과가 없습니다.</div>
       </div>`;
     }
 
@@ -5122,7 +5200,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${isDeliveryScope ? "" : `<button class="btn-danger" data-action="reset-history" type="button">이력 초기화</button>`}
       `)}
       ${isDeliveryScope || !state.historyShipNo ? "" : renderShipFilterNotice("history", state.historyShipNo)}
-      ${isDeliveryScope ? "" : (state.adminMode ? `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>` : `<div class="notice" style="margin-bottom:12px">수정과 초기화는 관리자 이메일 로그인 후 사용할 수 있습니다.</div>`)}
+      ${isDeliveryScope || !state.adminMode ? "" : `<div class="notice good" style="margin-bottom:12px">관리자 수정 모드가 켜져 있습니다.${state.adminEmail ? ` (${esc(state.adminEmail)})` : ""}</div>`}
       ${isDeliveryScope ? "" : renderHistoryPledgeStatus()}
       <div class="panel panel-pad">
         ${isDeliveryScope
@@ -5693,12 +5771,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         <div class="panel panel-pad" style="margin-bottom:14px">
           ${renderToolManagerShell()}
-        </div>
-        <div class="panel panel-pad" style="margin-bottom:14px">
-          <div class="section-title">
-            섹션/점검 항목 관리
-          </div>
-          <p class="section-help">점검 항목 추가/수정/삭제는 작업 유형을 선택해서 관리합니다.</p>
         </div>
         <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
           <div class="section-title">
@@ -8764,13 +8836,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "toggle-login-worker-picker") {
         state.loginWorkerPickerOpen = !state.loginWorkerPickerOpen;
+        if (state.loginWorkerPickerOpen) state.loginWorkerSearch = "";
         render();
+        return;
+      }
+      if (button.dataset.loginRememberWorker) {
+        state.loginWorkerId = button.dataset.loginRememberWorker;
+        state.loginWorkerPickerOpen = false;
+        state.loginWorkerSearch = "";
+        render();
+        requestAnimationFrame(() => $("loginEmployeeNo")?.focus());
         return;
       }
       if (button.dataset.loginWorkerSelect) {
         state.loginWorkerId = button.dataset.loginWorkerSelect;
         state.loginWorkerPickerOpen = false;
+        state.loginWorkerSearch = "";
         render();
+        requestAnimationFrame(() => $("loginEmployeeNo")?.focus());
         return;
       }
       if (button.dataset.monthlyWorkerToggle) {
@@ -9405,6 +9488,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.toolSearchQuery = event.target.value;
         applyToolSearchFilter();
       }
+      if (event.target.matches("[data-login-worker-search]")) {
+        state.loginWorkerSearch = event.target.value;
+        applyLoginWorkerSearchFilter();
+      }
       if (event.target.matches("[data-check-item]")) {
         const itemId = event.target.dataset.checkItem;
         state.draft.checks[itemId] = event.target.checked;
@@ -9805,8 +9892,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           employeeNo,
           loggedInAt: serverNow().toISOString(),
         };
+        state.lastLoginWorkerId = worker.id;
         state.loginWorkerPickerOpen = false;
+        state.loginWorkerSearch = "";
         saveWorkerSession(state.workerSession);
+        saveLastLoginWorkerId(worker.id);
         if (!state.adminMode && canWorkerPreEnterAdminMode(worker)) {
           try {
             setAdminSession(await createAdminSession(worker.id, employeeNo));
