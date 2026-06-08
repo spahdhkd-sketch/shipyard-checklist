@@ -47,7 +47,7 @@ expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
 expectMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*table:\s*"work_prep_records"/, "admin-mutations must whitelist work prep records for admin deletion");
-expectMatch(edge, /"deleted_at"/, "admin-mutations should know the work prep deletion tombstone column");
+expectNoMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*columns:\s*new Set\(\[[\s\S]*"deleted_at"[\s\S]*\]\)/, "work prep upserts must not be able to clear deletion tombstones");
 expectMatch(edge, /\.update\(\{ deleted_at: now, updated_at: now \}\)[\s\S]*\.in\("id", ids\)/, "work prep deletes should soft-delete records instead of physically deleting them");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
 expectNoMatch(edge, /adminAuth/, "admin mutations must not accept replayable worker id plus employee number credentials");
