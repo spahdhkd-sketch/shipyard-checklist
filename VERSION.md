@@ -1,19 +1,18 @@
 # Version
 
-Current version: `1.2-20260608`
+Current version: `1.3-20260609`
 
-Recorded at: `2026-06-08 23:54:57 +09:00`
+Recorded at: `2026-06-09 00:00:00 +09:00`
 
-Baseline commit: `3de9c83`
+Baseline commit: `pending`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version adds 작업지시서 관리 to the 관리 menu and stores/deletes work-prep records through the Supabase admin mutation boundary.
-- It makes 작업지시서 filters functional, renames the completion filter to `완료`, and opens selected work orders in an inline detail drawer below the list row.
-- It refines 작업지시서, 불안전요소, and 자재누락 inline detail drawers with clearer spacing and visual hierarchy.
-- It prevents duplicate 처리 이력 synthesis for 불안전요소/자재누락 records and removes duplicate active-row processing controls.
-- It adds regression coverage for work-prep admin management, filters, deletion, and processing history de-duplication.
+- This version fixes 작업지시서 deletion persistence so deleted records do not reappear after remote refresh.
+- It records deleted work-prep IDs locally, removes matching pending sync upserts, and filters deleted IDs from pulled remote rows.
+- It adds a scoped Supabase work-prep mutation session so 조장/관리 작업지시서 writes can be authorized without granting full admin mutation scope.
+- It keeps 작업지시서 delete/upsert through the Supabase admin mutation boundary and adds regression coverage for the deletion path.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

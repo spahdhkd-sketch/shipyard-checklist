@@ -1,5 +1,5 @@
-const APP_VERSION = "1.2-20260608";
-const ASSET_TOKEN = "20260608-work-prep-admin-1";
+const APP_VERSION = "1.3-20260609";
+const ASSET_TOKEN = "20260609-work-prep-delete-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

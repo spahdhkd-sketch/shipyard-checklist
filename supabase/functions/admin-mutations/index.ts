@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const PRIVILEGED_POSITIONS = new Set(["\uBC18\uC7A5", "\uB300\uD45C", "\uAD00\uB9AC", "\uCD1D\uBB34"]);
+const WORK_PREP_POSITIONS = new Set(["\uC870\uC7A5", "\uBC18\uC7A5", "\uB300\uD45C", "\uAD00\uB9AC", "\uCD1D\uBB34"]);
 const PRIVILEGED_TEAMS = new Set(["\uAD00\uB9AC", "\uCD1D\uBB34"]);
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
@@ -31,6 +32,7 @@ type TokenPayload = {
   v: 1;
   sid: string;
   workerId: string;
+  scope?: "admin" | "workPrep";
   nonce: string;
   iat: number;
   exp: number;
@@ -302,6 +304,12 @@ function isPrivilegedWorker(worker: Record<string, unknown>) {
   return PRIVILEGED_POSITIONS.has(position) || PRIVILEGED_TEAMS.has(team);
 }
 
+function canMutateWorkPrep(worker: Record<string, unknown>) {
+  const position = cleanText(worker.position, 80);
+  const team = cleanText(worker.team, 80);
+  return WORK_PREP_POSITIONS.has(position) || PRIVILEGED_TEAMS.has(team);
+}
+
 function base64UrlEncode(bytes: Uint8Array) {
   let binary = "";
   bytes.forEach((byte) => {
@@ -377,7 +385,7 @@ async function readToken(token: string) {
   }
 }
 
-async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: string) {
+async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: string, scope: "admin" | "workPrep" = "admin") {
   if (!workerId || !employeeNo) return { error: jsonResponse({ error: "admin_worker_required" }, 403) };
 
   const { data: worker, error } = await supabase
@@ -394,7 +402,10 @@ async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: st
   if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
     return { error: jsonResponse({ error: "admin_verification_failed" }, 403) };
   }
-  if (!isPrivilegedWorker(worker as Record<string, unknown>)) {
+  const allowed = scope === "workPrep"
+    ? canMutateWorkPrep(worker as Record<string, unknown>)
+    : isPrivilegedWorker(worker as Record<string, unknown>);
+  if (!allowed) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
 
@@ -454,11 +465,12 @@ async function clearAttempts(bucketKey: string) {
 async function createSession(payload: Record<string, unknown>) {
   const workerId = cleanText(payload.workerId, 120);
   const employeeNo = normalizeEmployeeNo(payload.employeeNo);
+  const scope = cleanText(payload.scope, 20) === "workPrep" ? "workPrep" : "admin";
   const bucketKey = `worker:${workerId}`;
   const attempt = await assertAttemptAllowed(bucketKey);
   if (attempt.error) return attempt.error;
 
-  const verification = await verifyPrivilegedWorkerCredential(workerId, employeeNo);
+  const verification = await verifyPrivilegedWorkerCredential(workerId, employeeNo, scope);
   if (verification.error) {
     if (workerId) await recordFailedAttempt(bucketKey, workerId, attempt.attempt);
     return verification.error;
@@ -472,6 +484,7 @@ async function createSession(payload: Record<string, unknown>) {
     v: 1,
     sid: sessionId,
     workerId,
+    scope,
     nonce: randomId("nonce"),
     iat: now,
     exp: now + SESSION_TTL_MS,
@@ -502,7 +515,7 @@ async function createSession(payload: Record<string, unknown>) {
   });
 }
 
-async function verifyAdminSession(payload: Record<string, unknown>) {
+async function verifyAdminSession(payload: Record<string, unknown>, requiredScope: "admin" | "workPrep" = "admin") {
   const session = rowObject(payload.adminSession) || {};
   const token = cleanText(session.token, 4096);
   if (!token) return { error: jsonResponse({ error: "admin_session_required" }, 403) };
@@ -547,7 +560,15 @@ async function verifyAdminSession(payload: Record<string, unknown>) {
     console.error("admin session worker lookup failed", workerError);
     return { error: jsonResponse({ error: "admin_lookup_failed" }, 500) };
   }
-  if (!worker || !isPrivilegedWorker(worker as Record<string, unknown>)) {
+  if (!worker) {
+    return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
+  }
+  const tokenScope = tokenPayload.scope || "admin";
+  const workerRecord = worker as Record<string, unknown>;
+  const allowed = requiredScope === "workPrep"
+    ? (tokenScope === "admin" || tokenScope === "workPrep") && canMutateWorkPrep(workerRecord)
+    : tokenScope === "admin" && isPrivilegedWorker(workerRecord);
+  if (!allowed) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
 
@@ -557,11 +578,11 @@ async function verifyAdminSession(payload: Record<string, unknown>) {
     .eq("id", tokenPayload.sid);
   if (updateError) console.error("admin session touch failed", updateError);
 
-  return { worker: worker as Record<string, unknown>, sessionId: tokenPayload.sid };
+  return { worker: workerRecord, sessionId: tokenPayload.sid };
 }
 
 async function revokeSession(payload: Record<string, unknown>) {
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyAdminSession(payload, cleanText(payload.key, 80) === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
   const { error } = await supabase
     .from("admin_mutation_sessions")
@@ -582,7 +603,7 @@ async function upsertRows(payload: Record<string, unknown>) {
     : [];
   if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyAdminSession(payload, cleanText(payload.key, 80) === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
 
   const { error } = await supabase.from(config.table).upsert(rows, { onConflict: "id" });

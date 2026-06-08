@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.2-20260608";
+    const APP_VERSION = "1.3-20260609";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -964,15 +964,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function applyRemoteTableRows(key, rows) {
       const config = remoteConfigByKey(key);
+      const nextRows = key === "workPrepRecords" ? filterDeletedWorkPrepRecords(rows) : rows;
       if (config?.limit || config?.pullOnStartup === false) {
-        state[key] = mergeRecordArrays(state[key], rows);
+        state[key] = mergeRecordArrays(key === "workPrepRecords" ? filterDeletedWorkPrepRecords(state[key]) : state[key], nextRows);
         return;
       }
       if (REMOTE_AUTHORITATIVE_KEYS.has(key)) {
-        state[key] = authoritativeRemoteRows(key, rows);
+        state[key] = authoritativeRemoteRows(key, nextRows);
         return;
       }
-      if (rows.length) state[key] = mergeRecordArrays(state[key], rows);
+      if (nextRows.length) state[key] = mergeRecordArrays(state[key], nextRows);
     }
 
     function normalizePendingSyncQueue(value) {
@@ -1276,6 +1277,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveJson("workPrepRecords", state.workPrepRecords);
     }
 
+    function saveDeletedWorkPrepRecordIds() {
+      saveJson("deletedWorkPrepRecordIds", state.deletedWorkPrepRecordIds);
+    }
+
+    function deletedWorkPrepRecordIdSet() {
+      return new Set(Array.isArray(state.deletedWorkPrepRecordIds) ? state.deletedWorkPrepRecordIds.filter(Boolean) : []);
+    }
+
+    function filterDeletedWorkPrepRecords(rows) {
+      const deletedIds = deletedWorkPrepRecordIdSet();
+      if (!deletedIds.size) return rows;
+      return (Array.isArray(rows) ? rows : []).filter((row) => row?.id && !deletedIds.has(row.id));
+    }
+
+    function rememberDeletedWorkPrepRecordId(recordId) {
+      const id = String(recordId || "").trim();
+      if (!id) return;
+      state.deletedWorkPrepRecordIds = [...deletedWorkPrepRecordIdSet(), id].slice(-300);
+      removePendingSyncRows("workPrepRecords", [id]);
+      saveDeletedWorkPrepRecordIds();
+    }
+
     function normalizeWorkPrepStatus(status) {
       return WORK_PREP_STATUS_ORDER[status] ? status : "ordered";
     }
@@ -1395,6 +1418,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const title = `${record.shipNo || "-"} ${category ? workLabel(category) : "작업지시서"}`;
       if (!window.confirm(`${title} 작업지시서를 삭제할까요?\n삭제 후 복구할 수 없습니다.`)) return;
       if (isSyncConfigured() && !(await deleteRemoteRows("workPrepRecords", [record.id]))) return;
+      rememberDeletedWorkPrepRecordId(record.id);
       state.workPrepRecords = state.workPrepRecords.filter((row) => row.id !== record.id);
       if (state.workPrepDraft?.id === record.id) {
         state.workPrepDraft = createFreshWorkPrepRegistrationDraft(state.workPrepDraft);
@@ -2456,6 +2480,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pledgeShipCollapsed: false,
       workPrepRegisterOpen: false,
       workPrepRecords: loadWorkPrepRecords(),
+      deletedWorkPrepRecordIds: loadJson("deletedWorkPrepRecordIds", []),
       selectedWorkPrepDate: "",
       workPrepDateManuallySelected: false,
       workPrepDirectOpen: false,
@@ -2539,6 +2564,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       remoteListLimits: loadJson("remoteListLimits", {}),
     };
     let cachedSupabaseClient = null;
+    let workPrepMutationSessionPromise = null;
 
     function initialView() {
       const view = viewFromPathname() || document.body?.dataset?.initialView || "dashboard";
@@ -6344,7 +6370,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderWorkPrepManager() {
       if (state.workPrepRegisterOpen) return renderWorkPrepRegister();
-      const canEdit = state.adminMode || isRedesignPreviewPage();
+      const canEdit = canOpenWorkPrepRegister() || isRedesignPreviewPage();
       const filters = state.workPrepFilters;
       const filtered = filterWorkPrepRecords(state.workPrepRecords, filters);
       const records = sortWorkPrepAdminRecords(filtered, filters.sort);
@@ -10105,7 +10131,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       );
     }
 
-    async function createAdminSession(workerId, employeeNo) {
+    async function createAdminSession(workerId, employeeNo, scope = "admin") {
       const client = supabaseClient();
       if (!client) throw new Error("Supabase client is not configured.");
       const { data, error } = await client.functions.invoke("admin-mutations", {
@@ -10113,6 +10139,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           action: "createSession",
           workerId,
           employeeNo,
+          scope,
         },
       });
       if (error || data?.error) throw new Error(error?.message || data.error);
@@ -10158,6 +10185,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             clearAdminSessionState();
             setAdminMode(false);
             toast(`${worker.name}님 로그인되었습니다. 관리자 서버 권한 확인에는 실패했습니다.`);
+          }
+        } else if (canWorkerPerformLeaderActions(worker)) {
+          try {
+            setAdminSession(await createAdminSession(worker.id, employeeNo, "workPrep"));
+            toast(`${worker.name}님 로그인되었습니다.`);
+          } catch (error) {
+            console.warn("work prep session create failed", error);
+            clearAdminSessionState();
+            toast(`${worker.name}님 로그인되었습니다. 작업지시서 서버 권한 확인에는 실패했습니다.`);
           }
         } else {
           clearAdminSessionState();
@@ -10335,6 +10371,29 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function canAttemptServerAdminWrite() {
       return adminSessionActive();
+    }
+
+    async function ensureWorkPrepMutationSession() {
+      if (!isSyncConfigured()) return true;
+      if (canAttemptServerAdminWrite()) return true;
+      const worker = currentWorkerSessionWorker();
+      const employeeNo = normalizeEmployeeNo(state.workerSession?.employeeNo || "");
+      if (!worker || !employeeNo || !canWorkerPerformLeaderActions(worker)) return false;
+      if (!workPrepMutationSessionPromise) {
+        workPrepMutationSessionPromise = createAdminSession(worker.id, employeeNo, "workPrep")
+          .then((session) => {
+            setAdminSession(session);
+            return true;
+          })
+          .catch((error) => {
+            console.warn("work prep session refresh failed", error);
+            return false;
+          })
+          .finally(() => {
+            workPrepMutationSessionPromise = null;
+          });
+      }
+      return workPrepMutationSessionPromise;
     }
 
     function requireAdminWrite() {
@@ -12152,6 +12211,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveSyncQueue();
     }
 
+    function removePendingSyncRows(key, ids) {
+      const removeIds = new Set((Array.isArray(ids) ? ids : [ids]).map((id) => String(id || "").trim()).filter(Boolean));
+      if (!removeIds.size) return;
+      state.pendingSyncQueue = normalizePendingSyncQueue(state.pendingSyncQueue)
+        .map((job) => {
+          if (job.type !== "rows" || !job.rowIdsByKey[key]) return job;
+          const remainingIds = job.rowIdsByKey[key].filter((id) => !removeIds.has(String(id || "")));
+          return {
+            ...job,
+            rowIdsByKey: {
+              ...job.rowIdsByKey,
+              [key]: remainingIds,
+            },
+          };
+        })
+        .filter((job) => job.type !== "rows" || job.keys.some((itemKey) => (job.rowIdsByKey[itemKey] || []).length));
+      saveSyncQueue();
+    }
+
     function prunePendingSyncQueue() {
       state.pendingSyncQueue = normalizePendingSyncQueue(state.pendingSyncQueue).slice(-80);
       const fullIndex = state.pendingSyncQueue.findIndex((job) => job.type === "full");
@@ -12483,7 +12561,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!client || !config) return false;
       try {
         if (ADMIN_REMOTE_KEYS.has(config.key) || PUBLIC_INSERT_ONLY_REMOTE_KEYS.has(config.key)) {
-          if (!canAttemptServerAdminWrite()) throw new Error("admin_session_required");
+          if (config.key === "workPrepRecords") {
+            if (!(await ensureWorkPrepMutationSession())) throw new Error("work_prep_session_required");
+          } else if (!canAttemptServerAdminWrite()) {
+            throw new Error("admin_session_required");
+          }
           await invokeAdminMutation("deleteRows", { key: config.key, ids });
           setSyncStatus("온라인", "online");
           return true;
@@ -12506,6 +12588,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!targetRows.length) return;
       const payload = targetRows.map(config.toDb);
       if (ADMIN_REMOTE_KEYS.has(config.key)) {
+        if (config.key === "workPrepRecords" && !(await ensureWorkPrepMutationSession())) {
+          throw new Error("work_prep_session_required");
+        }
         await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
         return;
       }

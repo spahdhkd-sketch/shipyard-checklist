@@ -39,6 +39,9 @@ expectMatch(edge, /action === "deleteSectionCascade"/, "admin-mutations must sup
 expectMatch(edge, /action === "uploadPictogramImage"/, "admin-mutations must upload custom pictograms through Storage");
 expectMatch(edge, /const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms"/, "admin-mutations should use the safety pictogram bucket");
 expectMatch(edge, /const PRIVILEGED_POSITIONS = new Set\(\["\\uBC18\\uC7A5", "\\uB300\\uD45C", "\\uAD00\\uB9AC", "\\uCD1D\\uBB34"\]\)/, "admin-mutations must allow foreman workers to create admin sessions");
+expectMatch(edge, /const WORK_PREP_POSITIONS = new Set\(\["\\uC870\\uC7A5", "\\uBC18\\uC7A5", "\\uB300\\uD45C", "\\uAD00\\uB9AC", "\\uCD1D\\uBB34"\]\)/, "admin-mutations must allow scoped work-prep sessions for leaders");
+expectMatch(edge, /scope\?: "admin" \| "workPrep"/, "admin session tokens should carry a mutation scope");
+expectMatch(edge, /verifyAdminSession\(payload, cleanText\(payload\.key, 80\) === "workPrepRecords" \? "workPrep" : "admin"\)/, "work prep records should allow scoped work-prep mutation sessions");
 expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "admin-mutations should write pictogram bytes to Storage");
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
@@ -58,6 +61,8 @@ expectNoMatch(app, /fromDb:\s*\(row\) => \(\{[\s\S]*?src:\s*row\.src[\s\S]*?sour
 expectNoMatch(app, /src:\s*String\(reader\.result \|\| ""\)/, "custom pictogram data URLs must not be saved directly into state");
 expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send server-issued admin session auth for admin mutations");
 expectMatch(app, /adminSessionToken/, "frontend must store an admin session token instead of replaying employee numbers");
+expectMatch(app, /createAdminSession\(worker\.id, employeeNo, "workPrep"\)/, "frontend should request scoped work-prep sessions for work-prep-capable workers");
+expectMatch(app, /async function ensureWorkPrepMutationSession\(\)/, "frontend should lazily refresh scoped work-prep sessions before deleting records");
 expectNoMatch(app, /adminAuth:\s*adminMutationAuthPayload\(\)/, "frontend must not send replayable adminAuth credentials on each mutation");
 expectNoMatch(app, /client\.from\("safety_inspections"\)\.delete\(/, "inspection history delete/reset must not use direct anon REST delete");
 expectNoMatch(app, /client\.from\("safety_inspection_items"\)\.delete\(/, "inspection item history delete/reset must not use direct anon REST delete");
