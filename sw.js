@@ -1,5 +1,5 @@
-const APP_VERSION = "1.1-20260606";
-const ASSET_TOKEN = "20260606-copy-polish-1";
+const APP_VERSION = "1.2-20260608";
+const ASSET_TOKEN = "20260608-work-prep-admin-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

@@ -81,6 +81,8 @@ assert.match(app, /function deleteWorkPrepRecord\(recordId\)/);
 assert.match(app, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /"delete-work-prep-record": \(\) => deleteWorkPrepRecord\(workPrepRecordId\(\)\)/);
+assert.match(app, /const deleteDisabled = !canDelete;/);
+assert.doesNotMatch(app, /이미 점검이 진행된 작업지시서는 삭제할 수 없습니다\./);
 assert.match(app, /selectedWorkPrepDate: ""/);
 assert.match(app, /workPrepDateManuallySelected: false/);
 assert.match(app, /function workPrepVisibleDateOptions\(todayDate = today\(\)/);

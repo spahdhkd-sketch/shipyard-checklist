@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260606-copy-polish-1";
+const ASSET_TOKEN = "20260608-work-prep-admin-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/js/worker-helpers.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/js/dashboard-view.js?v=${ASSET_TOKEN}`;
@@ -173,6 +173,15 @@ assert(manageHtml.includes('<div class="manage-workspace">'));
 assert(manageHtml.includes('data-test-panel="unsafe"'));
 assert(!manageHtml.includes('data-test-panel="materials"'));
 
+const workPrepManageHtml = dashboardView.renderManageShellView({
+  tabs: [{ id: "workPrep", label: "작업지시서", count: 4, active: true }],
+  activeTab: "workPrep",
+  panels: { workPrep: '<div data-test-panel="workPrep">work prep panel</div>' },
+});
+assert(workPrepManageHtml.includes('data-manage-tab="workPrep"'));
+assert(workPrepManageHtml.includes("작업지시서 <span>4</span>"));
+assert(workPrepManageHtml.includes('data-test-panel="workPrep"'));
+
 const unsafeCardHtml = dashboardView.renderUnsafeRecordCardView({
   id: "unsafe-1",
   shipNo: "S-100",
@@ -216,7 +225,7 @@ assert(unsafeDetailHtml.includes("박안전"));
 assert(unsafeDetailHtml.includes("개구부 덮개 미설치"));
 assert(unsafeDetailHtml.includes('class="unsafe-detail-photo" src="https://example.test/photo.jpg"'));
 assert(unsafeDetailHtml.includes("사진 1"));
-assert(unsafeDetailHtml.includes("현장 확인 중"));
+assert(!unsafeDetailHtml.includes("현장 확인 중"));
 assert(unsafeDetailHtml.includes("data-test-detail-timeline"));
 assert(unsafeDetailHtml.includes("data-test-detail-controls"));
 
@@ -256,7 +265,7 @@ assert(materialDetailHtml.includes("<strong>S-400</strong>"));
 assert(materialDetailHtml.includes("<strong>와셔</strong>"));
 assert(materialDetailHtml.includes("<strong>12개</strong>"));
 assert(materialDetailHtml.includes("와셔 부족"));
-assert(materialDetailHtml.includes("구매 요청 완료"));
+assert(!materialDetailHtml.includes("구매 요청 완료"));
 assert(materialDetailHtml.includes('data-test-detail-timeline="materials"'));
 assert(materialDetailHtml.includes('data-test-detail-controls="materials"'));
 

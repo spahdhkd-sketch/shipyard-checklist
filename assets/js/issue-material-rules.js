@@ -73,12 +73,16 @@
     }
 
     if (updatedAt && (currentStatus !== initialStatus || memo)) {
-      entries.push({
-        status: currentStatus,
-        memo,
-        changedAt: updatedAt,
-        actor: "관리자",
-      });
+      const currentAlreadyRecorded = uniqueTimelineEntries(entries)
+        .some((entry) => entry.status === currentStatus && entry.memo === memo);
+      if (!currentAlreadyRecorded) {
+        entries.push({
+          status: currentStatus,
+          memo,
+          changedAt: updatedAt,
+          actor: "관리자",
+        });
+      }
     }
 
     return uniqueTimelineEntries(entries);

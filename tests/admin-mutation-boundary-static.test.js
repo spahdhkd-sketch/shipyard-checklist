@@ -42,10 +42,12 @@ expectMatch(edge, /const PRIVILEGED_POSITIONS = new Set\(\["\\uBC18\\uC7A5", "\\
 expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "admin-mutations should write pictogram bytes to Storage");
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
+expectMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*table:\s*"work_prep_records"/, "admin-mutations must whitelist work prep records for admin deletion");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
 expectNoMatch(edge, /adminAuth/, "admin mutations must not accept replayable worker id plus employee number credentials");
 
 expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(/, "frontend must classify admin-managed remote keys");
+expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(\[[\s\S]*"workPrepRecords"/, "work prep records should delete through admin-mutations");
 expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(/, "frontend must keep worker-submitted records insert-only through public REST");
 expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(\[[\s\S]*"inspections"[\s\S]*"inspectionItems"/, "inspection history should be public insert-only");
 expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes must invoke the Edge Function");

@@ -204,6 +204,24 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "created_at",
     ]),
   }],
+  ["workPrepRecords", {
+    table: "work_prep_records",
+    columns: new Set([
+      "id",
+      "work_date",
+      "appearance_time",
+      "team",
+      "ship_no",
+      "category_id",
+      "leader_worker_id",
+      "worker_ids",
+      "other_team_worker_ids",
+      "tool_ids",
+      "status",
+      "created_at",
+      "updated_at",
+    ]),
+  }],
 ]);
 
 const supabase = createClient(

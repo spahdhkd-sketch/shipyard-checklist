@@ -395,6 +395,7 @@
         ${activeTab === "push" ? panels.push || "" : ""}
         ${activeTab === "unsafe" ? panels.unsafe || "" : ""}
         ${activeTab === "materials" ? panels.materials || "" : ""}
+        ${activeTab === "workPrep" ? panels.workPrep || "" : ""}
       </div>`;
   }
 
@@ -478,7 +479,6 @@
           ${renderUnsafeDetailPhotoBlock(model)}
           ${photoCount ? pendingPhotoHtml : ""}
         </div>
-        ${adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(adminMemo)}</div></div>` : ""}
         <div class="field" style="margin-top:12px">
           <span class="field-label">처리 이력</span>
           ${timelineHtml}
@@ -540,7 +540,6 @@
           <span class="field-label">요청 내용</span>
           <div class="readonly-box">${esc(content || "내용 없음")}</div>
         </div>
-        ${adminMemo ? `<div class="field" style="margin-top:12px"><span class="field-label">현재 조치/메모</span><div class="readonly-box">${esc(adminMemo)}</div></div>` : ""}
         <div class="field" style="margin-top:12px">
           <span class="field-label">처리 이력</span>
           ${timelineHtml}

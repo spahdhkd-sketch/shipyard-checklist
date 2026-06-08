@@ -12,10 +12,10 @@ const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
-const APP_VERSION = "1.1-20260606";
+const APP_VERSION = "1.2-20260608";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260606-copy-polish-1";
-const SW_CACHE = "gs-safety-20260606-copy-polish-1";
+const ASSET_TOKEN = "20260608-work-prep-admin-1";
+const SW_CACHE = "gs-safety-20260608-work-prep-admin-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -200,7 +200,7 @@ function checkRuntimeSource() {
   assertContains(app, "const focusedFieldState = captureFocusedFieldState()", "render preserves focused field state");
   assertContains(app, "restoreFocusedFieldState(focusedFieldState)", "render restores focused field state");
 
-  assertContains(app, 'const ADMIN_PREENTRY_WORKER_POSITIONS = new Set(["대표", "관리", "총무"])', "worker admin preentry badges are configured");
+  assertContains(app, 'const ADMIN_PREENTRY_WORKER_POSITIONS = new Set([FOREMAN_WORKER_POSITION, "대표", "관리", "총무"])', "worker admin preentry badges are configured");
   assertContains(app, "function canWorkerPreEnterAdminMode(worker)", "worker admin preentry predicate exists");
   assertContains(app, "ADMIN_PREENTRY_WORKER_POSITIONS.has(position)", "worker admin preentry checks badge");
   assertContains(app, "function workerAdminModeLabel(worker)", "worker admin mode label exists");

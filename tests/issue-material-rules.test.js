@@ -124,4 +124,23 @@ assert.deepStrictEqual(
   ],
 );
 
+assert.deepStrictEqual(
+  buildRecordTimeline({
+    status: "완료",
+    adminMemo: "조치 완료",
+    createdAt: "2026-05-15T08:00:00.000Z",
+    updatedAt: "2026-05-15T10:05:00.000Z",
+    completedAt: "2026-05-15T10:05:00.000Z",
+    statusHistory: [
+      { status: "접수", memo: "", changedAt: "2026-05-15T08:00:00.000Z", actor: "작업자" },
+      { status: "완료", memo: "조치 완료", changedAt: "2026-05-15T10:00:00.000Z", actor: "관리자" },
+    ],
+  }).map((entry) => [entry.status, entry.memo]),
+  [
+    ["접수", ""],
+    ["완료", "조치 완료"],
+  ],
+  "current status/memo should not be synthesized twice when history already contains it",
+);
+
 console.log("issue-material-rules tests passed");

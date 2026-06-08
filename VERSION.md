@@ -1,18 +1,19 @@
 # Version
 
-Current version: `1.1-20260606`
+Current version: `1.2-20260608`
 
-Recorded at: `2026-06-06 21:27:11 +09:00`
+Recorded at: `2026-06-08 23:54:57 +09:00`
 
-Baseline commit: `bdb712d`
+Baseline commit: `pending`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version redesigns mobile 점검이력 rows with a compact one-row card, stage-colored status, larger category icon treatment, and a tighter worker/status area.
-- It fixes 작업 전 점검 작업지시서 visibility for upcoming workdays, adds date navigation, and allows mistaken work orders to be deleted before inspection starts.
-- It adds 자재누락 상세보기 panels in 관리 메뉴 and opens the detail view by clicking the row/card content, matching 불안전요소 behavior.
-- It adds regression coverage for work-prep visibility, work-order deletion, history row rendering, and material detail rendering.
+- This version adds 작업지시서 관리 to the 관리 menu and stores/deletes work-prep records through the Supabase admin mutation boundary.
+- It makes 작업지시서 filters functional, renames the completion filter to `완료`, and opens selected work orders in an inline detail drawer below the list row.
+- It refines 작업지시서, 불안전요소, and 자재누락 inline detail drawers with clearer spacing and visual hierarchy.
+- It prevents duplicate 처리 이력 synthesis for 불안전요소/자재누락 records and removes duplicate active-row processing controls.
+- It adds regression coverage for work-prep admin management, filters, deletion, and processing history de-duplication.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:
