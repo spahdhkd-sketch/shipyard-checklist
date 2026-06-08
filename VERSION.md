@@ -1,18 +1,18 @@
 # Version
 
-Current version: `1.3-20260609`
+Current version: `1.4-20260609`
 
-Recorded at: `2026-06-09 00:00:00 +09:00`
+Recorded at: `2026-06-09 00:27:00 +09:00`
 
-Baseline commit: `74d9ab7`
+Baseline commit: `pending`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version fixes 작업지시서 deletion persistence so deleted records do not reappear after remote refresh.
-- It records deleted work-prep IDs locally, removes matching pending sync upserts, and filters deleted IDs from pulled remote rows.
-- It adds a scoped Supabase work-prep mutation session so 조장/관리 작업지시서 writes can be authorized without granting full admin mutation scope.
-- It keeps 작업지시서 delete/upsert through the Supabase admin mutation boundary and adds regression coverage for the deletion path.
+- This version makes 작업지시서 deletion server-persistent with a `deleted_at` tombstone instead of physical row deletion.
+- It hides soft-deleted work-prep records from public reads and blocks stale public updates from reviving them.
+- It updates the Supabase admin mutation boundary so 작업지시서 delete writes `deleted_at` while other admin deletes keep their existing behavior.
+- It keeps local tombstone filtering as a client-side backup and adds regression coverage for the soft-delete path.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

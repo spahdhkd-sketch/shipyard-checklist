@@ -222,6 +222,7 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "status",
       "created_at",
       "updated_at",
+      "deleted_at",
     ]),
   }],
 ]);
@@ -620,8 +621,22 @@ async function deleteRows(payload: Record<string, unknown>) {
   const ids = cleanIds(payload.ids);
   if (!ids.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const authorization = await verifyAdminSession(payload);
+  const key = cleanText(payload.key, 80);
+  const authorization = await verifyAdminSession(payload, key === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
+
+  if (key === "workPrepRecords") {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from(config.table)
+      .update({ deleted_at: now, updated_at: now })
+      .in("id", ids);
+    if (error) {
+      console.error("admin work prep soft delete failed", error);
+      return jsonResponse({ error: "admin_delete_failed" }, 500);
+    }
+    return jsonResponse({ ok: true, mutated: ids.length });
+  }
 
   const { error } = await supabase.from(config.table).delete().in("id", ids);
   if (error) {

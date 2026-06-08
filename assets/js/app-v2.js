@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.3-20260609";
+    const APP_VERSION = "1.4-20260609";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -651,7 +651,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "work_prep_records",
         key: "workPrepRecords",
-        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at",
+        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at",
         orderBy: "updated_at",
         ascending: false,
         limit: DEFAULT_REMOTE_LIST_LIMIT,
@@ -684,6 +684,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           status: normalizeWorkPrepStatus(row.status || "preparing"),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
+          deletedAt: row.deleted_at || "",
         }),
       },
     ];
@@ -1287,8 +1288,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function filterDeletedWorkPrepRecords(rows) {
       const deletedIds = deletedWorkPrepRecordIdSet();
-      if (!deletedIds.size) return rows;
-      return (Array.isArray(rows) ? rows : []).filter((row) => row?.id && !deletedIds.has(row.id));
+      return (Array.isArray(rows) ? rows : []).filter((row) => row?.id && !row.deletedAt && !deletedIds.has(row.id));
     }
 
     function rememberDeletedWorkPrepRecordId(recordId) {

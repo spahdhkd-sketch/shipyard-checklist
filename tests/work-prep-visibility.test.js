@@ -82,6 +82,7 @@ assert.match(app, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /rememberDeletedWorkPrepRecordId\(record\.id\)/);
 assert.match(app, /function filterDeletedWorkPrepRecords\(rows\)/);
+assert.match(app, /!row\.deletedAt/);
 assert.match(app, /key === "workPrepRecords" \? filterDeletedWorkPrepRecords\(rows\) : rows/);
 assert.match(app, /function removePendingSyncRows\(key, ids\)/);
 assert.match(app, /"delete-work-prep-record": \(\) => deleteWorkPrepRecord\(workPrepRecordId\(\)\)/);

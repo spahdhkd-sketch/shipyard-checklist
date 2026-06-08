@@ -19,6 +19,7 @@ const lintCleanupMigration = read("supabase/migrations/20260527091242_admin_muta
 const inspectionBoundaryMigration = read("supabase/migrations/20260527093146_inspection_history_insert_only_boundary.sql");
 const workPrepBoundaryMigration = read("supabase/migrations/20260527142709_work_prep_records_rls_boundary.sql");
 const workPrepUpdateShapeMigration = read("supabase/migrations/20260527142910_work_prep_records_update_shape_policy.sql");
+const workPrepSoftDeleteMigration = read("supabase/migrations/20260608152516_work_prep_soft_delete.sql");
 const appStateBoundaryMigration = read("supabase/migrations/20260527143351_app_state_read_only_boundary.sql");
 const issueInsertShapeMigration = read("supabase/migrations/20260527144011_issue_records_insert_shape_policies.sql");
 const workerPushBoundaryMigration = read("supabase/migrations/20260527144418_worker_push_subscriptions_boundary.sql");
@@ -46,6 +47,8 @@ expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
 expectMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*table:\s*"work_prep_records"/, "admin-mutations must whitelist work prep records for admin deletion");
+expectMatch(edge, /"deleted_at"/, "admin-mutations should know the work prep deletion tombstone column");
+expectMatch(edge, /\.update\(\{ deleted_at: now, updated_at: now \}\)[\s\S]*\.in\("id", ids\)/, "work prep deletes should soft-delete records instead of physically deleting them");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
 expectNoMatch(edge, /adminAuth/, "admin mutations must not accept replayable worker id plus employee number credentials");
 
@@ -57,6 +60,7 @@ expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes 
 expectMatch(app, /invokeAdminMutation\("uploadPictogramImage"/, "frontend custom pictogram images should upload through admin-mutations");
 expectMatch(app, /select\(config\.selectColumns\)/, "remote pulls should use explicit metadata-only column lists");
 expectMatch(app, /selectColumns:\s*"id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size"/, "safety_pictograms should pull metadata columns only");
+expectMatch(app, /selectColumns:\s*"id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at"/, "work prep pulls should include server tombstones");
 expectNoMatch(app, /fromDb:\s*\(row\) => \(\{[\s\S]*?src:\s*row\.src[\s\S]*?source:\s*row\.source \|\| "custom"/, "safety_pictograms fromDb must not pull src into state");
 expectNoMatch(app, /src:\s*String\(reader\.result \|\| ""\)/, "custom pictogram data URLs must not be saved directly into state");
 expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send server-issued admin session auth for admin mutations");
@@ -136,6 +140,10 @@ expectNoMatch(workPrepBoundaryMigration, /create policy "[^"]*delete[^"]*"[\s\S]
 expectMatch(workPrepUpdateShapeMigration, /drop policy if exists "public update work prep records"/i, "work prep update follow-up should replace the permissive update policy");
 expectMatch(workPrepUpdateShapeMigration, /create policy "public update work prep records"[\s\S]*for update[\s\S]*using \([\s\S]*jsonb_typeof\(worker_ids\) = 'array'[\s\S]*coalesce\(status, 'preparing'\) in[\s\S]*with check \([\s\S]*jsonb_typeof\(worker_ids\) = 'array'[\s\S]*coalesce\(status, 'preparing'\) in/i, "work prep update policy should constrain both USING and WITH CHECK");
 expectNoMatch(workPrepUpdateShapeMigration, /for update[\s\S]*using \(true\)/i, "work prep update follow-up should not leave an always-true UPDATE using clause");
+expectMatch(workPrepSoftDeleteMigration, /add column if not exists deleted_at timestamptz/i, "work prep soft delete migration should add deleted_at");
+expectMatch(workPrepSoftDeleteMigration, /revoke update \(deleted_at\) on table public\.work_prep_records from anon,\s*authenticated/i, "public clients should not clear work prep tombstones");
+expectMatch(workPrepSoftDeleteMigration, /create policy "public select work prep records"[\s\S]*using \(deleted_at is null\)/i, "public reads should hide soft-deleted work prep records");
+expectMatch(workPrepSoftDeleteMigration, /create policy "public update work prep records"[\s\S]*using \([\s\S]*deleted_at is null[\s\S]*with check \([\s\S]*deleted_at is null/i, "public stale updates should not revive soft-deleted work prep records");
 expectNoMatch(app, /app_state/, "current frontend sync should not depend on legacy app_state writes");
 expectMatch(appStateBoundaryMigration, /revoke\s+insert,\s*update,\s*delete,\s*truncate,\s*references,\s*trigger\s+on\s+table\s+public\.app_state\s+from\s+public,\s*anon,\s*authenticated/i, "app_state public writes and schema-level grants should be revoked");
 expectMatch(appStateBoundaryMigration, /grant\s+select\s+on\s+table\s+public\.app_state\s+to\s+anon,\s*authenticated/i, "app_state should remain public read-only for legacy state reads");
