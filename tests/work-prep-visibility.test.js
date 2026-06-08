@@ -82,6 +82,7 @@ assert.match(app, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /rememberDeletedWorkPrepRecordId\(record\.id\)/);
 assert.match(app, /function filterDeletedWorkPrepRecords\(rows\)/);
+assert.match(app, /key:\s*"workPrepRecords"[\s\S]*?limit:\s*0,/, "work prep management should not be capped to the default 20-row remote limit");
 assert.match(app, /!row\.deletedAt/);
 assert.match(app, /key === "workPrepRecords" \? filterDeletedWorkPrepRecords\(rows\) : rows/);
 assert.match(app, /function removePendingSyncRows\(key, ids\)/);

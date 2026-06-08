@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.4-20260609";
+    const APP_VERSION = "1.1-20260609";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -654,7 +654,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at",
         orderBy: "updated_at",
         ascending: false,
-        limit: DEFAULT_REMOTE_LIST_LIMIT,
+        limit: 0,
         toDb: (row) => ({
           id: row.id,
           work_date: row.workDate || "",
