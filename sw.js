@@ -1,5 +1,5 @@
-const APP_VERSION = "1.1-20260609-type-icons";
-const ASSET_TOKEN = "20260609-work-prep-type-icons-1";
+const APP_VERSION = "1.2-20260610-start-gate";
+const ASSET_TOKEN = "20260610-work-prep-start-gate-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

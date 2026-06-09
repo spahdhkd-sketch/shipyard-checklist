@@ -15,6 +15,7 @@
   const ADMIN_PREENTRY_WORKER_POSITIONS = new Set([FOREMAN_WORKER_POSITION, "대표", "관리", "총무"]);
   const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION]);
   const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"]);
+  const PRIVILEGED_WORKER_TEAMS = new Set(["관리", "총무"]);
   const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
   const LOGIN_WORKER_GROUP_RANK = new Map(LOGIN_WORKER_GROUP_ORDER.map((group, index) => [group, index]));
 
@@ -78,7 +79,8 @@
 
   function canWorkerPreEnterAdminMode(worker) {
     const position = normalizeWorkerPosition(worker && worker.position);
-    return ADMIN_PREENTRY_WORKER_POSITIONS.has(position);
+    const team = String(worker && worker.team || "").trim();
+    return ADMIN_PREENTRY_WORKER_POSITIONS.has(position) || PRIVILEGED_WORKER_TEAMS.has(team);
   }
 
   function workerAdminModeLabel(worker) {

@@ -1,6 +1,6 @@
 # Version
 
-Current version: `1.1-20260609`
+Current version: `1.2-20260610`
 
 Recorded at: `2026-06-09 01:05:00 +09:00`
 
@@ -11,7 +11,7 @@ Production alias: `https://gs-safety-checklist.vercel.app/`
 Notes:
 - This version removes the 20-row remote fetch cap from 작업지시서 관리 so the full work-prep list can load.
 - It keeps the server-side deletion tombstone protections from the previous build, but the visible symptom was the fetch cap rather than failed deletion.
-- It downgrades the displayed release line to `1.1-20260609` as requested while issuing a fresh asset token to avoid stale browser cache.
+- It downgrades the displayed release line to `1.2-20260610` as requested while issuing a fresh asset token to avoid stale browser cache.
 - Future maintenance should start from this GitHub source baseline.
 
 Release version rule:

@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.1-20260609-type-icons";
+    const APP_VERSION = "1.2-20260610-start-gate";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -1158,6 +1158,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PREENTRY_WORKER_POSITIONS = new Set([FOREMAN_WORKER_POSITION, "대표", "관리", "총무"]);
     const LEADER_EQUIVALENT_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION]);
     const PRIVILEGED_WORKER_POSITIONS = new Set([LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"]);
+    const PRIVILEGED_WORKER_TEAMS = new Set(["관리", "총무"]);
     const WORKER_TEAM_OPTIONS = ["선행", "후행", "관리"];
     const LOGIN_WORKER_GROUP_ORDER = ["대표", "관리", "선행", "후행", "총무"];
     const LOGIN_WORKER_GROUP_RANK = new Map(LOGIN_WORKER_GROUP_ORDER.map((group, index) => [group, index]));
@@ -1177,6 +1178,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       used: 5,
     };
     const DEFAULT_WORK_PREP_APPEARANCE_TIME = "15:00";
+    const WORK_PREP_START_TIME = "07:00";
+    const WORK_PREP_START_LOCKED_MESSAGE = "작업당일 07:00부터 점검 시작 가능합니다";
 
     function signatureCacheDateKey() {
       return today();
@@ -1248,7 +1251,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return WORKER_HELPERS.canWorkerPreEnterAdminMode(worker);
       }
       const position = normalizeWorkerPosition(worker?.position);
-      return ADMIN_PREENTRY_WORKER_POSITIONS.has(position);
+      const team = String(worker?.team || "").trim();
+      return ADMIN_PREENTRY_WORKER_POSITIONS.has(position) || PRIVILEGED_WORKER_TEAMS.has(team);
     }
 
     function workerAdminModeLabel(worker) {
@@ -1312,11 +1316,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         .sort((a, b) => (WORK_PREP_STATUS_ORDER[a] || 99) - (WORK_PREP_STATUS_ORDER[b] || 99));
     }
 
-    function workPrepActorLabel() {
+    function currentTimelineActorLabel(fallback = "관리자") {
       const worker = currentWorkerSessionWorker();
       const name = String(worker?.name || "").trim();
       if (name) return name;
-      return state.adminMode ? "관리자" : "작업자";
+      const sessionName = String(state.workerSession?.workerName || "").trim();
+      if (sessionName) return sessionName;
+      return state.adminMode ? fallback : "작업자";
+    }
+
+    function workPrepActorLabel() {
+      return currentTimelineActorLabel();
     }
 
     function normalizeWorkPrepTimelineEntry(entry) {
@@ -4695,12 +4705,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function startWorkPrepRecord(recordId) {
+      const record = workPrepRecordById(recordId);
+      if (!record) return toast("작업지시서를 찾을 수 없습니다.");
+      const availability = workPrepStartAvailability(record);
+      if (!availability.canStart) return toast(availability.message);
       openWorkPrepRecordForEdit(recordId, { status: "preparing" });
     }
 
     function startCheckFromWorkPrepRecord(recordId) {
       const record = workPrepRecordById(recordId);
       if (!record) return toast("작업지시서를 찾을 수 없습니다.");
+      const availability = workPrepStartAvailability(record);
+      if (!availability.canStart) return toast(availability.message);
       const category = categoryById(record.categoryId);
       if (!category) return toast("작업 유형을 찾을 수 없습니다.");
       const currentWorker = currentWorkerSessionWorker();
@@ -4904,6 +4920,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return Boolean(openAt) && now >= openAt;
     }
 
+    function workPrepStartDateTime(record) {
+      const workDate = String(record?.workDate || "").trim();
+      if (!workDate) return null;
+      const [rawHour, rawMinute] = WORK_PREP_START_TIME.split(":").map(Number);
+      const hour = Number.isFinite(rawHour) ? rawHour : 7;
+      const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
+      const startAt = new Date(`${workDate}T${pad2(hour)}:${pad2(minute)}:00`);
+      return Number.isNaN(startAt.getTime()) ? null : startAt;
+    }
+
+    function workPrepStartAvailability(record, now = serverNow()) {
+      const startAt = workPrepStartDateTime(record);
+      if (!startAt || now >= startAt) return { canStart: true, message: "" };
+      return { canStart: false, message: WORK_PREP_START_LOCKED_MESSAGE };
+    }
+
     function workPrepAppearanceMeta(record, todayDate = today()) {
       const workDate = String(record?.workDate || "");
       if (!workDate || workDate <= todayDate) return "";
@@ -4984,7 +5016,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const currentWorker = currentWorkerSessionWorker();
       const canStartCheck = isWorkPrepParticipant(record, currentWorker?.id);
       const currentWorkerSubmitted = hasSubmittedWorkPrepInspection(record, currentWorker?.id);
-      const checkDisabled = !isUsed && (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted));
+      const startAvailability = workPrepStartAvailability(record);
+      const checkDisabled = !isUsed && (!startAvailability.canStart || (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted)));
       const canDelete = canOpenWorkPrepRegister();
       const deleteDisabled = !canDelete;
       const buttonAction = status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep";
@@ -5013,6 +5046,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             : canStartCheck
               ? "점검 시작"
               : "점검 대기";
+      const buttonHelp = !startAvailability.canStart ? startAvailability.message : "";
+      const disabledAttrs = isUsed || checkDisabled
+        ? `disabled${buttonHelp ? ` title="${esc(buttonHelp)}" aria-label="${esc(`${buttonLabel} - ${buttonHelp}`)}"` : ""}`
+        : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`;
       return `<article class="work-prep-record-card status-${esc(status)}" data-work-prep-record="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 수정`)}">
         <div class="work-prep-record-top">
           <div class="work-prep-record-title-wrap">
@@ -5035,7 +5072,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${summaryHtml}
           <div class="work-prep-record-buttons">
             ${canDelete ? `<button class="btn-danger" ${deleteDisabled ? "disabled" : `data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}"`} type="button" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 삭제`)}">삭제</button>` : ""}
-            <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${esc(buttonLabel)}</button>
+            <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${disabledAttrs} type="button">${esc(buttonLabel)}</button>
           </div>
         </div>
       </article>`;
@@ -11411,7 +11448,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             status,
             memo: row.adminMemo,
             changedAt: updatedAt,
-            actor: "관리자",
+            actor: currentTimelineActorLabel("관리자"),
           }, { initialStatus: statuses[0] });
         }
       });
@@ -11498,7 +11535,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             status,
             memo: row.adminMemo,
             changedAt: updatedAt,
-            actor: "관리자",
+            actor: currentTimelineActorLabel("관리자"),
           }, { initialStatus: statuses[0] })
         : ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: statuses[0] });
       const remoteKey = kind === "unsafe" ? "unsafeIssues" : "missingMaterials";

@@ -29,6 +29,8 @@ const context = {
 
 vm.runInNewContext(`
   const DEFAULT_WORK_PREP_APPEARANCE_TIME = "15:00";
+  const WORK_PREP_START_TIME = "07:00";
+  const WORK_PREP_START_LOCKED_MESSAGE = "작업당일 07:00부터 점검 시작 가능합니다";
   const pad2 = (value) => String(value).padStart(2, "0");
   const localDate = (date) => {
     const parsed = new Date(date);
@@ -50,6 +52,8 @@ vm.runInNewContext(`
   ${extractFunction("workPrepOpenDate")}
   ${extractFunction("workPrepOpenDateTime")}
   ${extractFunction("shouldShowUpcomingWorkPrepRecord")}
+  ${extractFunction("workPrepStartDateTime")}
+  ${extractFunction("workPrepStartAvailability")}
   ${extractFunction("workPrepAppearanceMeta")}
   ${extractFunction("sortWorkPrepRecords")}
   ${extractFunction("visibleUpcomingWorkPrepRecords")}
@@ -57,6 +61,7 @@ vm.runInNewContext(`
   globalThis.helpers = {
     workPrepOpenDate,
     shouldShowUpcomingWorkPrepRecord,
+    workPrepStartAvailability,
     workPrepAppearanceMeta,
     workPrepVisibleDateOptions,
     setWorkPrepRecords(records) {
@@ -94,6 +99,16 @@ assert.equal(
   helpers.shouldShowUpcomingWorkPrepRecord({ workDate: "2026-06-08", appearanceTime: "15:00" }, new Date("2026-06-07T10:00:00")),
   true,
   "Visible Monday work orders should not disappear again over the weekend",
+);
+assert.deepEqual(
+  helpers.workPrepStartAvailability({ workDate: "2026-06-11" }, new Date("2026-06-11T06:59:00")),
+  { canStart: false, message: "작업당일 07:00부터 점검 시작 가능합니다" },
+  "work orders should block check start before 07:00 on the work date",
+);
+assert.deepEqual(
+  helpers.workPrepStartAvailability({ workDate: "2026-06-11" }, new Date("2026-06-11T07:00:00")),
+  { canStart: true, message: "" },
+  "work orders should allow check start from 07:00 on the work date",
 );
 
 context.__restDays = new Set(["2026-06-05"]);
@@ -137,6 +152,8 @@ assert.match(app, /const enteringCheckView = view === "check" && state\.view !==
 assert.match(app, /if \(enteringCheckView\) \{[\s\S]*state\.selectedWorkPrepDate = ""[\s\S]*state\.workPrepDateManuallySelected = false[\s\S]*\}/);
 assert.match(app, /function workPrepVisibleDateOptions\(todayDate = today\(\)/);
 assert.match(app, /function workPrepAppearanceMeta\(record, todayDate = today\(\)\)/);
+assert.match(app, /const WORK_PREP_START_LOCKED_MESSAGE = "작업당일 07:00부터 점검 시작 가능합니다"/);
+assert.match(app, /title="\$\{esc\(buttonHelp\)\}"/);
 assert.match(app, /workPrepAppearanceMeta\(record\) \? ` · \$\{esc\(workPrepAppearanceMeta\(record\)\)\}` : ""/);
 assert.match(app, /function selectWorkPrepDate\(date\)/);
 assert.match(app, /state\.workPrepDateManuallySelected = true/);

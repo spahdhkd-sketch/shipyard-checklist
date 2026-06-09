@@ -5,7 +5,7 @@ const path = require("path");
 const helpers = require("../assets/js/worker-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260609-work-prep-type-icons-1";
+const ASSET_TOKEN = "20260610-work-prep-start-gate-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
 const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
@@ -47,6 +47,7 @@ assert.strictEqual(helpers.isLeaderWorker({ position: "관리" }), false);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "관리" }), true);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "반장" }), true);
 assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "조장" }), false);
+assert.strictEqual(helpers.canWorkerPreEnterAdminMode({ position: "작업자", team: "관리" }), true);
 assert.strictEqual(helpers.workerAdminModeLabel({ name: "  김관리  " }), "김관리 권한");
 assert.strictEqual(helpers.workerAdminModeLabel({}), "작업자 권한");
 
@@ -81,6 +82,8 @@ const app = fs.readFileSync(path.join(ROOT, "assets/js/app-v2.js"), "utf8");
 assert(app.includes("window.ShipyardWorkerHelpers"), "app-v2 reads worker helper global");
 assert(app.includes("WORKER_HELPERS.sortWorkersForLogin"), "app-v2 delegates worker login sorting");
 assert(app.includes("WORKER_HELPERS.workerRoleBadge"), "app-v2 delegates worker role badge");
+assert(!app.includes('["permissions", "권한"]'), "app-v2 should not expose a dedicated worker permissions manage tab");
+assert(!app.includes("function renderWorkerPermissionManager()"), "app-v2 should keep permission editing inside the worker manager");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
 assert(sw.includes("/assets/js/worker-helpers.js?v=${ASSET_TOKEN}"), "service worker caches worker helper");
