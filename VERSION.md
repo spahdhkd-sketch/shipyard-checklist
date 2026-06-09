@@ -2,17 +2,17 @@
 
 Current version: `1.2-20260610`
 
-Recorded at: `2026-06-09 01:05:00 +09:00`
+Recorded at: `2026-06-10 02:01:28 +09:00`
 
-Baseline commit: `c929f31`
+Baseline commit: `cfe3d4b`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version removes the 20-row remote fetch cap from 작업지시서 관리 so the full work-prep list can load.
-- It keeps the server-side deletion tombstone protections from the previous build, but the visible symptom was the fetch cap rather than failed deletion.
-- It downgrades the displayed release line to `1.2-20260610` as requested while issuing a fresh asset token to avoid stale browser cache.
-- Future maintenance should start from this GitHub source baseline.
+- This version removes the dedicated 권한 tab and keeps worker permission edits inside 관리 > 작업자.
+- Timeline history entries now use the logged-in worker or manager name instead of the generic 관리자 label.
+- Work-prep start actions are locked until the work date 07:00, with the disabled-button guidance "작업당일 07:00부터 점검 시작 가능합니다".
+- It issues a fresh asset token and service-worker version so browsers pick up the 2026-06-10 release.
 
 Release version rule:
 - When the user says "배포 하자" or makes an equivalent deployment request, increment the minor version by `0.1`.
