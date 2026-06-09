@@ -4493,6 +4493,49 @@
       font-weight: 800;
     }
 
+    .work-prep-status-control {
+      display: inline-flex;
+      align-items: center;
+      width: 100%;
+      max-width: 128px;
+      min-height: 34px;
+      border-radius: 999px;
+      background: #eaf3ff;
+      color: #0b5cad;
+      box-shadow: inset 0 0 0 1px rgba(11, 92, 173, .18);
+    }
+
+    .work-prep-status-control.status-preparing {
+      background: #fff7ed;
+      color: #b45309;
+      box-shadow: inset 0 0 0 1px rgba(217, 119, 6, .24);
+    }
+
+    .work-prep-status-control.status-confirmed {
+      background: #ecfdf5;
+      color: #0f766e;
+      box-shadow: inset 0 0 0 1px rgba(15, 118, 110, .22);
+    }
+
+    .work-prep-status-control.status-used {
+      background: #f1f5f9;
+      color: #475569;
+      box-shadow: inset 0 0 0 1px rgba(100, 116, 139, .22);
+    }
+
+    .work-prep-status-select {
+      width: 100%;
+      min-height: 34px;
+      padding: 0 28px 0 12px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: currentColor;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
     .material-kpi-grid.work-prep-kpi-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -4653,6 +4696,10 @@
 
     .work-prep-detail-panel.tools {
       grid-column: 1 / -1;
+      background: #fff;
+    }
+
+    .work-prep-timeline-panel {
       background: #fff;
     }
 

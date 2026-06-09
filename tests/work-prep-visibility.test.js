@@ -37,14 +37,31 @@ vm.runInNewContext(`
   function isMonthlyRestDay(date) {
     return globalThis.__restDays.has(date) ? { date } : null;
   }
+  const WORK_PREP_STATUS_ORDER = { ordered: 1, preparing: 2, checked: 3 };
+  const state = { workPrepRecords: [] };
+  function currentWorkerSessionWorker() {
+    return null;
+  }
+  function normalizeWorkPrepStatus(status) {
+    return status || "preparing";
+  }
   ${extractFunction("addDaysToLocalDate")}
   ${extractFunction("isWorkPrepRestDate")}
   ${extractFunction("workPrepOpenDate")}
   ${extractFunction("workPrepOpenDateTime")}
   ${extractFunction("shouldShowUpcomingWorkPrepRecord")}
+  ${extractFunction("workPrepAppearanceMeta")}
+  ${extractFunction("sortWorkPrepRecords")}
+  ${extractFunction("visibleUpcomingWorkPrepRecords")}
+  ${extractFunction("workPrepVisibleDateOptions")}
   globalThis.helpers = {
     workPrepOpenDate,
     shouldShowUpcomingWorkPrepRecord,
+    workPrepAppearanceMeta,
+    workPrepVisibleDateOptions,
+    setWorkPrepRecords(records) {
+      state.workPrepRecords = records;
+    },
   };
 `, context);
 
@@ -52,6 +69,16 @@ const helpers = context.helpers;
 
 assert.equal(helpers.workPrepOpenDate("2026-06-08"), "2026-06-05", "Monday work orders should open on the previous Friday");
 assert.equal(helpers.workPrepOpenDate("2026-06-09"), "2026-06-08", "Tuesday work orders should open on Monday");
+assert.equal(
+  helpers.workPrepAppearanceMeta({ workDate: "2026-06-09", appearanceTime: "15:00" }, "2026-06-09"),
+  "",
+  "today's work orders should not show the 15:00 visibility marker",
+);
+assert.equal(
+  helpers.workPrepAppearanceMeta({ workDate: "2026-06-10", appearanceTime: "15:00" }, "2026-06-09"),
+  "15:00 이후",
+  "next-day work orders should show the 15:00 visibility marker",
+);
 
 assert.equal(
   helpers.shouldShowUpcomingWorkPrepRecord({ workDate: "2026-06-08", appearanceTime: "15:00" }, new Date("2026-06-05T14:59:00")),
@@ -72,8 +99,21 @@ assert.equal(
 context.__restDays = new Set(["2026-06-05"]);
 assert.equal(helpers.workPrepOpenDate("2026-06-08"), "2026-06-04", "Configured rest days should be skipped when opening upcoming work orders");
 
+helpers.setWorkPrepRecords([
+  { workDate: "2026-06-08", appearanceTime: "15:00", shipNo: "S-1", status: "ordered" },
+  { workDate: "2026-06-09", appearanceTime: "15:00", shipNo: "S-2", status: "ordered" },
+  { workDate: "2026-06-10", appearanceTime: "15:00", shipNo: "S-3", status: "ordered" },
+  { workDate: "2026-06-11", appearanceTime: "15:00", shipNo: "S-4", status: "ordered" },
+]);
+assert.deepEqual(
+  helpers.workPrepVisibleDateOptions("2026-06-09", new Date("2026-06-09T16:00:00")),
+  ["2026-06-08", "2026-06-09", "2026-06-10"],
+  "date navigation should include prior dates and visible next-day work orders while hiding unopened future dates",
+);
+
 assert.match(app, /const dateOptions = workPrepVisibleDateOptions\(todayDate\)/);
-assert.match(app, /const selectedDate = selectedWorkPrepDisplayDate\(dateOptions, firstUpcomingDate \|\| todayDate\)/);
+assert.match(app, /const selectedDate = selectedWorkPrepDisplayDate\(dateOptions, todayDate\)/);
+assert.doesNotMatch(app, /firstUpcomingDate/, "work prep entry should default to today's list instead of jumping to an upcoming date");
 assert.match(app, /renderWorkPrepDateSection\(selectedDate, selectedRecords, \{ next: selectedDate !== todayDate, force: true, dateOptions \}\)/);
 assert.doesNotMatch(app, /const nextDate = addDaysToLocalDate\(todayDate, 1\)/);
 
@@ -91,7 +131,11 @@ assert.match(app, /const deleteDisabled = !canDelete;/);
 assert.doesNotMatch(app, /이미 점검이 진행된 작업지시서는 삭제할 수 없습니다\./);
 assert.match(app, /selectedWorkPrepDate: ""/);
 assert.match(app, /workPrepDateManuallySelected: false/);
+assert.match(app, /const enteringCheckView = view === "check" && state\.view !== "check"/);
+assert.match(app, /if \(enteringCheckView\) \{[\s\S]*state\.selectedWorkPrepDate = ""[\s\S]*state\.workPrepDateManuallySelected = false[\s\S]*\}/);
 assert.match(app, /function workPrepVisibleDateOptions\(todayDate = today\(\)/);
+assert.match(app, /function workPrepAppearanceMeta\(record, todayDate = today\(\)\)/);
+assert.match(app, /\$\{workPrepAppearanceMeta\(record\) \? `<em>\$\{esc\(workPrepAppearanceMeta\(record\)\)\}<\/em>` : ""\}/);
 assert.match(app, /function selectWorkPrepDate\(date\)/);
 assert.match(app, /state\.workPrepDateManuallySelected = true/);
 assert.match(app, /class="work-prep-date-nav"/);

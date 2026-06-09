@@ -220,6 +220,7 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "other_team_worker_ids",
       "tool_ids",
       "status",
+      "status_history",
       "created_at",
       "updated_at",
     ]),

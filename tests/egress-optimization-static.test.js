@@ -19,7 +19,7 @@ const egressMigration = read("supabase/migrations/20260528003000_egress_reductio
 const pkg = JSON.parse(read("package.json"));
 
 expectNoMatch(app, /select\(config\.selectColumns \|\| "\*"\)/, "remote pulls must not fall back to select('*')");
-expectMatch(app, /client\.from\(source\)\.select\(config\.selectColumns\)/, "remote pulls must use explicit projected columns");
+expectMatch(app, /client\.from\(source\)\.select\(remoteSelectColumns\(config, fallback\)\)/, "remote pulls must use explicit projected columns");
 expectMatch(app, /order\(config\.orderBy,\s*\{\s*ascending:\s*config\.ascending !== false/, "remote pulls should support ordered bounded reads");
 expectMatch(app, /\.limit\(limit\)/, "remote pulls should support default row limits");
 expectMatch(app, /pullOnStartup:\s*false,[\s\S]*key:\s*"inspectionItems"/, "inspection item rows should lazy-load for detail views");

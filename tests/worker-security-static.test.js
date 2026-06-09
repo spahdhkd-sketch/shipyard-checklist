@@ -20,7 +20,7 @@ const manualScreenshots = read("tools/capture-manual-screenshots.mjs");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
 expectMatch(app, /const source = config\.readTable \|\| config\.table/, "selectTable should support readTable");
-expectMatch(app, /client\.from\(source\)\.select\(config\.selectColumns\)/, "selectTable should select from readTable source with explicit metadata-only columns");
+expectMatch(app, /client\.from\(source\)\.select\(remoteSelectColumns\(config, fallback\)\)/, "selectTable should select from readTable source with explicit metadata-only columns");
 expectNoMatch(app, /employeeNo: normalizeEmployeeNo\(row\.employee_no\)/, "worker fromDb must not map employee_no into browser worker rows");
 expectNoMatch(app, /employee_no: normalizeEmployeeNo\(row\.employeeNo\)/, "worker toDb must not write employee_no from browser worker rows");
 expectMatch(app, /table: "workers",[\s\S]*?toDb: \(row\) => \(\{[\s\S]*?created_at: row\.createdAt \|\| serverNow\(\)\.toISOString\(\)/, "worker toDb still includes created_at for Phase 1 upsert compatibility");

@@ -651,7 +651,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "work_prep_records",
         key: "workPrepRecords",
-        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at",
+        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,status_history,created_at,updated_at,deleted_at",
+        fallbackSelectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at",
         orderBy: "updated_at",
         ascending: false,
         limit: 0,
@@ -667,9 +668,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           other_team_worker_ids: Array.isArray(row.otherTeamWorkerIds) ? row.otherTeamWorkerIds : [],
           tool_ids: sanitizeToolIds(row.toolIds),
           status: normalizeWorkPrepStatus(row.status || "preparing"),
+          status_history: Array.isArray(row.statusHistory) ? row.statusHistory : [],
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
+        fallbackPayload: (payload) => payload.map(({ status_history, ...row }) => row),
         fromDb: (row) => ({
           id: row.id,
           workDate: row.work_date || "",
@@ -682,6 +685,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           otherTeamWorkerIds: Array.isArray(row.other_team_worker_ids) ? row.other_team_worker_ids : [],
           toolIds: sanitizeToolIds(row.tool_ids),
           status: normalizeWorkPrepStatus(row.status || "preparing"),
+          statusHistory: Array.isArray(row.status_history) ? row.status_history : [],
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           deletedAt: row.deleted_at || "",
@@ -1303,6 +1307,93 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return WORK_PREP_STATUS_ORDER[status] ? status : "ordered";
     }
 
+    function workPrepStatusOptions() {
+      return Object.keys(WORK_PREP_STATUS_ORDER)
+        .sort((a, b) => (WORK_PREP_STATUS_ORDER[a] || 99) - (WORK_PREP_STATUS_ORDER[b] || 99));
+    }
+
+    function workPrepActorLabel() {
+      const worker = currentWorkerSessionWorker();
+      const name = String(worker?.name || "").trim();
+      if (name) return name;
+      return state.adminMode ? "관리자" : "작업자";
+    }
+
+    function normalizeWorkPrepTimelineEntry(entry) {
+      if (!entry || typeof entry !== "object") return null;
+      const status = String(entry.status || "").trim();
+      const changedAt = String(entry.changedAt || "").trim();
+      if (!status || !changedAt) return null;
+      const actor = String(entry.actor || "").trim() || "관리자";
+      const memo = String(entry.memo || "").trim();
+      return {
+        id: String(entry.id || "").trim() || `${changedAt}:${status}:${actor}`,
+        status,
+        memo,
+        changedAt,
+        actor,
+      };
+    }
+
+    function uniqueWorkPrepTimelineEntries(entries) {
+      const seen = new Set();
+      return (Array.isArray(entries) ? entries : [])
+        .map(normalizeWorkPrepTimelineEntry)
+        .filter(Boolean)
+        .filter((entry) => {
+          const key = `${entry.changedAt}\u0000${entry.status}\u0000${entry.memo}\u0000${entry.actor}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => String(a.changedAt).localeCompare(String(b.changedAt)));
+    }
+
+    function workPrepRegistrationActor(record) {
+      const leader = state.workers.find((worker) => worker.id === record?.leaderWorkerId);
+      return String(leader?.name || "").trim() || "관리자";
+    }
+
+    function buildWorkPrepTimeline(record) {
+      const row = record && typeof record === "object" ? record : {};
+      const entries = Array.isArray(row.statusHistory) ? [...row.statusHistory] : [];
+      const createdAt = String(row.createdAt || "").trim();
+      if (createdAt) {
+        entries.push({
+          status: "등록",
+          memo: `${WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(row.status || "preparing")] || "작업지시서"} 상태로 등록`,
+          changedAt: createdAt,
+          actor: workPrepRegistrationActor(row),
+        });
+      }
+      return uniqueWorkPrepTimelineEntries(entries);
+    }
+
+    function appendWorkPrepStatusHistoryEntry(record, entry) {
+      return uniqueWorkPrepTimelineEntries([
+        ...buildWorkPrepTimeline(record),
+        entry,
+      ]);
+    }
+
+    function workPrepRecordWithStatus(row, status, options = {}) {
+      const normalized = normalizeWorkPrepStatus(status);
+      const previousStatus = normalizeWorkPrepStatus(row?.status || "");
+      const changedAt = options.changedAt || serverNow().toISOString();
+      if (previousStatus === normalized) return row;
+      return {
+        ...row,
+        status: normalized,
+        statusHistory: appendWorkPrepStatusHistoryEntry(row, {
+          status: WORK_PREP_STATUS_LABELS[normalized] || normalized,
+          memo: `${WORK_PREP_STATUS_LABELS[previousStatus] || previousStatus} → ${WORK_PREP_STATUS_LABELS[normalized] || normalized}`,
+          changedAt,
+          actor: options.actor || workPrepActorLabel(),
+        }),
+        updatedAt: changedAt,
+      };
+    }
+
     function normalizeWorkPrepWorkerIds(draft) {
       const leaderId = String(draft.leaderWorkerId || "");
       const ids = new Set(Array.isArray(draft.workerIds) ? draft.workerIds : []);
@@ -1369,6 +1460,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         otherTeamWorkerIds: normalizeOtherTeamWorkPrepWorkerIds(cleanDraft),
         toolIds: normalizeWorkPrepToolIds(cleanDraft),
         status: normalizeWorkPrepStatus(cleanDraft.status || "preparing"),
+        statusHistory: uniqueWorkPrepTimelineEntries(cleanDraft.statusHistory || []),
         createdAt: cleanDraft.createdAt || now,
         updatedAt: now,
       };
@@ -1393,11 +1485,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function updateWorkPrepRecordStatus(recordId, status) {
       const normalized = normalizeWorkPrepStatus(status);
-      const now = new Date().toISOString();
+      const now = serverNow().toISOString();
       let updated = null;
       state.workPrepRecords = state.workPrepRecords.map((row) => {
         if (row.id !== recordId) return row;
-        updated = { ...row, status: normalized, updatedAt: now };
+        updated = workPrepRecordWithStatus(row, normalized, { changedAt: now });
         return updated;
       });
       if (updated) {
@@ -1408,6 +1500,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }
       }
       return updated;
+    }
+
+    async function updateWorkPrepAdminStatus(recordId, status) {
+      if (!requireAdminWrite()) return;
+      const record = workPrepRecordById(recordId);
+      if (!record) return;
+      const normalized = normalizeWorkPrepStatus(status);
+      const previous = {
+        ...record,
+        statusHistory: Array.isArray(record.statusHistory) ? [...record.statusHistory] : [],
+      };
+      if (normalizeWorkPrepStatus(record.status) === normalized) {
+        toast("변경된 작업지시서 상태가 없습니다.");
+        return;
+      }
+      const changedAt = serverNow().toISOString();
+      const updated = workPrepRecordWithStatus(record, normalized, {
+        changedAt,
+        actor: workPrepActorLabel(),
+      });
+      state.workPrepRecords = state.workPrepRecords.map((row) => row.id === record.id ? updated : row);
+      saveWorkPrepRecords();
+      const ok = await upsertAdminRows("workPrepRecords", [updated]);
+      if (!ok) {
+        state.workPrepRecords = state.workPrepRecords.map((row) => row.id === record.id ? previous : row);
+        saveWorkPrepRecords();
+        render();
+        return;
+      }
+      persist();
+      renderPreservingScroll();
+      toast("작업지시서 상태를 변경했습니다.");
     }
 
     async function deleteWorkPrepRecord(recordId) {
@@ -3058,8 +3182,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (["manage", "pledge", "analytics"].includes(view)) {
         loadAdminModule().catch((error) => console.warn("Admin module preload failed", error));
       }
+      const enteringCheckView = view === "check" && state.view !== "check";
       const changed = state.view !== view || state.selectedCategoryId || state.historyDetailId;
       state.view = view;
+      if (enteringCheckView) {
+        state.selectedWorkPrepDate = "";
+        state.workPrepDateManuallySelected = false;
+      }
       if (view !== "check") {
         state.selectedCategoryId = null;
         state.workPrepRegisterOpen = false;
@@ -4770,6 +4899,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return Boolean(openAt) && now >= openAt;
     }
 
+    function workPrepAppearanceMeta(record, todayDate = today()) {
+      const workDate = String(record?.workDate || "");
+      if (!workDate || workDate <= todayDate) return "";
+      return `${record?.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME} 이후`;
+    }
+
     function sortWorkPrepRecords(records = []) {
       const workerTeam = String(currentWorkerSessionWorker()?.team || "").trim();
       return [...records]
@@ -4794,6 +4929,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function workPrepVisibleDateOptions(todayDate = today(), now = new Date()) {
       const dates = new Set([todayDate]);
+      state.workPrepRecords.forEach((record) => {
+        if (record.workDate && record.workDate <= todayDate) dates.add(record.workDate);
+      });
       visibleUpcomingWorkPrepRecords(todayDate, now).forEach((record) => {
         if (record.workDate) dates.add(record.workDate);
       });
@@ -5057,8 +5195,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const categories = state.categories.sort(byOrder);
         const todayDate = today();
         const dateOptions = workPrepVisibleDateOptions(todayDate);
-        const firstUpcomingDate = dateOptions.find((date) => date !== todayDate) || "";
-        const selectedDate = selectedWorkPrepDisplayDate(dateOptions, firstUpcomingDate || todayDate);
+        const selectedDate = selectedWorkPrepDisplayDate(dateOptions, todayDate);
         const selectedRecords = workPrepRecordsForDate(selectedDate);
         const workPrepSections = renderWorkPrepDateSection(selectedDate, selectedRecords, { next: selectedDate !== todayDate, force: true, dateOptions });
         const prepEntry = canOpenWorkPrepRegister() ? `<section class="work-prep-entry-card">
@@ -6494,13 +6631,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const toolCount = sanitizeToolIds(record.toolIds).length;
       const status = normalizeWorkPrepStatus(record.status);
       const participantNames = workPrepParticipantNameSummary(record);
+      const canEdit = state.adminMode || isRedesignPreviewPage();
       return `<div class="work-prep-admin-row status-${esc(status)} ${active ? "active" : ""}" data-work-prep-record-detail="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 상세 보기`)}">
-        <span><strong>${esc(shortDate(record.workDate || record.createdAt))}</strong><em>${esc(record.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME)} 이후</em></span>
+        <span><strong>${esc(shortDate(record.workDate || record.createdAt))}</strong>${workPrepAppearanceMeta(record) ? `<em>${esc(workPrepAppearanceMeta(record))}</em>` : ""}</span>
         <span><strong>${esc(record.shipNo || "-")}</strong><em>${esc(category ? workLabel(category) : "작업 유형 없음")} · ${esc(record.team || "-")}</em></span>
         <span><strong>${esc(leader?.name || "미정")}</strong><em>${esc(leader?.team || record.team || "-")}</em></span>
         <span><strong>${esc(participantNames)}</strong><em>점검 ${progressInfo.done}/${progressInfo.total || participantCount} · 공기구 ${toolCount}개</em></span>
-        <span>${statusChip(WORK_PREP_STATUS_LABELS[status] || status)}</span>
+        <span>${renderWorkPrepStatusControl(record, canEdit)}</span>
       </div>`;
+    }
+
+    function renderWorkPrepStatusControl(record, canEdit) {
+      const status = normalizeWorkPrepStatus(record.status);
+      const label = WORK_PREP_STATUS_LABELS[status] || status;
+      if (!canEdit) return statusChip(label);
+      return `<label class="work-prep-status-control status-${esc(status)}">
+        <span class="sr-only">작업지시서 상태</span>
+        <select class="select work-prep-status-select" data-work-prep-status="${esc(record.id)}" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 상태 변경`)}">
+          ${workPrepStatusOptions().map((option) => `<option value="${esc(option)}" ${option === status ? "selected" : ""}>${esc(WORK_PREP_STATUS_LABELS[option] || option)}</option>`).join("")}
+        </select>
+      </label>`;
     }
 
     function renderWorkPrepInlineDetail(record) {
@@ -6538,7 +6688,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <div class="work-prep-detail-title">
               <span>${esc(record.shipNo || "-")}</span>
               <strong>${esc(category ? workLabel(category) : "작업 유형 없음")}</strong>
-              <em>${esc(record.team || "-")} · ${esc(shortDate(record.workDate || record.createdAt))} · ${esc(record.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME)} 이후</em>
+              <em>${esc([record.team || "-", shortDate(record.workDate || record.createdAt), workPrepAppearanceMeta(record)].filter(Boolean).join(" · "))}</em>
             </div>
             <div class="work-prep-detail-status">${statusChip(statusLabel)}</div>
           </div>
@@ -6561,6 +6711,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             </section>
           </div>
 
+          ${renderWorkPrepTimeline(record)}
+
           <div class="work-prep-detail-foot">
             <span>등록 ${esc(formatDateTime(record.createdAt || record.updatedAt || ""))}</span>
             <div class="work-prep-detail-actions">
@@ -6569,6 +6721,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             </div>
           </div>
         </div>
+      </section>`;
+    }
+
+    function renderWorkPrepTimeline(record) {
+      const timeline = buildWorkPrepTimeline(record);
+      if (!timeline.length) return "";
+      return `<section class="work-prep-detail-panel work-prep-timeline-panel">
+        <span class="work-prep-detail-label">상태 타임라인</span>
+        <ol class="record-timeline">
+          ${timeline.map((entry) => `<li>
+            <time class="record-timeline-time" datetime="${esc(entry.changedAt)}">${esc(formatDateTime(entry.changedAt))}</time>
+            <div class="record-timeline-main">
+              ${statusBadge(entry.status)}
+              <span class="record-timeline-actor">${esc(entry.actor || "관리자")}</span>
+            </div>
+            ${entry.memo ? `<div class="record-timeline-note">${esc(entry.memo)}</div>` : ""}
+          </li>`).join("")}
+        </ol>
       </section>`;
     }
 
@@ -9811,6 +9981,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         updateWorkPrepAppearanceTime(event.target.value);
         return;
       }
+      if (event.target.matches("[data-work-prep-status]")) {
+        updateWorkPrepAdminStatus(event.target.dataset.workPrepStatus, event.target.value);
+        return;
+      }
       if (event.target.id === "otherWorkerSelect") {
         selectPledgeWorker(event.target.value);
         return;
@@ -12133,6 +12307,36 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return REMOTE_TABLES.find((config) => config.key === key);
     }
 
+    function remoteErrorText(error) {
+      if (!error) return "";
+      if (typeof error === "string") return error;
+      const parts = [
+        error.message,
+        error.details,
+        error.hint,
+        error.code,
+        error.error,
+        error.name,
+      ];
+      try {
+        parts.push(JSON.stringify(error));
+      } catch (_) {}
+      return parts.filter(Boolean).join(" ");
+    }
+
+    function remoteSelectColumns(config, fallback = false) {
+      return fallback && config?.fallbackSelectColumns ? config.fallbackSelectColumns : config?.selectColumns;
+    }
+
+    function shouldRetryRemoteWithoutOptionalColumns(config, error) {
+      if (!config || (!config.fallbackSelectColumns && !config.fallbackPayload)) return false;
+      return /status_history|schema cache|column|PGRST|admin_upsert_failed/i.test(remoteErrorText(error));
+    }
+
+    function remoteFallbackPayload(config, payload) {
+      return typeof config?.fallbackPayload === "function" ? config.fallbackPayload(payload) : payload;
+    }
+
     function syncableKeys(keys) {
       const values = Array.isArray(keys) ? keys : (keys ? [keys] : []);
       return [...new Set(values.map(String).filter((key) => remoteConfigByKey(key)))];
@@ -12527,7 +12731,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!config || !cleanRows.length) return false;
       try {
         const payload = cleanRows.map(config.toDb);
-        await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        try {
+          await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        } catch (error) {
+          if (!shouldRetryRemoteWithoutOptionalColumns(config, error)) throw error;
+          await invokeAdminMutation("upsertRows", { key: config.key, rows: remoteFallbackPayload(config, payload) });
+        }
         setSyncStatus("온라인", "online");
         return true;
       } catch (error) {
@@ -12591,7 +12800,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (config.key === "workPrepRecords" && !(await ensureWorkPrepMutationSession())) {
           throw new Error("work_prep_session_required");
         }
-        await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        try {
+          await invokeAdminMutation("upsertRows", { key: config.key, rows: payload });
+        } catch (error) {
+          if (!shouldRetryRemoteWithoutOptionalColumns(config, error)) throw error;
+          await invokeAdminMutation("upsertRows", { key: config.key, rows: remoteFallbackPayload(config, payload) });
+        }
         return;
       }
       if (PUBLIC_INSERT_ONLY_REMOTE_KEYS.has(config.key)) {
@@ -12610,23 +12824,46 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
         error = retry.error;
       }
-      if (error && /status_history/i.test(String(error.message || error.details || ""))) {
-        const fallbackPayload = payload.map(({ status_history, ...row }) => row);
-        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+      if (error && shouldRetryRemoteWithoutOptionalColumns(config, error)) {
+        const retry = await client.from(config.table).upsert(remoteFallbackPayload(config, payload), { onConflict: "id" });
         error = retry.error;
       }
       if (error) throw error;
     }
 
     async function selectTable(client, config) {
+      async function runSelect(fallback = false) {
+        const source = config.readTable || config.table;
+        let query = client.from(source).select(remoteSelectColumns(config, fallback));
+        if (config.orderBy) query = query.order(config.orderBy, { ascending: config.ascending !== false });
+        const limit = remoteListLimit(config.key);
+        if (limit) query = query.limit(limit);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { key: config.key, rows: (data || []).map(config.fromDb) };
+      }
+      try {
+        return await runSelect(false);
+      } catch (error) {
+        if (!shouldRetryRemoteWithoutOptionalColumns(config, error)) throw error;
+        return runSelect(true);
+      }
+    }
+
+    async function selectDetailRows(client, config, buildQuery) {
       const source = config.readTable || config.table;
-      let query = client.from(source).select(config.selectColumns);
-      if (config.orderBy) query = query.order(config.orderBy, { ascending: config.ascending !== false });
-      const limit = remoteListLimit(config.key);
-      if (limit) query = query.limit(limit);
-      const { data, error } = await query;
-      if (error) throw error;
-      return { key: config.key, rows: (data || []).map(config.fromDb) };
+      const runSelect = async (fallback = false) => {
+        const query = buildQuery(client.from(source).select(remoteSelectColumns(config, fallback)));
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+      };
+      try {
+        return await runSelect(false);
+      } catch (error) {
+        if (!shouldRetryRemoteWithoutOptionalColumns(config, error)) throw error;
+        return runSelect(true);
+      }
     }
 
     async function loadInspectionItemsForDetail(inspectionId) {
@@ -12635,11 +12872,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       const config = remoteConfigByKey("inspectionItems");
       if (!client || !config) return;
-      const { data, error } = await client
-        .from(config.table)
-        .select(config.selectColumns)
-        .eq("inspection_id", id);
-      if (error) throw error;
+      const data = await selectDetailRows(client, config, (query) => query.eq("inspection_id", id));
       applyRemoteTableRows(config.key, (data || []).map(config.fromDb));
       state.remoteLoadedInspectionItemIds = [...new Set([...state.remoteLoadedInspectionItemIds, id])];
       persist();
@@ -12651,13 +12884,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       const config = remoteConfigByKey("issuePhotos");
       if (!client || !config) return;
-      const { data, error } = await client
-        .from(config.table)
-        .select(config.selectColumns)
+      const data = await selectDetailRows(client, config, (query) => query
         .eq("target_type", "unsafe_issue")
         .eq("target_id", id)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
+        .order("sort_order", { ascending: true }));
       applyRemoteTableRows(config.key, (data || []).map(config.fromDb));
       state.remoteLoadedIssuePhotoTargetIds = [...new Set([...state.remoteLoadedIssuePhotoTargetIds, id])];
       persist();
