@@ -135,7 +135,7 @@ assert.match(app, /const enteringCheckView = view === "check" && state\.view !==
 assert.match(app, /if \(enteringCheckView\) \{[\s\S]*state\.selectedWorkPrepDate = ""[\s\S]*state\.workPrepDateManuallySelected = false[\s\S]*\}/);
 assert.match(app, /function workPrepVisibleDateOptions\(todayDate = today\(\)/);
 assert.match(app, /function workPrepAppearanceMeta\(record, todayDate = today\(\)\)/);
-assert.match(app, /\$\{workPrepAppearanceMeta\(record\) \? `<em>\$\{esc\(workPrepAppearanceMeta\(record\)\)\}<\/em>` : ""\}/);
+assert.match(app, /workPrepAppearanceMeta\(record\) \? ` · \$\{esc\(workPrepAppearanceMeta\(record\)\)\}` : ""/);
 assert.match(app, /function selectWorkPrepDate\(date\)/);
 assert.match(app, /state\.workPrepDateManuallySelected = true/);
 assert.match(app, /class="work-prep-date-nav"/);

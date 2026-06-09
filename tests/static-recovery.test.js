@@ -547,6 +547,9 @@ assert.match(app, /DASHBOARD_VIEW\.renderManageShellView\(\{/);
 assert.match(app, /\["workPrep", "작업지시서"\]/);
 assert.match(app, /function renderWorkPrepManager\(\)/);
 assert.match(app, /function renderWorkPrepAdminRow\(record, active = false\)/);
+assert.match(app, /class="work-prep-record-identity"/);
+assert.match(app, /class="work-prep-admin-card-main"/);
+assert.match(app, /renderWorkPrepAdminTimelineSummary\(record\)/);
 assert.match(app, /function renderWorkPrepStatusControl\(record, canEdit\)/);
 assert.match(app, /data-work-prep-status="\$\{esc\(record\.id\)\}"/);
 assert.match(app, /function updateWorkPrepAdminStatus\(recordId, status\)/);
@@ -554,6 +557,7 @@ assert.match(app, /updateWorkPrepAdminStatus\(event\.target\.dataset\.workPrepSt
 assert.match(app, /function buildWorkPrepTimeline\(record\)/);
 assert.match(app, /function renderWorkPrepTimeline\(record\)/);
 assert.match(app, /renderWorkPrepTimeline\(record\)/);
+assert.doesNotMatch(app, /buttonLabel[\s\S]*: "점검 대기"/);
 assert.match(app, /workPrepDetailId: ""/);
 assert.match(app, /deletedWorkPrepRecordIds: loadJson\("deletedWorkPrepRecordIds", \[\]\)/);
 assert.match(app, /data-work-prep-record-detail="\$\{esc\(record\.id\)\}"/);
