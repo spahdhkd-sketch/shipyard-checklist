@@ -1,4 +1,4 @@
-﻿:root {
+:root {
       --color-brand-primary: #0F766E;
       --color-brand-primary-hover: #0D5F59;
       --color-brand-primary-active: #114E49;
@@ -2935,6 +2935,67 @@
       min-width: 0;
     }
 
+    .work-prep-record-title-wrap {
+      display: flex !important;
+      align-items: center;
+      gap: 10px !important;
+      min-width: 0;
+    }
+
+    .work-prep-record-type-icon,
+    .work-prep-admin-type-icon {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      background: #f3f5f8;
+      box-shadow: inset 0 0 0 1px #cfd6df;
+      overflow: hidden;
+    }
+
+    .work-prep-record-type-icon {
+      width: 58px;
+      height: 50px;
+    }
+
+    .work-prep-admin-type-icon {
+      width: 72px;
+      height: 64px;
+    }
+
+    .work-prep-record-type-icon::before,
+    .work-prep-admin-type-icon::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: #9a6a42;
+      z-index: 1;
+    }
+
+    .work-prep-record-type-icon svg,
+    .work-prep-record-type-icon img,
+    .work-prep-admin-type-icon svg,
+    .work-prep-admin-type-icon img {
+      width: 42px;
+      height: 38px;
+      object-fit: contain;
+      opacity: .72;
+    }
+
+    .work-prep-admin-type-icon svg,
+    .work-prep-admin-type-icon img {
+      width: 48px;
+      height: 42px;
+    }
+
+    .work-prep-record-title-wrap > div {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
     .work-prep-record-top {
       display: flex;
       align-items: center;
@@ -3070,21 +3131,6 @@
         grid-template-columns: 72px minmax(0, 1fr);
       }
 
-      .work-prep-record-actions {
-        grid-template-columns: 1fr;
-      }
-
-      .work-prep-record-buttons {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .work-prep-record-actions .btn,
-      .work-prep-record-actions .btn-light,
-      .work-prep-record-actions .btn-danger {
-        width: 100%;
-      }
-
       .work-prep-admin-card-list {
         padding: 10px;
       }
@@ -3093,6 +3139,10 @@
         grid-template-columns: minmax(0, 1fr);
         width: 100%;
         max-width: 100%;
+      }
+
+      .work-prep-admin-row.work-prep-admin-card {
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .work-prep-admin-card-main {
@@ -3105,9 +3155,9 @@
       }
 
       .work-prep-admin-card-side {
-        grid-template-columns: minmax(0, 1fr) auto;
+        display: flex;
         align-items: center;
-        justify-items: stretch;
+        justify-content: flex-end;
         min-width: 0;
       }
 
@@ -4562,6 +4612,16 @@
       background: #fff;
     }
 
+    .work-prep-admin-row.work-prep-admin-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      min-width: 0;
+      min-height: 0;
+      padding: 14px;
+      border-bottom: 1px solid #d7e1ec;
+    }
+
     .work-prep-admin-row.status-used {
       background: #f8fafc;
     }
@@ -4605,6 +4665,36 @@
       font-size: 11px;
       font-style: normal;
       font-weight: 800;
+    }
+
+    .work-prep-admin-row.work-prep-admin-card .work-prep-admin-card-title strong,
+    .work-prep-admin-row.work-prep-admin-card .work-prep-admin-card-title em {
+      display: inline;
+      overflow: visible;
+      text-overflow: clip;
+      white-space: nowrap;
+    }
+
+    .work-prep-admin-row.work-prep-admin-card .work-prep-admin-card-title {
+      display: grid;
+      align-items: start;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .work-prep-admin-row.work-prep-admin-card .work-prep-admin-card-title strong {
+      font-size: 18px;
+      line-height: 1.15;
+      font-weight: 950;
+    }
+
+    .work-prep-admin-row.work-prep-admin-card .work-prep-admin-card-title em {
+      margin-top: 0;
+      color: #0f172a;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 900;
+      white-space: normal;
     }
 
     .work-prep-admin-card {

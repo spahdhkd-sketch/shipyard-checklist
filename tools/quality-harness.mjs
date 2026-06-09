@@ -14,8 +14,8 @@ const strictGit = args.has("--strict-git");
 
 const APP_VERSION = "1.1-20260609";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260609-work-prep-full-list-1";
-const SW_CACHE = "gs-safety-20260609-work-prep-full-list-1";
+const ASSET_TOKEN = "20260609-work-prep-type-icons-1";
+const SW_CACHE = "gs-safety-20260609-work-prep-type-icons-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [

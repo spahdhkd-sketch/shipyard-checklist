@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.1-20260609";
+    const APP_VERSION = "1.1-20260609-type-icons";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -1582,8 +1582,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const participantIds = workPrepParticipantWorkerIds(record);
       const participantSet = new Set(participantIds);
       const submittedIds = new Set();
-      state.inspections
-        .filter((inspection) => String(inspection.workPrepRecordId || "") === String(record?.id || ""))
+      workPrepSubmissionInspections(record)
         .forEach((inspection) => {
           const workerId = inspectionWorkPrepWorkerId(inspection, record);
           if (participantSet.has(workerId)) submittedIds.add(workerId);
@@ -1594,6 +1593,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         submittedIds: [...submittedIds],
         complete: Boolean(participantIds.length) && submittedIds.size >= participantIds.length,
       };
+    }
+
+    function workPrepSubmissionInspections(record) {
+      const recordId = String(record?.id || "");
+      if (!recordId) return [];
+      return state.inspections.filter((inspection) => String(inspection.workPrepRecordId || "") === recordId);
     }
 
     function hasSubmittedWorkPrepInspection(record, workerId) {
@@ -4963,6 +4968,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>`;
     }
 
+    function renderWorkPrepTypeIcon(category, className = "work-prep-record-type-icon") {
+      return `<span class="${esc(className)}" aria-hidden="true">${category ? categoryVisual(category) : lineIcon("shieldCheck")}</span>`;
+    }
+
     function renderWorkPrepCard(record) {
       const category = categoryById(record.categoryId);
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
@@ -4975,8 +4984,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const currentWorker = currentWorkerSessionWorker();
       const canStartCheck = isWorkPrepParticipant(record, currentWorker?.id);
       const currentWorkerSubmitted = hasSubmittedWorkPrepInspection(record, currentWorker?.id);
+      const checkDisabled = !isUsed && (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted));
       const canDelete = canOpenWorkPrepRegister();
       const deleteDisabled = !canDelete;
+      const buttonAction = status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep";
       const submittedIds = new Set(submissionProgress.submittedIds || []);
       const pendingWorkers = workPrepParticipantWorkerIds(record)
         .filter((id) => !submittedIds.has(id))
@@ -4993,36 +5004,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         : (isUsed || submissionProgress.complete)
           ? `<div class="work-prep-submission-summary done"><strong>전원 점검 완료</strong></div>`
           : `<div class="work-prep-submission-summary pending"><strong>미점검 ${pendingNames.length}명</strong>${pendingNamesHtml}</div>`;
-      const actionButton = status === "ordered" && canDelete
-        ? `<button class="btn-light" data-action="start-work-prep-record" data-work-prep-record-id="${esc(record.id)}" type="button">준비 시작</button>`
-        : (!isUsed && canStartCheck && !currentWorkerSubmitted)
-          ? `<button class="btn" data-action="start-check-from-work-prep" data-work-prep-record-id="${esc(record.id)}" type="button">점검 시작</button>`
-          : "";
+      const buttonLabel = status === "ordered"
+        ? "준비 시작"
+        : isUsed
+          ? WORK_PREP_STATUS_LABELS.used
+          : currentWorkerSubmitted
+            ? "제출 완료"
+            : canStartCheck
+              ? "점검 시작"
+              : "점검 대기";
       return `<article class="work-prep-record-card status-${esc(status)}" data-work-prep-record="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 수정`)}">
-        <div class="work-prep-record-main">
-          <div class="work-prep-record-identity">${renderWorkPrepShipMark(record)}</div>
-          <div class="work-prep-record-content">
-            <div class="work-prep-record-top">
-              <div>
-                <strong>${esc(record.shipNo || "-")}</strong>
-                <span>${esc(category ? workLabel(category) : "작업 유형 없음")}</span>
-              </div>
-              <em>${esc(WORK_PREP_STATUS_LABELS[status])}</em>
-            </div>
-            <div class="work-prep-record-meta">
-              <span class="work-prep-record-worker"><strong>${esc(leader?.name || "미정")}</strong>${workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION })}</span>
-              <span>같이 ${workerCount}명</span>
-              <span class="work-prep-record-progress">점검 ${submissionProgress.done}/${progressTotal}명</span>
-              <span>공기구 ${toolCount}개</span>
-              <span>${esc(record.team || "-")}</span>
+        <div class="work-prep-record-top">
+          <div class="work-prep-record-title-wrap">
+            ${renderWorkPrepTypeIcon(category)}
+            <div>
+              <strong>${esc(record.shipNo || "-")}</strong>
+              <span>${esc(category ? workLabel(category) : "작업 유형 없음")}</span>
             </div>
           </div>
+          <em>${esc(WORK_PREP_STATUS_LABELS[status])}</em>
+        </div>
+        <div class="work-prep-record-meta">
+          <span class="work-prep-record-worker"><strong>${esc(leader?.name || "미정")}</strong>${workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION })}</span>
+          <span>같이 ${workerCount}명</span>
+          <span class="work-prep-record-progress">점검 ${submissionProgress.done}/${progressTotal}명</span>
+          <span>공기구 ${toolCount}개</span>
+          <span>${esc(record.team || "-")}</span>
         </div>
         <div class="work-prep-record-actions">
           ${summaryHtml}
           <div class="work-prep-record-buttons">
             ${canDelete ? `<button class="btn-danger" ${deleteDisabled ? "disabled" : `data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}"`} type="button" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 삭제`)}">삭제</button>` : ""}
-            ${actionButton}
+            <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${isUsed || checkDisabled ? "disabled" : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`} type="button">${esc(buttonLabel)}</button>
           </div>
         </div>
       </article>`;
@@ -6637,7 +6650,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const canEdit = state.adminMode || isRedesignPreviewPage();
       return `<div class="work-prep-admin-row work-prep-admin-card status-${esc(status)} ${active ? "active" : ""}" data-work-prep-record-detail="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 상세 보기`)}">
         <div class="work-prep-admin-card-main">
-          <div class="work-prep-admin-card-mark">${renderWorkPrepShipMark(record)}</div>
+          <div class="work-prep-admin-card-mark">${renderWorkPrepTypeIcon(category, "work-prep-admin-type-icon")}</div>
           <div class="work-prep-admin-card-content">
             <div class="work-prep-admin-card-title">
               <strong>${esc(record.shipNo || "-")}</strong>

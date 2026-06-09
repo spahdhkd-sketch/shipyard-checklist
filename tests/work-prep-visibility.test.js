@@ -128,6 +128,8 @@ assert.match(app, /key === "workPrepRecords" \? filterDeletedWorkPrepRecords\(ro
 assert.match(app, /function removePendingSyncRows\(key, ids\)/);
 assert.match(app, /"delete-work-prep-record": \(\) => deleteWorkPrepRecord\(workPrepRecordId\(\)\)/);
 assert.match(app, /const deleteDisabled = !canDelete;/);
+assert.match(app, /function renderWorkPrepTypeIcon\(category, className = "work-prep-record-type-icon"\)/);
+assert.match(app, /category \? categoryVisual\(category\) : lineIcon\("shieldCheck"\)/);
 assert.doesNotMatch(app, /이미 점검이 진행된 작업지시서는 삭제할 수 없습니다\./);
 assert.match(app, /selectedWorkPrepDate: ""/);
 assert.match(app, /workPrepDateManuallySelected: false/);
