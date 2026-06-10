@@ -6,10 +6,10 @@ const helpers = require("../assets/js/worker-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
 const ASSET_TOKEN = "20260610-design-unify-1";
-const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
-const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
-const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
-const WORKER_HELPER_SCRIPT = `assets/js/worker-helpers.js?v=${ASSET_TOKEN}`;
+const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
+const PICTOGRAM_HELPER_SCRIPT = `assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`;
+const SHIP_HELPER_SCRIPT = `assets/dist/js/ship-helpers.min.js?v=${ASSET_TOKEN}`;
+const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
 
 assert.strictEqual(helpers.normalizedWorkerName("  김민수  "), "김민수");
 assert.strictEqual(helpers.normalizedWorkerName(null), "");
@@ -86,6 +86,6 @@ assert(!app.includes('["permissions", "권한"]'), "app-v2 should not expose a d
 assert(!app.includes("function renderWorkerPermissionManager()"), "app-v2 should keep permission editing inside the worker manager");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes("/assets/js/worker-helpers.js?v=${ASSET_TOKEN}"), "service worker caches worker helper");
+assert(sw.includes("/assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}"), "service worker caches worker helper");
 
 console.log("worker helper tests passed");

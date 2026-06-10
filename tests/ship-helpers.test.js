@@ -6,9 +6,9 @@ const helpers = require("../assets/js/ship-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
 const ASSET_TOKEN = "20260610-design-unify-1";
-const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
-const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
-const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
+const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
+const SHIP_HELPER_SCRIPT = `assets/dist/js/ship-helpers.min.js?v=${ASSET_TOKEN}`;
+const PICTOGRAM_HELPER_SCRIPT = `assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`;
 
 assert.deepStrictEqual(helpers.SHIP_WORKFLOW_STAGES, ["mounting", "lc", "st", "cl", "dl"]);
 assert.strictEqual(helpers.normalizeShipStageInput("탑재"), "mounting");
@@ -72,6 +72,6 @@ assert(app.includes("window.ShipyardShipHelpers"), "app-v2 reads ship helper glo
 assert(app.includes("SHIP_HELPERS.compareShipStage"), "app-v2 delegates ship stage compare");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes("/assets/js/ship-helpers.js?v=${ASSET_TOKEN}"), "service worker caches ship helper");
+assert(sw.includes("/assets/dist/js/ship-helpers.min.js?v=${ASSET_TOKEN}"), "service worker caches ship helper");
 
 console.log("ship helper tests passed");

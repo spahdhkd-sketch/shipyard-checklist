@@ -29,4 +29,4 @@ expectMatch(adminModule, /export function runAdminAction\(api, action, event\)/,
 });
 
 expectMatch(adminModule, /typeof handler !== "function"\) return false/, "unknown admin actions should be rejected");
-expectMatch(sw, /"\/assets\/js\/admin-v2\.js"/, "service worker should cache the dynamically imported admin module");
+expectMatch(sw, /"\/assets\/dist\/js\/admin-v2\.js"/, "service worker should cache the dynamically imported admin module");

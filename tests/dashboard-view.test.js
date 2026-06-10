@@ -6,9 +6,9 @@ const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
 const ASSET_TOKEN = "20260610-design-unify-1";
-const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
-const WORKER_HELPER_SCRIPT = `assets/js/worker-helpers.js?v=${ASSET_TOKEN}`;
-const DASHBOARD_VIEW_SCRIPT = `assets/js/dashboard-view.js?v=${ASSET_TOKEN}`;
+const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
+const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
+const DASHBOARD_VIEW_SCRIPT = `assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`;
 
 const html = dashboardView.renderDashboardView({
   todayCount: 4,
@@ -367,6 +367,6 @@ assert(!app.includes("function statPill("), "statPill moved out of app-v2");
 assert(!app.includes("function statIcon("), "statIcon moved out of app-v2");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes("/assets/js/dashboard-view.js?v=${ASSET_TOKEN}"), "service worker caches dashboard view");
+assert(sw.includes("/assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}"), "service worker caches dashboard view");
 
 console.log("dashboard view tests passed");

@@ -147,13 +147,13 @@ function checkGitState() {
 function checkHtmlPages() {
   for (const page of PAGES) {
     const html = read(page);
-    assertContains(html, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, `${page} uses current CSS token`);
-    assertContains(html, `assets/css/20-component-table.css?v=${ASSET_TOKEN}`, `${page} uses current table CSS token`);
-    assertContains(html, `assets/css/30-feature-signature.css?v=${ASSET_TOKEN}`, `${page} uses current signature CSS token`);
-    assertContains(html, `assets/css/30-feature-push-management.css?v=${ASSET_TOKEN}`, `${page} uses current push management CSS token`);
-    assertContains(html, `assets/css/30-feature-monthly-worker.css?v=${ASSET_TOKEN}`, `${page} uses current monthly worker CSS token`);
-    assertContains(html, `assets/css/20-component-disabled-reason.css?v=${ASSET_TOKEN}`, `${page} uses current disabled-reason CSS token`);
-    assertContains(html, `assets/js/app-v2.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
+    assertContains(html, `assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`, `${page} uses current CSS token`);
+    assertContains(html, `assets/dist/css/20-component-table.min.css?v=${ASSET_TOKEN}`, `${page} uses current table CSS token`);
+    assertContains(html, `assets/dist/css/30-feature-signature.min.css?v=${ASSET_TOKEN}`, `${page} uses current signature CSS token`);
+    assertContains(html, `assets/dist/css/30-feature-push-management.min.css?v=${ASSET_TOKEN}`, `${page} uses current push management CSS token`);
+    assertContains(html, `assets/dist/css/30-feature-monthly-worker.min.css?v=${ASSET_TOKEN}`, `${page} uses current monthly worker CSS token`);
+    assertContains(html, `assets/dist/css/20-component-disabled-reason.min.css?v=${ASSET_TOKEN}`, `${page} uses current disabled-reason CSS token`);
+    assertContains(html, `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`, `${page} uses current JS token`);
     assertContains(html, "assets/js/vendor/supabase-js-2.105.3.min.js", `${page} uses local Supabase vendor bundle`);
     assertContains(html, VERSION_LOADING_COPY, `${page} shows version loading copy before JS`);
     assertNotContains(html, "assets/css/styles.css", `${page} does not use legacy CSS`);
@@ -164,8 +164,8 @@ function checkHtmlPages() {
   }
 
   const notFound = read("404.html");
-  assertContains(notFound, `assets/css/styles-v2.css?v=${ASSET_TOKEN}`, "404 uses current CSS token");
-  assertContains(notFound, `assets/css/30-feature-not-found.css?v=${ASSET_TOKEN}`, "404 uses current not-found CSS token");
+  assertContains(notFound, `assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`, "404 uses current CSS token");
+  assertContains(notFound, `assets/dist/css/30-feature-not-found.min.css?v=${ASSET_TOKEN}`, "404 uses current not-found CSS token");
   assertNotContains(notFound, "assets/css/styles.css", "404 does not use legacy CSS");
 }
 
@@ -235,14 +235,14 @@ function checkRuntimeSource() {
   assertContains(sw, `const ASSET_TOKEN = "${ASSET_TOKEN}"`, "service worker asset token is current");
   assertContains(sw, "const CACHE = `gs-safety-${ASSET_TOKEN}`", "service worker cache is derived from asset token");
   assertContains(sw, "GS_SW_VERSION", "service worker exposes version message");
-  assertContains(sw, "styles-v2.css?v=${ASSET_TOKEN}", "service worker caches CSS through asset token");
-  assertContains(sw, "20-component-table.css?v=${ASSET_TOKEN}", "service worker caches table CSS through asset token");
-  assertContains(sw, "30-feature-not-found.css?v=${ASSET_TOKEN}", "service worker caches not-found CSS through asset token");
-  assertContains(sw, "30-feature-signature.css?v=${ASSET_TOKEN}", "service worker caches signature CSS through asset token");
-  assertContains(sw, "30-feature-push-management.css?v=${ASSET_TOKEN}", "service worker caches push management CSS through asset token");
-  assertContains(sw, "30-feature-monthly-worker.css?v=${ASSET_TOKEN}", "service worker caches monthly worker CSS through asset token");
-  assertContains(sw, "20-component-disabled-reason.css?v=${ASSET_TOKEN}", "service worker caches disabled-reason CSS through asset token");
-  assertContains(sw, "app-v2.js?v=${ASSET_TOKEN}", "service worker caches JS through asset token");
+  assertContains(sw, "styles-v2.min.css?v=${ASSET_TOKEN}", "service worker caches CSS through asset token");
+  assertContains(sw, "20-component-table.min.css?v=${ASSET_TOKEN}", "service worker caches table CSS through asset token");
+  assertContains(sw, "30-feature-not-found.min.css?v=${ASSET_TOKEN}", "service worker caches not-found CSS through asset token");
+  assertContains(sw, "30-feature-signature.min.css?v=${ASSET_TOKEN}", "service worker caches signature CSS through asset token");
+  assertContains(sw, "30-feature-push-management.min.css?v=${ASSET_TOKEN}", "service worker caches push management CSS through asset token");
+  assertContains(sw, "30-feature-monthly-worker.min.css?v=${ASSET_TOKEN}", "service worker caches monthly worker CSS through asset token");
+  assertContains(sw, "20-component-disabled-reason.min.css?v=${ASSET_TOKEN}", "service worker caches disabled-reason CSS through asset token");
+  assertContains(sw, "app-v2.min.js?v=${ASSET_TOKEN}", "service worker caches JS through asset token");
   const shellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
     .map((match) => match[1])
     .filter((asset) => asset.startsWith("/assets/"))
@@ -292,14 +292,14 @@ async function checkLiveProduction() {
   const stamp = Date.now();
   try {
     const indexLive = await fetchText(`${PRODUCTION_ALIAS}/index.html?__harness=${stamp}`);
-    const cssLive = await fetchText(`${PRODUCTION_ALIAS}/assets/css/styles-v2.css?v=${ASSET_TOKEN}&__harness=${stamp}`);
-    const jsLive = await fetchText(`${PRODUCTION_ALIAS}/assets/js/app-v2.js?v=${ASSET_TOKEN}&__harness=${stamp}`);
+    const cssLive = await fetchText(`${PRODUCTION_ALIAS}/assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}&__harness=${stamp}`);
+    const jsLive = await fetchText(`${PRODUCTION_ALIAS}/assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}&__harness=${stamp}`);
     const swLive = await fetchText(`${PRODUCTION_ALIAS}/sw.js?__harness=${stamp}`);
     const notFoundLive = await fetchText(`${PRODUCTION_ALIAS}/404.html?__harness=${stamp}`);
 
     add("live index responds 200", indexLive.status === 200, String(indexLive.status));
-    add("live index uses current CSS token", indexLive.text.includes(`assets/css/styles-v2.css?v=${ASSET_TOKEN}`));
-    add("live index uses current JS token", indexLive.text.includes(`assets/js/app-v2.js?v=${ASSET_TOKEN}`));
+    add("live index uses current CSS token", indexLive.text.includes(`assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`));
+    add("live index uses current JS token", indexLive.text.includes(`assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`));
     add("live JS responds 200", jsLive.status === 200, String(jsLive.status));
     add("live JS has current APP_VERSION", jsLive.text.includes(`const APP_VERSION = "${APP_VERSION}"`));
     add("live JS has active Supabase ref", jsLive.text.includes(`https://${SUPABASE_PROJECT_REF}.supabase.co`));
@@ -311,7 +311,7 @@ async function checkLiveProduction() {
     add("live service worker app version is current", swLive.text.includes(`const APP_VERSION = "${APP_VERSION}"`));
     add("live service worker asset token is current", swLive.text.includes(`const ASSET_TOKEN = "${ASSET_TOKEN}"`));
     add("live service worker exposes version message", swLive.text.includes("GS_SW_VERSION"));
-    add("live 404 uses current CSS token", notFoundLive.text.includes(`assets/css/styles-v2.css?v=${ASSET_TOKEN}`));
+    add("live 404 uses current CSS token", notFoundLive.text.includes(`assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`));
 
     const duplicateRootRedirects = await Promise.all(
       DUPLICATE_VERCEL_ALIASES.map((alias) => fetchRedirect(`${alias}/?__harness=${stamp}`)),

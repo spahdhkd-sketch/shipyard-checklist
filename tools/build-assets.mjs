@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Per-file asset minifier (no bundling). Keeps load order and global structure
 // intact: each source file is minified 1:1 into assets/dist/ with a .min suffix.
-// References in HTML/SW are intentionally NOT changed here — this only produces
-// build artifacts so we can later opt into serving them.
+// HTML/SW reference these dist outputs directly. The artifacts are committed so the
+// GitHub deploy path serves them; regenerate before each release.
 //
 // Usage: node tools/build-assets.mjs   (or: npm run build)
 
@@ -49,7 +49,10 @@ async function run() {
     for (const file of files) {
       const before = (await stat(file)).size;
       const base = path.basename(file, ext);
-      const outfile = path.join(root, out, `${base}.min${ext}`);
+      // admin-v2 is loaded via dynamic import("./admin-v2.js") from app-v2, so its
+      // dist twin must keep the importable name (no .min) to resolve next to app-v2.min.js.
+      const outName = base === "admin-v2" ? `${base}${ext}` : `${base}.min${ext}`;
+      const outfile = path.join(root, out, outName);
       await build({
         entryPoints: [file],
         outfile,
@@ -75,7 +78,7 @@ async function run() {
   console.log("  " + "-".repeat(58));
   const pct = totalBefore ? (100 * (1 - totalAfter / totalBefore)).toFixed(1) : "0";
   console.log(`  ${"TOTAL".padEnd(36)} ${kb(totalBefore).padStart(9)} -> ${kb(totalAfter).padStart(9)}  (-${pct}%)`);
-  console.log(`\n  Artifacts written to assets/dist/ (not committed). References unchanged.\n`);
+  console.log(`\n  Artifacts written to assets/dist/ (committed). HTML/SW reference these directly.\n`);
 }
 
 run().catch((err) => { console.error(err); process.exit(1); });

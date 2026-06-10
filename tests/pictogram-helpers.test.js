@@ -6,8 +6,8 @@ const helpers = require("../assets/js/pictogram-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
 const ASSET_TOKEN = "20260610-design-unify-1";
-const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
-const HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
+const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
+const HELPER_SCRIPT = `assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`;
 
 assert.strictEqual(helpers.normalizeIconKey("load"), "upperModuleInstallation");
 assert.strictEqual(helpers.normalizeIconKey("confinedSpace"), "safetyGear");
@@ -63,6 +63,6 @@ assert(app.includes("window.ShipyardPictogramHelpers"), "app-v2 reads pictogram 
 assert(app.includes("PICTOGRAM_HELPERS.pictogramLazyImageSrc"), "app-v2 delegates lazy image src");
 
 const sw = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-assert(sw.includes("/assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}"), "service worker caches pictogram helper");
+assert(sw.includes("/assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}"), "service worker caches pictogram helper");
 
 console.log("pictogram helper tests passed");
