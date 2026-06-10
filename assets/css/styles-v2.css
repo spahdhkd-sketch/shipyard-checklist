@@ -6813,6 +6813,10 @@
       fill: none;
     }
 
+    .pictogram-picture {
+      display: contents;
+    }
+
     .pictogram-image {
       display: block;
       width: 100%;

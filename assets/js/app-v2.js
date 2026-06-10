@@ -4289,7 +4289,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const src = pictogramAssetSrc(id);
       const iconName = lineIconName(id, fallbackIcon);
       if (src) {
-        return `<img class="pictogram-image" src="${esc(src)}" alt="" loading="lazy" decoding="async" aria-hidden="true" data-fallback-icon="${esc(iconName)}" />`;
+        const img = `<img class="pictogram-image" src="${esc(src)}" alt="" loading="lazy" decoding="async" aria-hidden="true" data-fallback-icon="${esc(iconName)}" />`;
+        // Built-in local illustrations ship a WebP twin (~80% smaller). Serve it
+        // via <picture> with the PNG as automatic fallback; custom/remote
+        // pictograms keep the plain <img>. The existing error handler still
+        // degrades to a line icon if both sources fail.
+        if (src.startsWith(ILLUSTRATION_BASE) && src.endsWith(".png")) {
+          const webp = `${src.slice(0, -4)}.webp`;
+          return `<picture class="pictogram-picture"><source srcset="${esc(webp)}" type="image/webp" />${img}</picture>`;
+        }
+        return img;
       }
       return lineIcon(iconName);
     }

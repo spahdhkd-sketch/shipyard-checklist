@@ -7,3 +7,7 @@ supabase/.temp/
 visual-verification/
 .tmp-chrome-*/
 docs/quality/claude-cowork-review-2026-05-24.md
+
+# Local env (secrets) - never commit
+.env.local
+.env*.local
