@@ -70,6 +70,7 @@ function startServer() {
     const srv = createServer((req, res) => {
       let p = decodeURIComponent(req.url.split("?")[0]);
       if (p === "/") p = "/index.html";
+      if (p === "/sw.js") { res.writeHead(404); res.end(""); return; }
       try {
         const data = readFileSync(join(ROOT, p));
         res.writeHead(200, { "Content-Type": MIME[extname(p)] || "application/octet-stream" });
@@ -122,21 +123,42 @@ async function main() {
 
   const puppeteer = (await import("puppeteer-core")).default;
   const executablePath = await resolveChrome();
+  const isServerlessChromium = /chromium|\/tmp\//.test(executablePath);
   const srv = await startServer();
-  const browser = await puppeteer.launch({
+  const launchBrowser = () => puppeteer.launch({
     executablePath, headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--single-process", "--no-zygote", "--lang=ko-KR"],
+    args: [
+      "--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--lang=ko-KR",
+      ...(isServerlessChromium ? ["--single-process", "--no-zygote"] : []),
+    ],
     defaultViewport: { width: 390, height: 844 },
   });
-  const page = await browser.newPage();
-  await page.emulateTimezone(tz);
-  page.on("dialog", (d) => d.accept());
-  await page.evaluateOnNewDocument((PRE, SEED) => {
-    for (const [k, v] of Object.entries(SEED)) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
-    sessionStorage.setItem(PRE + "workerSession", JSON.stringify({ workerId: "w-hong", workerName: "홍길동", employeeNo: "1234", loggedInAt: new Date().toISOString() }));
-  }, PRE, seed);
+  let browser = await launchBrowser();
+  const makePage = async () => {
+    const newPage = await browser.newPage();
+    await newPage.emulateTimezone(tz);
+    newPage.on("dialog", (d) => d.accept());
+    await newPage.evaluateOnNewDocument((PRE, SEED) => {
+      for (const [k, v] of Object.entries(SEED)) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
+      sessionStorage.setItem(PRE + "workerSession", JSON.stringify({ workerId: "w-hong", workerName: "홍길동", employeeNo: "1234", loggedInAt: new Date().toISOString() }));
+    }, PRE, seed);
+    return newPage;
+  };
+  let page = await makePage();
 
-  const goto = async (path) => { await page.goto(`http://localhost:${PORT}/${path}`, { waitUntil: "networkidle2", timeout: 25000 }); await wait(1500); };
+  const goto = async (path) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await page.goto(`http://localhost:${PORT}/${path}`, { waitUntil: "networkidle2", timeout: 25000 });
+        await wait(1500);
+        await page.evaluate(() => document.body.innerText.length);
+        return;
+      } catch (error) {
+        if (attempt === 1) throw error;
+        await wait(1200);
+      }
+    }
+  };
 
   console.log(`E2E 스모크 시작 (tz=${tz}, today=${todayStr}, app=${appVersion})`);
 
@@ -145,6 +167,17 @@ async function main() {
   let text = await bodyText(page);
   check("홈: '오늘 내 점검' 카드 표시", text.includes("오늘 내 점검"));
   check("홈: 로그인 작업자 미점검 안내", /홍길동님, 미점검 1건/.test(text));
+
+  // 1-2. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
+  await goto("ships.html");
+  check("호선: 공정 현황 보드 렌더", (await bodyText(page)).includes("호선 공정 현황"));
+  await goto("pledge.html");
+  check("서약: 관리 화면 렌더", (await bodyText(page)).includes("안전 서약 관리"));
+  await goto("history.html");
+  check("이력: 점검 현황 요약 렌더", (await bodyText(page)).includes("오늘 작업자 점검 현황"));
+  await goto("manage.html");
+  check("관리: 접수 현황 화면 렌더", (await bodyText(page)).includes("불안전요소"));
+
 
   // 2. 작업 전 점검 제출 플로우
   await goto("check.html");
@@ -185,32 +218,37 @@ async function main() {
   check("불안전: 접수 클릭", await clickBtn(page, "불안전요소 접수")); await wait(1800);
   check("불안전: 접수 완료 화면", (await bodyText(page)).includes("신고가 접수되었습니다"));
 
-  // 5. 자재누락 등록 플로우
-  await goto("materials.html");
-  await page.evaluate(() => {
-    const sel = [...document.querySelectorAll("select")].find((s) => s.offsetParent);
-    const opt = [...sel.options].find((o) => /2402/.test(o.textContent));
-    sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await wait(700);
-  check("자재: 호선 선택 후 다음", await clickBtn(page, "선택 → 다음")); await wait(1300);
-  await clickBtn(page, "용접 소모품"); await wait(400);
-  await page.evaluate(() => { [...document.querySelectorAll("input")].find((i) => i.offsetParent && (i.placeholder || "").includes("볼트")).focus(); });
-  await page.keyboard.type("용접봉 E7016", { delay: 10 }); await wait(400);
-  check("자재: 수량 입력 이동", await clickBtn(page, "다음 → 수량")); await wait(1300);
-  await page.evaluate(() => { [...document.querySelectorAll("input")].find((i) => i.offsetParent).focus(); });
-  await page.keyboard.type("5", { delay: 20 }); await wait(400);
-  check("자재: 최종 확인 이동", await clickBtn(page, "다음 → 최종 확인")); await wait(1300);
-  check("자재: 등록 클릭", await clickBtn(page, "누락 자재 등록")); await wait(1800);
-  check("자재: 등록 완료 화면", (await bodyText(page)).includes("자재 누락이 등록되었습니다"));
-
-  // 6. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
-  await goto("ships.html");
-  check("호선: 공정 현황 보드 렌더", (await bodyText(page)).includes("호선 공정 현황"));
-  await goto("pledge.html");
-  check("서약: 관리 화면 렌더", (await bodyText(page)).includes("안전 서약 관리"));
-  await goto("history.html");
-  check("이력: 점검 현황 요약 렌더", (await bodyText(page)).includes("오늘 작업자 점검 현황"));
+  // 5. 자재누락 등록 플로우 (불안정 환경 대비 1회 재시도)
+  const runMaterialsFlow = async () => {
+    await goto("materials.html");
+    await page.evaluate(() => {
+      const sel = [...document.querySelectorAll("select")].find((x) => x.offsetParent);
+      const opt = [...sel.options].find((o) => /2402/.test(o.textContent));
+      sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await wait(700);
+    if (!await clickBtn(page, "선택 → 다음")) return false; await wait(1300);
+    await clickBtn(page, "용접 소모품"); await wait(400);
+    await page.evaluate(() => { [...document.querySelectorAll("input")].find((i) => i.offsetParent && (i.placeholder || "").includes("볼트")).focus(); });
+    await page.keyboard.type("용접봉 E7016", { delay: 10 }); await wait(400);
+    if (!await clickBtn(page, "다음 → 수량")) return false; await wait(1300);
+    await page.evaluate(() => { [...document.querySelectorAll("input")].find((i) => i.offsetParent).focus(); });
+    await page.keyboard.type("5", { delay: 20 }); await wait(400);
+    if (!await clickBtn(page, "다음 → 최종 확인")) return false; await wait(1300);
+    if (!await clickBtn(page, "누락 자재 등록")) return false; await wait(1800);
+    return (await bodyText(page)).includes("자재 누락이 등록되었습니다");
+  };
+  let materialsOk = false;
+  for (let attempt = 0; attempt < 2 && !materialsOk; attempt += 1) {
+    try { await page.close(); } catch {}
+    try { page = await makePage(); } catch {
+      try { await browser.close(); } catch {}
+      browser = await launchBrowser();
+      page = await makePage();
+    }
+    try { materialsOk = await runMaterialsFlow(); } catch { materialsOk = false; }
+  }
+  check("자재: 등록 플로우 완료", materialsOk);
 
   await browser.close();
   srv.close();

@@ -138,9 +138,60 @@
       </section>`;
   }
 
+  // 관리 > 작업자: 작업자 행 (읽기 전용 마크업)
+  // row: { id, name, teamLine, expanded, canEditPush, badgesHtml, editPanelHtml }
+  function renderWorkerRowView(row = {}) {
+    return `<article class="item-row worker-row ${row.expanded ? "is-open" : ""}" data-worker-card-toggle="${esc(row.id)}" aria-expanded="${row.expanded ? "true" : "false"}">
+        <div class="worker-card-head">
+          <div class="item-main">
+            <div class="item-name">${esc(row.name)}</div>
+            <div class="small muted worker-team-line">${esc(row.teamLine)}</div>
+          </div>
+          <button class="btn-light worker-push-edit-btn" data-action="edit-worker-push-devices" data-worker-push-manage="${esc(row.id)}" ${row.canEditPush ? "" : "disabled"} type="button">알림수정</button>
+        </div>
+        <div class="worker-meta-line">
+          ${row.badgesHtml || ""}
+        </div>
+        ${row.expanded ? row.editPanelHtml || "" : ""}
+      </article>`;
+  }
+
+  // 관리 > 작업자: 목록 화면 (읽기 전용 마크업)
+  // model: { count, teamOptionsHtml, positionOptionsHtml, rows: [rowModel] }
+  function renderWorkerManagerView(model = {}) {
+    const rows = Array.isArray(model.rows) ? model.rows : [];
+    return `<section class="panel panel-pad">
+        <div class="section-title">작업자 목록 <span class="small muted">${Number(model.count) || 0}명</span></div>
+        <div class="form-row worker-form">
+          <div class="field">
+            <label for="workerName">이름</label>
+            <input class="input" id="workerName" placeholder="예) 김민수" />
+          </div>
+          <div class="field">
+            <label for="workerTeam">팀 성격</label>
+            <select class="select" id="workerTeam">
+              ${model.teamOptionsHtml || ""}
+            </select>
+          </div>
+          <div class="field">
+            <label for="workerPosition">배지</label>
+            <select class="select" id="workerPosition">
+              ${model.positionOptionsHtml || ""}
+            </select>
+          </div>
+          <button class="btn" data-action="add-worker" type="button">추가</button>
+        </div>
+        <div class="list worker-list">
+          ${rows.length ? rows.map(renderWorkerRowView).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
+        </div>
+      </section>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
     renderPledgeManagerView,
+    renderWorkerRowView,
+    renderWorkerManagerView,
   };
 }));

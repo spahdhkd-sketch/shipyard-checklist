@@ -6831,31 +6831,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderWorkerManager() {
       const workers = sortWorkersForLogin(state.workers);
-      return `<section class="panel panel-pad">
-        <div class="section-title">작업자 목록 <span class="small muted">${state.workers.length}명</span></div>
-        <div class="form-row worker-form">
-          <div class="field">
-            <label for="workerName">이름</label>
-            <input class="input" id="workerName" placeholder="예) 김민수" />
-          </div>
-          <div class="field">
-            <label for="workerTeam">팀 성격</label>
-            <select class="select" id="workerTeam">
-              ${renderWorkerTeamOptions("")}
-            </select>
-          </div>
-          <div class="field">
-            <label for="workerPosition">배지</label>
-            <select class="select" id="workerPosition">
-              ${renderWorkerPositionOptions(DEFAULT_WORKER_POSITION)}
-            </select>
-          </div>
-          <button class="btn" data-action="add-worker" type="button">추가</button>
-        </div>
-        <div class="list worker-list">
-          ${workers.length ? workers.map(renderWorkerRow).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderWorkerManagerView({
+        count: state.workers.length,
+        teamOptionsHtml: renderWorkerTeamOptions(""),
+        positionOptionsHtml: renderWorkerPositionOptions(DEFAULT_WORKER_POSITION),
+        rows: workers.map(workerRowModel),
+      });
+    }
+
+    function workerRowModel(worker) {
+      const expanded = state.workerEditCardId === worker.id;
+      return {
+        id: worker.id,
+        name: worker.name,
+        teamLine: worker.team || "팀 성격 미지정",
+        expanded,
+        canEditPush: Boolean(state.adminMode),
+        badgesHtml: `${workerTeamBadge(worker.team)}\n          ${workerRoleBadge(worker)}\n          ${workerPushSubscriptionBadgeHtml(worker.id)}`,
+        editPanelHtml: expanded ? renderWorkerEditPanel(worker) : "",
+      };
     }
 
     function adminPushWorkers() {
@@ -7144,25 +7138,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <button class="btn" data-save-worker="${esc(worker.id)}" type="button">수정</button>
         </div>
       </div>`;
-    }
-
-    function renderWorkerRow(worker) {
-      const expanded = state.workerEditCardId === worker.id;
-      return `<article class="item-row worker-row ${expanded ? "is-open" : ""}" data-worker-card-toggle="${esc(worker.id)}" aria-expanded="${expanded ? "true" : "false"}">
-        <div class="worker-card-head">
-          <div class="item-main">
-            <div class="item-name">${esc(worker.name)}</div>
-            <div class="small muted worker-team-line">${esc(worker.team || "팀 성격 미지정")}</div>
-          </div>
-          <button class="btn-light worker-push-edit-btn" data-action="edit-worker-push-devices" data-worker-push-manage="${esc(worker.id)}" ${state.adminMode ? "" : "disabled"} type="button">알림수정</button>
-        </div>
-        <div class="worker-meta-line">
-          ${workerTeamBadge(worker.team)}
-          ${workerRoleBadge(worker)}
-          ${workerPushSubscriptionBadgeHtml(worker.id)}
-        </div>
-        ${expanded ? renderWorkerEditPanel(worker) : ""}
-      </article>`;
     }
 
     function shortRecordId(id) {
