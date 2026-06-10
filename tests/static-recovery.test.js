@@ -46,7 +46,7 @@ assert.match(html, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20
 assert.match(html, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260610-design-unify-1/);
-assert.match(html, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
+assert.doesNotMatch(html, /http-equiv="Content-Security-Policy"/); // CSP single source of truth: vercel.json headers
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
 assert.match(html, /id="homeVersionLabel"/);
