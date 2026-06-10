@@ -17,7 +17,7 @@ GitHub `spahdhkd-sketch/shipyard-checklist` 저장소를 클론하고 main 브�
 먼저 `handoff-2026-06-10.md`를 열어 현재 상태의 기준으로 삼아.
 
 그다음 `npm install`(esbuild 포함), `npm run verify`(전부 통과해야 함),
-`npm run build`(assets/dist 재생성)로 로컬 상태를 확인해.
+`npm run build:assets`(assets/dist 재생성)로 로컬 상태를 확인해.
 
 작업 시작 전에 production alias가 `gs-safety-checklist.vercel.app`,
 Vercel 프로젝트가 `index-html`, Supabase ref가 `yuuroocvxvzgmsdeeiws`인지 다시 확인해.
