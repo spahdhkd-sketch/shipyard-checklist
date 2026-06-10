@@ -22,6 +22,7 @@ const SHELL = [
   `/assets/js/ship-helpers.js?v=${ASSET_TOKEN}`,
   `/assets/js/worker-helpers.js?v=${ASSET_TOKEN}`,
   `/assets/js/dashboard-view.js?v=${ASSET_TOKEN}`,
+  `/assets/js/screen-views.js?v=${ASSET_TOKEN}`,
   "/assets/js/admin-v2.js",
   `/assets/js/app-v2.js?v=${ASSET_TOKEN}`
 ];

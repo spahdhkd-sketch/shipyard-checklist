@@ -120,6 +120,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const DASHBOARD_VIEW = typeof window !== "undefined" && window.ShipyardDashboardView
       ? window.ShipyardDashboardView
       : {};
+    const SCREEN_VIEWS = typeof window !== "undefined" && window.ShipyardScreenViews
+      ? window.ShipyardScreenViews
+      : {};
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -5466,20 +5469,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const completed = rows.filter((row) => row.done).length;
       const pending = Math.max(rows.length - completed, 0);
       const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
-      return `<section class="history-pledge-status" aria-label="오늘 작업자 점검 현황">
-        <div class="history-pledge-head">
-          <div>
-            <strong>오늘 작업자 점검 현황</strong>
-            <span>안전 서약 관리의 오늘 서약 현황 기준</span>
-          </div>
-          <button class="btn-light" data-view="pledge" type="button">상세 보기</button>
-        </div>
-        <div class="history-pledge-kpis">
-          <div><strong>${completed}</strong><span>점검 완료</span></div>
-          <div><strong>${pending}</strong><span>미점검</span></div>
-          <div><strong>${rate}%</strong><span>완료율</span></div>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderHistoryPledgeStatusView({ completed, pending, rate });
     }
 
     function filteredHistoryRows() {
@@ -5753,30 +5743,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderProcessBoard(grouped) {
-      const total = state.ships.length;
-      const stages = grouped.map(({ stage, ships }) => ({ info: shipStageInfo(stage), ships }));
-      return `<div class="panel panel-pad process-board">
-        <div class="section-title">호선 공정 현황 <span class="small muted">총 ${total}척</span></div>
-        <div class="ship-board-note">공정 상태는 호선 정보 카드 오른쪽의 상태 목록에서 수정합니다. 인도일 + 1개월이 지난 호선은 자동 삭제됩니다.</div>
-        <div class="process-tabs">
-          ${stages.map(({ info }) => `<div class="stage-tab" style="--stage:${esc(info.color)}">${esc(info.label)}</div>`).join("")}
-        </div>
-        <div class="process-lanes">
-          ${stages.map(({ info, ships }) => {
-            return `<div class="process-lane">
-              <div class="process-lane-head"><span>${esc(info.label)}</span><span>${ships.length}</span></div>
-              ${ships.slice(0, 5).map((ship) => `<span class="ship-chip" style="--chip:${esc(info.color)}">${navIcon("ship")}<strong>${esc(ship.no)}</strong><small>${esc(shipStageCardFoot(ship))}</small></span>`).join("")}
-              ${ships.length > 5 ? `<span class="ship-tile" style="--chip:${esc(info.color)}">+${ships.length - 5}</span>` : `<button class="ship-tile add-ship-tile" style="--chip:${esc(info.color)}" data-action="focus-ship-add" type="button">+<small>호선 추가</small></button>`}
-            </div>`;
-          }).join("")}
-        </div>
-        <div class="process-legend">
-          ${SHIP_WORKFLOW_STAGES.map((stage) => {
-            const info = shipStageInfo(stage);
-            return `<span><i class="legend-dot" style="--dot:${esc(info.color)}"></i>${esc(info.label)}</span>`;
-          }).join("")}
-        </div>
-      </div>`;
+      const stages = grouped.map(({ stage, ships }) => {
+        const info = shipStageInfo(stage);
+        return {
+          label: info.label,
+          color: info.color,
+          count: ships.length,
+          chips: ships.slice(0, 5).map((ship) => ({ no: ship.no, foot: shipStageCardFoot(ship) })),
+          overflow: Math.max(ships.length - 5, 0),
+        };
+      });
+      return SCREEN_VIEWS.renderProcessBoardView({
+        total: state.ships.length,
+        note: "공정 상태는 호선 정보 카드 오른쪽의 상태 목록에서 수정합니다. 인도일 + 1개월이 지난 호선은 자동 삭제됩니다.",
+        stages,
+        legend: SHIP_WORKFLOW_STAGES.map((stage) => {
+          const info = shipStageInfo(stage);
+          return { label: info.label, color: info.color };
+        }),
+      }, { navIcon });
     }
 
     function renderShipRow(ship) {
@@ -7622,78 +7607,31 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
       const week = pledgeWeekStats();
       const weekTotal = week.reduce((sum, row) => sum + row.done, 0);
-      const rules = pledgeRules();
-      const editing = Boolean(state.pledgeTemplateEditing);
-      const canNotifyPledge = canSendPledgeNotifications();
-      return `<section class="admin-board pledge-board">
-        <div class="admin-board-top">
-          <div>
-            <h2>안전 서약 관리</h2>
-            <p>${today().replace(/-/g, ".")} · 오늘 서약 현황 실시간</p>
-          </div>
-          <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="pledge" type="button">내보내기</button>
-            <button class="btn" data-action="edit-pledge-template" type="button">서약 양식 편집</button>
-          </div>
-        </div>
-        <div class="pledge-kpi-grid">
-          ${pledgeKpi("오늘 서약 완료", completed, "명", `전체 ${rows.length}명 중`, "done")}
-          ${pledgeKpi("미완료", pending, "명", "알림 발송 가능", "warn")}
-          ${pledgeKpi("완료율", rate, "%", "어제 대비 추적", "rate")}
-          ${pledgeKpi("이번 주 누적", weekTotal, "건", "일 평균 " + (Math.round(weekTotal / 7 * 10) / 10) + "건", "total")}
-        </div>
-        <div class="pledge-layout">
-          <section class="pledge-table-card">
-            <div class="material-table-head">
-              <div><strong>오늘 서약 현황</strong><span>${today().replace(/-/g, ".")} · ${rows.length}명</span></div>
-              ${canNotifyPledge || state.adminMode ? `<div class="material-table-actions pledge-notify-actions">
-                ${state.adminMode ? `<button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>` : ""}
-                ${canNotifyPledge ? `<button class="btn" data-action="notify-pledge-pending" ${pending ? "" : "disabled"} title="${pending ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>` : ""}
-              </div>` : ""}
-            </div>
-            <div class="pledge-table">
-              <div class="pledge-row pledge-row-head"><span>작업자</span><span>팀</span><span>호선</span><span>서약 시각</span><span>상태</span></div>
-              ${rows.length ? rows.map((row) => `<div class="pledge-row">
-                <span><strong>${esc(row.name)}</strong></span>
-                <span>${esc(row.team)}</span>
-                <span><strong>${esc(row.shipNo)}</strong></span>
-                <span>${esc(row.time)}</span>
-                <span>${statusChip(pledgeRowStatus(row))}</span>
-              </div>`).join("") : `<div class="empty">오늘 표시할 작업자 정보가 없습니다.</div>`}
-            </div>
-          </section>
-          <aside class="pledge-side">
-            <section class="pledge-preview-card">
-              <div class="material-table-head">
-                <div><strong>서약 양식 미리보기</strong></div>
-                ${editing ? `<div class="material-table-actions"><button class="btn-light" data-action="cancel-pledge-template" type="button">취소</button><button class="btn" data-action="save-pledge-template" type="button">저장</button></div>` : `<button class="btn-light" data-action="edit-pledge-template" type="button">편집</button>`}
-              </div>
-              ${editing ? `<div class="pledge-editor">
-                <label for="pledgeRulesInput">서약 수칙</label>
-                <textarea class="textarea" id="pledgeRulesInput">${esc(rules.join("\n"))}</textarea>
-                <p>각 줄이 서약서의 한 항목으로 저장됩니다.</p>
-              </div>` : `<div class="pledge-paper">
-                <h3>작업 전 안전 서약서</h3>
-                <p>나 ________ (이)은 오늘 작업에 앞서 다음 안전 수칙을 준수할 것을 서약합니다.</p>
-                <ol>
-                  ${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}
-                </ol>
-                <div class="pledge-sign"><span>서명: ____________</span><span>날짜: ${esc(today())}</span></div>
-              </div>`}
-            </section>
-            <section class="pledge-weekly-card">
-              <strong>주간 서약 완료율</strong>
-              <div class="pledge-bars">
-                ${week.map((row) => `<div class="pledge-bar-row">
-                  <span>${esc(row.date.slice(5).replace("-", "/"))}</span>
-                  <i><b style="width:${Math.min(row.pct, 100)}%"></b></i>
-                  <strong>${row.pct}%</strong>
-                </div>`).join("")}
-              </div>
-            </section>
-          </aside>
-        </div>
-      </section>`;
+      const kpiHtml = [
+        pledgeKpi("오늘 서약 완료", completed, "명", `전체 ${rows.length}명 중`, "done"),
+        pledgeKpi("미완료", pending, "명", "알림 발송 가능", "warn"),
+        pledgeKpi("완료율", rate, "%", "어제 대비 추적", "rate"),
+        pledgeKpi("이번 주 누적", weekTotal, "건", "일 평균 " + (Math.round(weekTotal / 7 * 10) / 10) + "건", "total"),
+      ].join("");
+      return SCREEN_VIEWS.renderPledgeManagerView({
+        dateLabel: today().replace(/-/g, "."),
+        todayIso: today(),
+        rows: rows.map((row) => ({
+          name: row.name,
+          team: row.team,
+          shipNo: row.shipNo,
+          time: row.time,
+          statusChipHtml: statusChip(pledgeRowStatus(row)),
+        })),
+        totalCount: rows.length,
+        pendingCount: pending,
+        kpiHtml,
+        canNotifyPledge: canSendPledgeNotifications(),
+        adminMode: state.adminMode,
+        editing: Boolean(state.pledgeTemplateEditing),
+        rules: pledgeRules(),
+        weekBars: week.map((row) => ({ label: row.date.slice(5).replace("-", "/"), pct: row.pct })),
+      });
     }
 
     function completionIcon(name) {

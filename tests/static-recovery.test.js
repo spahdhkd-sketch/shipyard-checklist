@@ -18,6 +18,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/css/30-feature-signature.css",
   "assets/js/app-v2.js",
   "assets/js/dashboard-view.js",
+  "assets/js/screen-views.js",
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
   "assets/icons/icon-512.png",
@@ -365,8 +366,9 @@ assert.doesNotMatch(app, /worker_push_subscription_status/);
 assert.match(app, /senderWorkerId/);
 assert.match(app, /senderEmployeeNo/);
 assert.match(app, /sendKind: options\.kind \|\| ""/);
-assert.match(app, /data-action="notify-pledge-pending"/);
-assert.match(app, /data-action="edit-push-template" data-push-template-kind="pledgePending"/);
+const screenViews = read("assets/js/screen-views.js");
+assert.match(app + screenViews, /data-action="notify-pledge-pending"/);
+assert.match(app + screenViews, /data-action="edit-push-template" data-push-template-kind="pledgePending"/);
 assert.match(app, /data-action="edit-push-template" data-push-template-kind="unsafeIssue"/);
 assert.match(app, /data-action="register-push-notifications"/);
 assert.match(app, /data-action="test-push-notification"/);

@@ -204,6 +204,14 @@ async function main() {
   check("자재: 등록 클릭", await clickBtn(page, "누락 자재 등록")); await wait(1800);
   check("자재: 등록 완료 화면", (await bodyText(page)).includes("자재 누락이 등록되었습니다"));
 
+  // 6. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
+  await goto("ships.html");
+  check("호선: 공정 현황 보드 렌더", (await bodyText(page)).includes("호선 공정 현황"));
+  await goto("pledge.html");
+  check("서약: 관리 화면 렌더", (await bodyText(page)).includes("안전 서약 관리"));
+  await goto("history.html");
+  check("이력: 점검 현황 요약 렌더", (await bodyText(page)).includes("오늘 작업자 점검 현황"));
+
   await browser.close();
   srv.close();
   if (failures) {
