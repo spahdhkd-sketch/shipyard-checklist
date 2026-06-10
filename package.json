@@ -5,9 +5,11 @@
     "harness:live": "node tools/quality-harness.mjs --live",
     "harness:strict": "node tools/quality-harness.mjs --strict-git --live",
     "serve": "node tools/static-server.mjs 4173",
-    "e2e": "node tools/e2e-smoke.mjs"
+    "e2e": "node tools/e2e-smoke.mjs",
+    "build": "node tools/build-assets.mjs"
   },
   "devDependencies": {
-    "puppeteer-core": "^23.0.0"
+    "puppeteer-core": "^23.0.0",
+    "esbuild": "^0.28.0"
   }
 }
