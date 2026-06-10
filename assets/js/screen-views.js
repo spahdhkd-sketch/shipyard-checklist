@@ -187,11 +187,89 @@
       </section>`;
   }
 
+  // 관리 > 불안전요소: 처리 보드 셸 (읽기 전용 마크업)
+  // model: { totalCount, openCount, adminMode, shipFilterNoticeHtml, rowsHtml }
+  function renderUnsafeManagerView(model = {}) {
+    return `<section class="admin-board unsafe-board">
+        <div class="admin-board-top">
+          <div>
+            <h2>불안전요소 처리</h2>
+            <p>${Number(model.totalCount) || 0}건 등록 · ${Number(model.openCount) || 0}건 미확인</p>
+          </div>
+          <div class="admin-board-actions">
+            <button class="btn-light" data-export-records="unsafe" type="button">내보내기</button>
+            <button class="btn-danger" data-action="reset-unsafe-records" ${model.adminMode ? "" : "disabled"} type="button">이력 초기화</button>
+            <button class="btn-light" data-action="edit-push-template" data-push-template-kind="unsafeIssue" type="button">푸시 문구 수정</button>
+            <button class="btn" data-view="unsafe" type="button">+ 신규</button>
+          </div>
+        </div>
+        ${model.shipFilterNoticeHtml || ""}
+        <div class="unsafe-split unsafe-split-inline">
+          <aside class="unsafe-list-panel">
+            <div class="unsafe-list-head">
+              <div><strong>전체 목록</strong><span>상태별</span></div>
+              <button class="btn-light" data-record-filter="unsafe:status" value="" type="button">필터</button>
+            </div>
+            <div class="unsafe-list-table">
+              <div class="unsafe-list-row unsafe-list-row-head"><span>호선</span><span>제목</span><span>상태</span></div>
+              ${model.rowsHtml || `<div class="empty">표시할 불안전요소가 없습니다.</div>`}
+            </div>
+          </aside>
+        </div>
+      </section>`;
+  }
+
+  // 관리 > 자재누락: 관리 보드 셸 (읽기 전용 마크업)
+  // model: { totalCount, checkingCount, doneCount, adminMode, canEdit, kpiHtml, shipFilterNoticeHtml,
+  //          filterPanelHtml, visibleCount, sortValue, sortLabel, rowsHtml }
+  function renderMaterialManagerView(model = {}) {
+    return `<section class="admin-board material-board">
+        <div class="admin-board-top">
+          <div>
+            <h2>호선자재 누락 관리</h2>
+            <p>${Number(model.totalCount) || 0}건 등록 · ${Number(model.checkingCount) || 0}건 확인중 · ${Number(model.doneCount) || 0}건 완료</p>
+          </div>
+          <div class="admin-board-actions">
+            <button class="btn-light" data-export-records="materials" type="button">내보내기</button>
+            <button class="btn-danger" data-action="reset-material-records" ${model.adminMode ? "" : "disabled"} type="button">이력 초기화</button>
+            <button class="btn" data-view="materials" type="button">+ 신규 등록</button>
+          </div>
+        </div>
+        <div class="material-kpi-grid">
+          ${model.kpiHtml || ""}
+        </div>
+        ${model.shipFilterNoticeHtml || ""}
+        <div class="material-layout">
+          <aside class="material-filter-panel">
+            <div class="section-title">호선별 필터</div>
+            ${model.filterPanelHtml || ""}
+          </aside>
+          <section class="material-table-card">
+            <div class="material-table-head">
+              <div><strong>자재 누락 목록</strong><span>${Number(model.visibleCount) || 0}건 표시 중</span></div>
+              <div class="material-table-actions">
+                <button class="btn-light" data-record-filter="materials:sort" value="${esc(model.sortValue)}" type="button">정렬: ${esc(model.sortLabel)}</button>
+                <button class="btn-light" data-action="bulk-material-status" ${model.canEdit ? "" : "disabled"} type="button">상태 일괄 변경</button>
+              </div>
+            </div>
+            <div class="material-table">
+              <div class="material-row material-row-head">
+                <span></span><span>호선</span><span>자재명</span><span>수량</span><span>등록자</span><span>등록 시각</span><span>상태</span><span>액션</span>
+              </div>
+              ${model.rowsHtml || `<div class="empty">표시할 자재 누락 기록이 없습니다.</div>`}
+            </div>
+          </section>
+        </div>
+      </section>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
     renderPledgeManagerView,
     renderWorkerRowView,
     renderWorkerManagerView,
+    renderUnsafeManagerView,
+    renderMaterialManagerView,
   };
 }));

@@ -7195,36 +7195,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const sorted = ISSUE_MATERIAL_RULES.sortRecords(filtered, state.unsafeFilters.sort, ISSUE_MATERIAL_RULES.UNSAFE_STATUSES);
       const openCount = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
       const activeId = sorted.some((row) => row.id === state.unsafeDetailId) ? state.unsafeDetailId : "";
-      return `<section class="admin-board unsafe-board">
-        <div class="admin-board-top">
-          <div>
-            <h2>불안전요소 처리</h2>
-            <p>${state.unsafeIssues.length}건 등록 · ${openCount}건 미확인</p>
-          </div>
-          <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="unsafe" type="button">내보내기</button>
-            <button class="btn-danger" data-action="reset-unsafe-records" ${state.adminMode ? "" : "disabled"} type="button">이력 초기화</button>
-            <button class="btn-light" data-action="edit-push-template" data-push-template-kind="unsafeIssue" type="button">푸시 문구 수정</button>
-            <button class="btn" data-view="unsafe" type="button">+ 신규</button>
-          </div>
-        </div>
-        ${state.unsafeFilters.shipNo ? renderShipFilterNotice("unsafe", state.unsafeFilters.shipNo) : ""}
-        <div class="unsafe-split unsafe-split-inline">
-          <aside class="unsafe-list-panel">
-            <div class="unsafe-list-head">
-              <div><strong>전체 목록</strong><span>상태별</span></div>
-              <button class="btn-light" data-record-filter="unsafe:status" value="" type="button">필터</button>
-            </div>
-            <div class="unsafe-list-table">
-              <div class="unsafe-list-row unsafe-list-row-head"><span>호선</span><span>제목</span><span>상태</span></div>
-              ${sorted.length ? sorted.map((row) => {
-                const active = row.id === activeId;
-                return `${renderUnsafeQueueItem(row, active)}${active ? renderUnsafeInlineDetail(row) : ""}`;
-              }).join("") : `<div class="empty">표시할 불안전요소가 없습니다.</div>`}
-            </div>
-          </aside>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderUnsafeManagerView({
+        totalCount: state.unsafeIssues.length,
+        openCount,
+        adminMode: Boolean(state.adminMode),
+        shipFilterNoticeHtml: state.unsafeFilters.shipNo ? renderShipFilterNotice("unsafe", state.unsafeFilters.shipNo) : "",
+        rowsHtml: sorted.length ? sorted.map((row) => {
+          const active = row.id === activeId;
+          return `${renderUnsafeQueueItem(row, active)}${active ? renderUnsafeInlineDetail(row) : ""}`;
+        }).join("") : "",
+      });
     }
 
     function renderUnsafeQueueItem(row, active) {
@@ -7410,55 +7390,34 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const checking = state.missingMaterials.filter((row) => row.status === statuses[1]).length;
       const done = state.missingMaterials.filter((row) => row.status === statuses[2]).length;
       const activeId = sorted.some((row) => row.id === state.materialDetailId) ? state.materialDetailId : "";
-      return `<section class="admin-board material-board">
-        <div class="admin-board-top">
-          <div>
-            <h2>호선자재 누락 관리</h2>
-            <p>${state.missingMaterials.length}건 등록 · ${checking}건 확인중 · ${done}건 완료</p>
-          </div>
-          <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="materials" type="button">내보내기</button>
-            <button class="btn-danger" data-action="reset-material-records" ${state.adminMode ? "" : "disabled"} type="button">이력 초기화</button>
-            <button class="btn" data-view="materials" type="button">+ 신규 등록</button>
-          </div>
-        </div>
-        <div class="material-kpi-grid">
-          ${materialKpi("전체", state.missingMaterials.length, "건", "#0b1d3a", "")}
-          ${materialKpi("접수", received, "건", "#dc2626", statuses[0])}
-          ${materialKpi("확인중", checking, "건", "#d97706", statuses[1])}
-          ${materialKpi("완료", done, "건", "#3F7A50", statuses[2])}
-        </div>
-        ${state.materialFilters.shipNo ? renderShipFilterNotice("materials", state.materialFilters.shipNo) : ""}
-        <div class="material-layout">
-          <aside class="material-filter-panel">
-            <div class="section-title">호선별 필터</div>
-            <button class="material-ship-filter ${state.materialFilters.shipNo ? "" : "active"}" data-record-filter="materials:shipNo" value="" type="button">
+      const filterPanelHtml = `<button class="material-ship-filter ${state.materialFilters.shipNo ? "" : "active"}" data-record-filter="materials:shipNo" value="" type="button">
               <span>전체 호선</span><strong>${filterPanelRows.length}</strong>
             </button>
             ${filterGroups.map((group) => `<button class="material-ship-filter ${state.materialFilters.shipNo === group.shipNo ? "active" : ""}" data-record-filter="materials:shipNo" value="${esc(group.shipNo)}" type="button">
               <span><strong>${esc(group.shipNo)}</strong><em>${esc(shipStageForNo(group.shipNo))} · ${materialProgressForGroup(group)}%</em></span><strong>${group.records.length}</strong>
-            </button>`).join("")}
-          </aside>
-          <section class="material-table-card">
-            <div class="material-table-head">
-              <div><strong>자재 누락 목록</strong><span>${filtered.length}건 표시 중</span></div>
-              <div class="material-table-actions">
-                <button class="btn-light" data-record-filter="materials:sort" value="${state.materialFilters.sort === "latest" ? "status" : "latest"}" type="button">정렬: ${state.materialFilters.sort === "latest" ? "상태순" : "최신순"}</button>
-                <button class="btn-light" data-action="bulk-material-status" ${canEdit ? "" : "disabled"} type="button">상태 일괄 변경</button>
-              </div>
-            </div>
-            <div class="material-table">
-              <div class="material-row material-row-head">
-                <span></span><span>호선</span><span>자재명</span><span>수량</span><span>등록자</span><span>등록 시각</span><span>상태</span><span>액션</span>
-              </div>
-              ${sorted.length ? sorted.map((row) => {
-                const active = row.id === activeId;
-                return `${renderMaterialTableRow(row, active)}${active ? renderMaterialInlineDetail(row) : ""}`;
-              }).join("") : `<div class="empty">표시할 자재 누락 기록이 없습니다.</div>`}
-            </div>
-          </section>
-        </div>
-      </section>`;
+            </button>`).join("")}`;
+      return SCREEN_VIEWS.renderMaterialManagerView({
+        totalCount: state.missingMaterials.length,
+        checkingCount: checking,
+        doneCount: done,
+        adminMode: Boolean(state.adminMode),
+        canEdit,
+        kpiHtml: [
+          materialKpi("전체", state.missingMaterials.length, "건", "#0b1d3a", ""),
+          materialKpi("접수", received, "건", "#dc2626", statuses[0]),
+          materialKpi("확인중", checking, "건", "#d97706", statuses[1]),
+          materialKpi("완료", done, "건", "#3F7A50", statuses[2]),
+        ].join(""),
+        shipFilterNoticeHtml: state.materialFilters.shipNo ? renderShipFilterNotice("materials", state.materialFilters.shipNo) : "",
+        filterPanelHtml,
+        visibleCount: filtered.length,
+        sortValue: state.materialFilters.sort === "latest" ? "status" : "latest",
+        sortLabel: state.materialFilters.sort === "latest" ? "상태순" : "최신순",
+        rowsHtml: sorted.length ? sorted.map((row) => {
+          const active = row.id === activeId;
+          return `${renderMaterialTableRow(row, active)}${active ? renderMaterialInlineDetail(row) : ""}`;
+        }).join("") : "",
+      });
     }
 
     function materialKpi(label, value, unit, color, status) {
