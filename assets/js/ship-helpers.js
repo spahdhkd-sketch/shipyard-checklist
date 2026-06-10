@@ -17,10 +17,10 @@
     ["saved", "저장된 순서"],
   ];
   const STAGE_META = {
-    mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#8F5E35", bg: "#F8F1E8" },
-    lc: { stage: "lc", label: "L/C", percent: 45, color: "#1d4ed8", bg: "#eff6ff" },
+    mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#7A5326", bg: "#F8F1E8" },
+    lc: { stage: "lc", label: "L/C", percent: 45, color: "#2E5DA6", bg: "#eff6ff" },
     st: { stage: "st", label: "S/T", percent: 70, color: "#0f766e", bg: "#f0fdfa" },
-    cl: { stage: "cl", label: "C/L", percent: 92, color: "#4F7A5C", bg: "#F1F6F2" },
+    cl: { stage: "cl", label: "C/L", percent: 92, color: "#3F7A50", bg: "#F1F6F2" },
     dl: { stage: "dl", label: "D/L", percent: 100, color: "#7e22ce", bg: "#faf5ff" },
   };
 

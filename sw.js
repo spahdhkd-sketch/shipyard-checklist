@@ -1,5 +1,5 @@
 const APP_VERSION = "1.2-20260610-start-gate";
-const ASSET_TOKEN = "20260610-work-prep-start-gate-1";
+const ASSET_TOKEN = "20260610-design-unify-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

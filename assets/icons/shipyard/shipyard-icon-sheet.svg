@@ -12,7 +12,7 @@
 <g transform="translate(146 72)">
     
   <title id="stage-lc-title">L/C</title>
-  <g fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 43h46"/><path d="M16 43l6-26h20l6 26"/><path d="M23 27h18"/><path d="M20 35h24"/><path d="M47 17l8 8-8 8"/><path d="M40 25h15"/></g>
+  <g fill="none" stroke="#2E5DA6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 43h46"/><path d="M16 43l6-26h20l6 26"/><path d="M23 27h18"/><path d="M20 35h24"/><path d="M47 17l8 8-8 8"/><path d="M40 25h15"/></g>
 
     <text x="32" y="84" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">L/C</text>
   </g>
@@ -54,28 +54,28 @@
 <g transform="translate(146 182)">
     
   <title id="work-postinstall-title">후행 설치</title>
-  <g fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 48h44"/><path d="M16 48V21h31v27"/><path d="M23 31h17"/><path d="M23 40h17"/><path d="M47 10l9 9"/><path d="M56 10l-9 9"/></g>
+  <g fill="none" stroke="#2E5DA6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 48h44"/><path d="M16 48V21h31v27"/><path d="M23 31h17"/><path d="M23 40h17"/><path d="M47 10l9 9"/><path d="M56 10l-9 9"/></g>
 
     <text x="32" y="84" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">후행 설치</text>
   </g>
 <g transform="translate(256 182)">
     
   <title id="work-dp-install-title">DP 설치</title>
-  <g fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="14" width="38" height="34" rx="5"/><path d="M21 25h20"/><path d="M21 35h13"/><path d="M18 56h28"/><path d="M32 48v8"/><path d="M48 8l8 8"/><path d="M56 8l-8 8"/></g>
+  <g fill="none" stroke="#2E5DA6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="14" width="38" height="34" rx="5"/><path d="M21 25h20"/><path d="M21 35h13"/><path d="M18 56h28"/><path d="M32 48v8"/><path d="M48 8l8 8"/><path d="M56 8l-8 8"/></g>
 
     <text x="32" y="84" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DP 설치</text>
   </g>
 <g transform="translate(366 182)">
     
   <title id="work-dp-inspect-title">DP 검사</title>
-  <g fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="9" width="34" height="43" rx="5"/><path d="M20 21h17"/><path d="M20 31h13"/><path d="m21 43 5 5 11-14"/><circle cx="48" cy="45" r="8"/><path d="m54 51 6 6"/></g>
+  <g fill="none" stroke="#2E5DA6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="9" width="34" height="43" rx="5"/><path d="M20 21h17"/><path d="M20 31h13"/><path d="m21 43 5 5 11-14"/><circle cx="48" cy="45" r="8"/><path d="m54 51 6 6"/></g>
 
     <text x="32" y="84" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DP 검사</text>
   </g>
 <g transform="translate(476 182)">
     
   <title id="work-pressure-title">압력 테스트</title>
-  <g fill="none" stroke="#1d4ed8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="31" r="19"/><path d="M32 31 45 19"/><path d="M19 43h26"/><path d="M17 56h30"/><path d="M32 12V6"/><path d="M23 6h18"/></g>
+  <g fill="none" stroke="#2E5DA6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="31" r="19"/><path d="M32 31 45 19"/><path d="M19 43h26"/><path d="M17 56h30"/><path d="M32 12V6"/><path d="M23 6h18"/></g>
 
     <text x="32" y="84" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">압력 테스트</text>
   </g>

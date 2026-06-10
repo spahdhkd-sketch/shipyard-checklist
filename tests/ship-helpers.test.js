@@ -5,7 +5,7 @@ const path = require("path");
 const helpers = require("../assets/js/ship-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260610-work-prep-start-gate-1";
+const ASSET_TOKEN = "20260610-design-unify-1";
 const APP_SCRIPT = `assets/js/app-v2.js?v=${ASSET_TOKEN}`;
 const SHIP_HELPER_SCRIPT = `assets/js/ship-helpers.js?v=${ASSET_TOKEN}`;
 const PICTOGRAM_HELPER_SCRIPT = `assets/js/pictogram-helpers.js?v=${ASSET_TOKEN}`;
@@ -23,7 +23,7 @@ assert.deepStrictEqual(helpers.shipStageInfo("lc"), {
   stage: "lc",
   label: "L/C",
   percent: 45,
-  color: "#1d4ed8",
+  color: "#2E5DA6",
   bg: "#eff6ff",
 });
 assert.strictEqual(helpers.shipStageInfo("unknown").stage, "mounting");

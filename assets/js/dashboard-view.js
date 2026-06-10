@@ -67,7 +67,29 @@
       processStages = [],
     } = model;
 
+    const myCheck = model.myCheck || null;
+    const myCheckHtml = !myCheck ? "" : (() => {
+      const lines = {
+        none: { strong: "오늘 등록된 내 작업지시서가 없습니다", span: "필요하면 작업지시서 없이 바로 점검할 수 있습니다", btn: "점검 화면 열기", view: "check", disabled: false },
+        ready: { strong: `${esc(myCheck.name)}님, 미점검 ${myCheck.pending}건`, span: myCheck.nextLabel ? `다음 점검: ${esc(myCheck.nextLabel)}` : "", btn: "점검 시작", view: "check", disabled: false },
+        locked: { strong: `${esc(myCheck.name)}님, 미점검 ${myCheck.pending}건`, span: esc(myCheck.lockMessage), btn: "점검 시작", view: "check", disabled: true },
+        done: { strong: "오늘 점검을 모두 마쳤습니다", span: `${myCheck.total}건 제출 완료 · 안전한 하루 되세요`, btn: "이력 보기", view: "history", disabled: false },
+      };
+      const line = lines[myCheck.status] || lines.none;
+      return `<section class="ops-my-check is-${esc(myCheck.status)}" aria-labelledby="dashboardMyCheckHeading">
+        ${sectionHeading("dashboardMyCheckHeading", "오늘 내 점검")}
+        <div class="ops-my-check-card">
+          <div class="ops-my-check-info">
+            <strong>${line.strong}</strong>
+            ${line.span ? `<span>${line.span}</span>` : ""}
+          </div>
+          <button class="btn ops-my-check-btn" data-view="${line.view}" type="button" ${line.disabled ? `disabled title="${esc(myCheck.lockMessage)}"` : ""}>${line.btn}</button>
+        </div>
+      </section>`;
+    })();
+
     return `<h1 class="sr-only">조선소 안전 체크리스트</h1>
+      ${myCheckHtml}
       <section class="ops-hero" aria-labelledby="dashboardQuickHeading">
         ${sectionHeading("dashboardQuickHeading", "현장 빠른 실행")}
         <div class="ops-hero-main">

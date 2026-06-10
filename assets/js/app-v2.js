@@ -301,10 +301,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       ["saved", "저장된 순서"],
     ];
     const STAGE_META = {
-      mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#8F5E35", bg: "#F8F1E8" },
-      lc: { stage: "lc", label: "L/C", percent: 45, color: "#1d4ed8", bg: "#eff6ff" },
+      mounting: { stage: "mounting", label: "탑재", percent: 20, color: "#7A5326", bg: "#F8F1E8" },
+      lc: { stage: "lc", label: "L/C", percent: 45, color: "#2E5DA6", bg: "#eff6ff" },
       st: { stage: "st", label: "S/T", percent: 70, color: "#0f766e", bg: "#f0fdfa" },
-      cl: { stage: "cl", label: "C/L", percent: 92, color: "#4F7A5C", bg: "#F1F6F2" },
+      cl: { stage: "cl", label: "C/L", percent: 92, color: "#3F7A50", bg: "#F1F6F2" },
       dl: { stage: "dl", label: "D/L", percent: 100, color: "#7e22ce", bg: "#faf5ff" },
     };
     const CATEGORY_STAGE_RULES = [
@@ -3866,7 +3866,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function pageHead(title, lead, actions = "") {
       return `<div class="page-head">
         <div>
-          <div class="eyebrow">Safety checklist</div>
           <h1>${esc(title)}</h1>
           <p class="lead">${esc(lead)}</p>
         </div>
@@ -4077,7 +4076,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         info: shipStageInfo(stage),
         count: state.ships.filter((ship) => effectiveShipStage(ship).stage === stage).length,
       }));
+      const sessionWorker = currentWorkerSessionWorker();
+      const myCheck = (() => {
+        if (!sessionWorker?.id) return null;
+        const preps = workPrepRecordsForDate(today())
+          .filter((record) => !record.deletedAt && workPrepParticipantWorkerIds(record).includes(sessionWorker.id));
+        const pendingPreps = preps.filter((record) => !hasSubmittedWorkPrepInspection(record, sessionWorker.id));
+        const next = pendingPreps[0] || null;
+        const nextCat = next ? state.categories.find((cat) => cat.id === next.categoryId) : null;
+        const gate = next ? workPrepStartAvailability(next) : { canStart: true, message: "" };
+        return {
+          name: sessionWorker.name || "",
+          total: preps.length,
+          pending: pendingPreps.length,
+          status: !preps.length ? "none" : !pendingPreps.length ? "done" : gate.canStart ? "ready" : "locked",
+          nextLabel: next ? `H${next.shipNo}${nextCat ? ` · ${workLabel(nextCat)}` : ""}` : "",
+          lockMessage: gate.message || "",
+        };
+      })();
       return {
+        myCheck,
         todayCount,
         todayDone,
         todayPending,
@@ -4673,7 +4691,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function openWorkPrepRegister() {
-      if (!canOpenWorkPrepRegister()) return toast("작업 준비 등록은 관리/총무/조장만 사용할 수 있습니다.");
+      if (!canOpenWorkPrepRegister()) return toast("작업지시서 등록은 관리/총무/조장만 사용할 수 있습니다.");
       const previous = state.workPrepDraft || {};
       state.workPrepDraft = createFreshWorkPrepRegistrationDraft(previous);
       state.workPrepRegisterOpen = true;
@@ -5033,7 +5051,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ? `<span>${pendingNames.slice(0, pendingNameLimit).map(esc).join(" · ")}${hiddenPendingCount ? ` 외 ${hiddenPendingCount}명` : ""}</span>`
         : "";
       const summaryHtml = status === "ordered"
-        ? `<div class="work-prep-submission-summary neutral"><strong>작업 준비 전</strong></div>`
+        ? `<div class="work-prep-submission-summary neutral"><strong>작업지시 전</strong></div>`
         : (isUsed || submissionProgress.complete)
           ? `<div class="work-prep-submission-summary done"><strong>전원 점검 완료</strong></div>`
           : `<div class="work-prep-submission-summary pending"><strong>미점검 ${pendingNames.length}명</strong>${pendingNamesHtml}</div>`;
@@ -5110,8 +5128,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderDirectCheckSection(categories) {
       return `<section class="work-prep-direct-section">
         <button class="work-prep-direct-toggle" data-action="toggle-work-prep-direct" type="button" aria-expanded="${state.workPrepDirectOpen ? "true" : "false"}">
-          <span><strong>작업 준비 없이 점검</strong><em>등록된 작업지시서가 없거나 즉시 점검할 때 펼쳐서 선택</em></span>
-          ${renderCategoryToggleImage(state.workPrepDirectOpen, { color: "#0b5cad" })}
+          <span><strong>작업지시서 없이 점검</strong><em>등록된 작업지시서가 없거나 즉시 점검할 때 펼쳐서 선택</em></span>
+          ${renderCategoryToggleImage(state.workPrepDirectOpen, { color: "#2E5DA6" })}
         </button>
         ${state.workPrepDirectOpen ? `<div class="work-prep-direct-panel">
           <div class="work-grid check-flow-work-grid">
@@ -5145,7 +5163,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ["confirmed", "확정"],
         ["used", WORK_PREP_STATUS_LABELS.used],
       ];
-      const body = `<div class="work-prep-status-strip" aria-label="작업 준비 상태">
+      const body = `<div class="work-prep-status-strip" aria-label="작업지시서 상태">
         ${statusSteps.map(([status, label]) => `<span class="${normalizeWorkPrepStatus(draft.status) === status ? "active" : ""}">${esc(label)}</span>`).join("")}
       </div>
       <section class="work-prep-register-card">
@@ -5232,13 +5250,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <button class="material-flow-primary" data-action="save-work-prep-registration" type="button">${manageContext ? "작업지시서 저장" : "준비 시작"}</button>`;
       return `<section class="material-flow check-flow work-prep-register-flow">
         <div class="material-flow-head">
-          <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업 준비 등록"}</div>
+          <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업지시서 등록"}</div>
           <div class="material-flow-title">
             <button class="material-back" data-action="close-work-prep-register" type="button" aria-label="${manageContext ? "작업지시서 관리 목록으로 돌아가기" : "작업 선택으로 돌아가기"}">‹</button>
-            <h1>${manageContext ? "작업지시서 등록" : "작업 준비 등록"}</h1>
+            <h1>${manageContext ? "작업지시서 등록" : "작업지시서 등록"}</h1>
           </div>
           <p>${manageContext ? "작업일, 호선, 조장, 작업자, 공기구 기준을 한 번에 관리합니다." : "작업지시 기준으로 조장, 같이 작업자, 공기구/준비물을 먼저 정리합니다."}</p>
-          <div class="material-flow-progress" role="progressbar" aria-label="작업 준비 등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><span style="width:25%"></span></div>
+          <div class="material-flow-progress" role="progressbar" aria-label="작업지시서 등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><span style="width:25%"></span></div>
         </div>
         <div class="material-flow-body">${body}</div>
         <div class="material-flow-footer">${footer}</div>
@@ -5256,7 +5274,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const workPrepSections = renderWorkPrepDateSection(selectedDate, selectedRecords, { next: selectedDate !== todayDate, force: true, dateOptions });
         const prepEntry = canOpenWorkPrepRegister() ? `<section class="work-prep-entry-card">
           <div>
-            <strong>작업 준비 등록</strong>
+            <strong>작업지시서 등록</strong>
             <span>조장/관리/총무가 점검 전 작업자와 공기구를 먼저 정리합니다.</span>
           </div>
           <button class="btn" data-action="open-work-prep-register" type="button">등록</button>
@@ -6198,7 +6216,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const workType = category ? workLabel(category) : "작업 유형 없음";
       const subtitle = options.compact
         ? `${workDateTitle} · ${workType}`
-        : `${workDateTitle.replace(" 작업지시서", "")} · ${workType} · 작업 준비 기준 점검 완료`;
+        : `${workDateTitle.replace(" 작업지시서", "")} · ${workType} · 작업지시서 기준 점검 완료`;
       return `<section class="inspection-work-prep-mini-card status-${esc(status)}">
         <div class="inspection-work-prep-mini-top">
           <div>
@@ -6587,7 +6605,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <div class="material-kpi-grid work-prep-kpi-grid">
           ${workPrepKpi("전체", state.workPrepRecords.length, "건", "#0b1d3a", "")}
           ${workPrepKpi("준비", preparing, "건", "#d97706", "preparing")}
-          ${workPrepKpi("지시", ordered, "건", "#0b5cad", "ordered")}
+          ${workPrepKpi("지시", ordered, "건", "#2E5DA6", "ordered")}
           ${workPrepKpi("진행", confirmed, "건", "#0f766e", "confirmed")}
           ${workPrepKpi("완료", used, "건", "#64748b", "used")}
         </div>
@@ -7448,7 +7466,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${materialKpi("전체", state.missingMaterials.length, "건", "#0b1d3a", "")}
           ${materialKpi("접수", received, "건", "#dc2626", statuses[0])}
           ${materialKpi("확인중", checking, "건", "#d97706", statuses[1])}
-          ${materialKpi("완료", done, "건", "#4F7A5C", statuses[2])}
+          ${materialKpi("완료", done, "건", "#3F7A50", statuses[2])}
         </div>
         ${state.materialFilters.shipNo ? renderShipFilterNotice("materials", state.materialFilters.shipNo) : ""}
         <div class="material-layout">

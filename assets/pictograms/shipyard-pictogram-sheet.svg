@@ -9,8 +9,8 @@
 </g>
 <g transform="translate(156 68)">
   <title id="stage-lc-title">L/C</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 45h40"/><path d="M18 45l5-23h18l5 23"/><path d="M24 31h16"/><path d="M21 38h22"/><path d="M47 22l5 5-5 5"/><path d="M42 27h10"/></g>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#2E5DA6" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#2E5DA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 45h40"/><path d="M18 45l5-23h18l5 23"/><path d="M24 31h16"/><path d="M21 38h22"/><path d="M47 22l5 5-5 5"/><path d="M42 27h10"/></g>
   <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">L/C</text>
 </g>
 <g transform="translate(288 68)">
@@ -45,26 +45,26 @@
 </g>
 <g transform="translate(420 220)">
   <title id="work-postinstall-title">후행 설치</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 48h36"/><path d="M19 48V26h26v22"/><path d="M25 34h14"/><path d="M25 41h14"/><path d="M45 18l7 7"/><path d="M52 18l-7 7"/></g>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#2E5DA6" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#2E5DA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 48h36"/><path d="M19 48V26h26v22"/><path d="M25 34h14"/><path d="M25 41h14"/><path d="M45 18l7 7"/><path d="M52 18l-7 7"/></g>
   <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">후행 설치</text>
 </g>
 <g transform="translate(24 372)">
   <title id="work-dp-install-title">DP 설치</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="18" width="34" height="28" rx="4"/><path d="M23 28h18"/><path d="M23 36h12"/><path d="M20 52h24"/><path d="M32 46v6"/><path d="M47 13l5 5"/><path d="M52 13l-5 5"/></g>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#2E5DA6" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#2E5DA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="18" width="34" height="28" rx="4"/><path d="M23 28h18"/><path d="M23 36h12"/><path d="M20 52h24"/><path d="M32 46v6"/><path d="M47 13l5 5"/><path d="M52 13l-5 5"/></g>
   <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DP 설치</text>
 </g>
 <g transform="translate(156 372)">
   <title id="work-dp-inspect-title">DP 검사</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="14" width="30" height="38" rx="4"/><path d="M22 24h16"/><path d="M22 32h12"/><path d="m23 42 4 4 9-11"/><circle cx="47" cy="45" r="7"/><path d="m52 50 5 5"/></g>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#2E5DA6" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#2E5DA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="14" width="30" height="38" rx="4"/><path d="M22 24h16"/><path d="M22 32h12"/><path d="m23 42 4 4 9-11"/><circle cx="47" cy="45" r="7"/><path d="m52 50 5 5"/></g>
   <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">DP 검사</text>
 </g>
 <g transform="translate(288 372)">
   <title id="work-pressure-test-title">압력 테스트</title>
-  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#1d4ed8" stroke-width="4"/>
-  <g transform="translate(16 16)" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="17"/><path d="M32 32 43 22"/><path d="M21 42h22"/><path d="M20 53h24"/><path d="M32 15v-5"/><path d="M24 10h16"/></g>
+  <rect x="8" y="8" width="80" height="80" rx="16" fill="#f8fafc" stroke="#2E5DA6" stroke-width="4"/>
+  <g transform="translate(16 16)" fill="none" stroke="#2E5DA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="17"/><path d="M32 32 43 22"/><path d="M21 42h22"/><path d="M20 53h24"/><path d="M32 15v-5"/><path d="M24 10h16"/></g>
   <text x="48" y="108" text-anchor="middle" font-family="Arial, 'Noto Sans KR', sans-serif" font-size="12" font-weight="800" fill="#10213d">압력 테스트</text>
 </g>
 <g transform="translate(420 372)">
