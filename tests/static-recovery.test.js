@@ -45,6 +45,7 @@ assert.match(html, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=2
 assert.match(html, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
+assert.match(html, /assets\/dist\/js\/xlsx-helpers\.min\.js\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260610-design-unify-1/);
 assert.doesNotMatch(html, /http-equiv="Content-Security-Policy"/); // CSP single source of truth: vercel.json headers
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
@@ -812,6 +813,7 @@ assert.match(sw, /30-feature-signature\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /30-feature-push-management\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /30-feature-monthly-worker\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /20-component-disabled-reason\.min\.css\?v=\$\{ASSET_TOKEN\}/);
+assert.match(sw, /xlsx-helpers\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /app-v2\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
