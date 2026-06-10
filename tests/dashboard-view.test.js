@@ -347,7 +347,12 @@ const extractFunction = (source, name) => {
   }
   assert.fail(`${name} has a complete function body`);
 };
-const analyticsModel = extractFunction(app, "buildAnalyticsDashboardModel");
+// 모델 빌더는 assets/js/analytics-model.js로 추출됨 — 특성 검증도 모듈 소스를 본다.
+const analyticsModelSource = fs.readFileSync(path.join(ROOT, "assets/js/analytics-model.js"), "utf8");
+const analyticsModel = extractFunction(analyticsModelSource, "buildAnalyticsDashboardModel");
+const analyticsAppWrapper = extractFunction(app, "buildAnalyticsDashboardModel");
+assert(analyticsAppWrapper.includes("ANALYTICS_MODEL.buildAnalyticsDashboardModel("), "app-v2 delegates analytics model building to analytics-model module");
+assert(app.includes("window.ShipyardAnalyticsModel"), "app-v2 reads analytics model global");
 const analyticsRender = extractFunction(app, "renderAnalyticsDashboard");
 assert(app.includes("window.ShipyardDashboardView"), "app-v2 reads dashboard view global");
 assert(app.includes("DASHBOARD_VIEW.renderDashboardView(dashboardModel(), { sectionHeading, navIcon })"), "renderDashboard delegates to dashboard view");

@@ -46,6 +46,8 @@ assert.match(html, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20
 assert.match(html, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.match(html, /assets\/dist\/js\/xlsx-helpers\.min\.js\?v=20260610-design-unify-1/);
+assert.match(html, /assets\/dist\/js\/analytics-model\.min\.js\?v=20260610-design-unify-1/);
+assert.match(html, /assets\/dist\/js\/ship-import-rules\.min\.js\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260610-design-unify-1/);
 assert.doesNotMatch(html, /http-equiv="Content-Security-Policy"/); // CSP single source of truth: vercel.json headers
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
@@ -634,7 +636,10 @@ assert.match(app, /function monthlyWorkerInspectionStats\(/);
 assert.doesNotMatch(app, /attentionWorkers/);
 assert.match(app, /visiblePledgeAnalyticsWorkers\(\)\.forEach\(\(worker\) =>/);
 assert.doesNotMatch(app, /기록 기반/);
-assert.match(app, /\]\.filter\(\(row\) => visiblePledgeAnalyticsWorkerName\(row\.worker\)\)\.sort/);
+// recent 활동 필터는 analytics-model.js로 이동 (isVisibleWorkerName으로 주입)
+const analyticsModelJs = read("assets/js/analytics-model.js");
+assert.match(analyticsModelJs, /\]\.filter\(\(row\) => isVisibleWorkerName\(row\.worker\)\)\.sort/);
+assert.match(app, /isVisibleWorkerName: visiblePledgeAnalyticsWorkerName/);
 assert.match(app, /function workerDayInspectionStatus\(workerName, date\)/);
 assert.match(app, /function buildMonthlyWorkerAnalyticsModel\(/);
 assert.match(app, /function renderMonthlyWorkerAnalytics\(/);
@@ -814,6 +819,8 @@ assert.match(sw, /30-feature-push-management\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /30-feature-monthly-worker\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /20-component-disabled-reason\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /xlsx-helpers\.min\.js\?v=\$\{ASSET_TOKEN\}/);
+assert.match(sw, /analytics-model\.min\.js\?v=\$\{ASSET_TOKEN\}/);
+assert.match(sw, /ship-import-rules\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /app-v2\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);

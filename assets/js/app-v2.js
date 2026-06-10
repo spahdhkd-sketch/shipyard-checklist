@@ -126,6 +126,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const XLSX_HELPERS = typeof window !== "undefined" && window.ShipyardXlsxHelpers
       ? window.ShipyardXlsxHelpers
       : {};
+    const ANALYTICS_MODEL = typeof window !== "undefined" && window.ShipyardAnalyticsModel
+      ? window.ShipyardAnalyticsModel
+      : {};
+    const SHIP_IMPORT_RULES = typeof window !== "undefined" && window.ShipyardShipImportRules
+      ? window.ShipyardShipImportRules
+      : {};
     const OLD_KEYS = {
       checklists: "checklists",
       ships: "ships",
@@ -7634,10 +7640,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
-    function analyticsPercent(part, total) {
-      return total ? Math.round(part / total * 100) : 0;
-    }
-
     function analyticsKpi(label, value, note, tone = "") {
       return `<div class="analytics-kpi ${tone}">
         <span>${esc(label)}</span>
@@ -7867,80 +7869,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return DASHBOARD_VIEW.renderMonthlyWorkerAnalyticsView(buildMonthlyWorkerAnalyticsModel(), { analyticsKpi });
     }
 
+    // 분석 모델 빌더는 assets/js/analytics-model.js (window.ShipyardAnalyticsModel)로 추출됨.
     function buildAnalyticsDashboardModel() {
-      const now = serverNow();
-      const weekStart = new Date(now);
-      weekStart.setHours(0, 0, 0, 0);
-      weekStart.setDate(weekStart.getDate() - 6);
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayValue = localDate(yesterday);
-      const dateInRange = (value) => {
-        if (!value) return false;
-        const date = new Date(String(value).includes("T") ? value : `${value}T00:00:00`);
-        return !Number.isNaN(date.getTime()) && date >= weekStart && date <= now;
-      };
-      const deltaText = (current, previous) => {
-        const diff = Number(current || 0) - Number(previous || 0);
-        if (diff > 0) return `어제 대비 +${diff}건`;
-        if (diff < 0) return `어제 대비 ${diff}건`;
-        return "어제와 동일";
-      };
-      const todayRows = state.inspections.filter((row) => row.date === today());
-      const todayDone = todayRows.filter((row) => row.status === "완료").length;
-      const yesterdayDone = state.inspections.filter((row) => row.date === yesterdayValue && row.status === "완료").length;
-      const unsafeOpen = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
-      const unsafeReceived = state.unsafeIssues.filter((row) => row.status === ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0]).length;
-      const unsafeProcessing = state.unsafeIssues.filter((row) => row.status === ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[1]).length;
-      const materialOpen = state.missingMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
-      const materialReceived = state.missingMaterials.filter((row) => row.status === ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0]).length;
-      const materialChecking = state.missingMaterials.filter((row) => row.status === ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[1]).length;
-      const processRows = SHIP_WORKFLOW_STAGES.map((stage) => {
-        const info = shipStageInfo(stage);
-        const count = state.ships.filter((ship) => effectiveShipStage(ship).stage === stage).length;
-        return { info, count };
+      return ANALYTICS_MODEL.buildAnalyticsDashboardModel({
+        now: serverNow(),
+        todayValue: today(),
+        syncText: state.syncText || "로컬 저장",
+        inspections: state.inspections,
+        unsafeIssues: state.unsafeIssues,
+        missingMaterials: state.missingMaterials,
+        ships: state.ships,
+      }, {
+        localDate,
+        formatKoreanDate,
+        syncStatusLabel,
+        shipStageInfo,
+        effectiveShipStage,
+        isVisibleWorkerName: visiblePledgeAnalyticsWorkerName,
+        unsafeStatuses: ISSUE_MATERIAL_RULES.UNSAFE_STATUSES,
+        materialStatuses: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES,
+        workflowStages: SHIP_WORKFLOW_STAGES,
       });
-      const processTotal = Math.max(state.ships.length, 1);
-      const weekInspections = state.inspections.filter((row) => dateInRange(row.date || row.createdAt));
-      const weekUnsafe = state.unsafeIssues.filter((row) => dateInRange(row.createdAt));
-      const weekMaterials = state.missingMaterials.filter((row) => dateInRange(row.createdAt));
-      const riskNg = weekInspections.filter((row) => Number(row.warnings || 0) > 0).length
-        + weekUnsafe.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
-      const riskWarn = weekInspections.filter((row) => row.status !== "완료" && !Number(row.warnings || 0)).length
-        + weekMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
-      const riskOk = weekInspections.filter((row) => row.status === "완료" && !Number(row.warnings || 0)).length;
-      const riskTotal = Math.max(riskNg + riskWarn + riskOk, 1);
-      const activeProcessCount = processRows.filter(({ count }) => count > 0).length;
-      const weeklyActivityCount = weekInspections.length + weekUnsafe.length + weekMaterials.length;
-      const recent = [
-        ...state.unsafeIssues.map((row) => ({ id: row.id, kind: "unsafe", type: "불안전요소 등록", shipNo: row.shipNo, content: row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
-        ...state.missingMaterials.map((row) => ({ id: row.id, kind: "materials", type: "자재누락", shipNo: row.shipNo, content: row.materialName || row.content, worker: row.workerNameSnapshot, status: row.status, time: row.createdAt })),
-      ].filter((row) => visiblePledgeAnalyticsWorkerName(row.worker)).sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0)).slice(0, 5);
-      return {
-        dateLabel: formatKoreanDate(now),
-        syncText: syncStatusLabel(state.syncText || "로컬 저장"),
-        todayDone,
-        todayDeltaText: deltaText(todayDone, yesterdayDone),
-        unsafeOpen,
-        unsafeSummary: unsafeOpen ? `${unsafeReceived}건 접수 · ${unsafeProcessing}건 조치중` : "미확인 없음",
-        materialOpen,
-        materialSummary: materialOpen ? `${materialReceived}건 접수 · ${materialChecking}건 확인중` : "미처리 없음",
-        shipCount: state.ships.length,
-        processStageCount: SHIP_WORKFLOW_STAGES.length,
-        processSummary: `${activeProcessCount}/${SHIP_WORKFLOW_STAGES.length}단계 분포`,
-        processRows: processRows.map(({ info, count }) => ({
-          info,
-          count,
-          percent: analyticsPercent(count, processTotal),
-        })),
-        risk: {
-          ng: { count: riskNg, percent: analyticsPercent(riskNg, riskTotal) },
-          warn: { count: riskWarn, percent: analyticsPercent(riskWarn, riskTotal) },
-          ok: { count: riskOk, percent: analyticsPercent(riskOk, riskTotal) },
-        },
-        weeklyAverage: (Math.round(weeklyActivityCount / 7 * 10) / 10).toFixed(1),
-        recent,
-      };
     }
 
     function renderAnalyticsDashboard() {
@@ -10898,68 +10847,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (saved) await replaceUnsafePhotosWithThumbnails(photoUpdates, originalPhotos);
     }
 
-    const SHIP_IMPORT_DATE_FIELDS = [
-      ["lcDate", "L/C", ["L/C", "LC", "L C"]],
-      ["stDate", "S/T", ["S/T", "ST", "S T"]],
-      ["clDate", "C/L", ["C/L", "CL", "C L"]],
-      ["dlDate", "D/L", ["D/L", "DL", "D L"]],
-    ];
+    const SHIP_IMPORT_DATE_FIELDS = SHIP_IMPORT_RULES.SHIP_IMPORT_DATE_FIELDS || [];
 
     function triggerShipImport() {
       if (!state.adminMode && !requestAdminAccess()) return;
       document.querySelector("[data-import-ships-file]")?.click();
     }
 
-    function importHeaderKey(value) {
-      return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
-    }
-
-    function importCell(row, aliases) {
-      const wanted = new Set(aliases.map(importHeaderKey));
-      const found = Object.entries(row).find(([key]) => wanted.has(importHeaderKey(key)));
-      return String(found?.[1] || "").trim();
-    }
-
-    function excelSerialToDate(value) {
-      const serial = Number(value);
-      if (!Number.isFinite(serial) || serial < 20000 || serial > 80000) return "";
-      const date = new Date(Math.round((serial - 25569) * 86400000));
-      return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
-    }
-
-    function normalizeImportDate(value) {
-      const raw = String(value || "").trim();
-      if (!raw) return "";
-      const serialDate = excelSerialToDate(raw);
-      if (serialDate) return serialDate;
-      const match = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-      if (!match) return "";
-      return `${match[1]}-${pad2(match[2])}-${pad2(match[3])}`;
-    }
-
+    // 가져오기 규칙은 assets/js/ship-import-rules.js (window.ShipyardShipImportRules)로 추출됨.
     function normalizeShipImportRow(row) {
-      const no = normalizeShipNo(importCell(row, ["호선명", "호선번호", "호선", "shipNo", "ship"]));
-      if (!no) return null;
-      const imported = {
-        no,
-        type: importCell(row, ["선종", "shipType", "type"]),
-        processStage: normalizeShipStageInput(importCell(row, ["상태", "호선상태", "공정상태", "현재상태", "stage", "processStage"])),
-      };
-      SHIP_IMPORT_DATE_FIELDS.forEach(([field, , aliases]) => {
-        imported[field] = normalizeImportDate(importCell(row, aliases));
-      });
-      return imported;
+      return SHIP_IMPORT_RULES.normalizeShipImportRow(row, { normalizeShipNo, normalizeShipStageInput });
     }
 
     function shipImportDateConflicts(importedRows) {
-      const existingByNo = new Map(state.ships.map((ship) => [ship.no, ship]));
-      return importedRows.flatMap((imported) => {
-        const existing = existingByNo.get(imported.no);
-        if (!existing) return [];
-        return SHIP_IMPORT_DATE_FIELDS
-          .filter(([field]) => existing[field] && imported[field] && dateOnly(existing[field]) !== imported[field])
-          .map(([field, label]) => ({ no: imported.no, label, before: dateOnly(existing[field]), after: imported[field] }));
-      });
+      return SHIP_IMPORT_RULES.shipImportDateConflicts(importedRows, state.ships);
     }
 
     function confirmShipImportDateChanges(conflicts) {

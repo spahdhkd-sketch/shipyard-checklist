@@ -22,6 +22,8 @@ const SHELL = [
   `/assets/dist/js/ship-helpers.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/xlsx-helpers.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/analytics-model.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/ship-import-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/screen-views.min.js?v=${ASSET_TOKEN}`,
   "/assets/dist/js/admin-v2.js",
