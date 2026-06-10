@@ -111,18 +111,25 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (/\.(css|js)$/.test(requestUrl.pathname)) {
+    // Stale-while-revalidate: assets are versioned via ?v=<ASSET_TOKEN>, so a
+    // cached entry for a given URL is effectively immutable. Serve it instantly
+    // and refresh the cache in the background; only block on the network when
+    // there is no cached copy (e.g. a freshly deployed token). Falls back to the
+    // cached copy if the network is unavailable.
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response;
-          }
-
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          return response;
+      caches.open(CACHE).then((cache) =>
+        cache.match(event.request).then((cached) => {
+          const networkFetch = fetch(event.request)
+            .then((response) => {
+              if (response && response.status === 200 && response.type === "basic") {
+                cache.put(event.request, response.clone());
+              }
+              return response;
+            })
+            .catch(() => cached);
+          return cached || networkFetch;
         })
-        .catch(() => caches.match(event.request))
+      )
     );
     return;
   }
