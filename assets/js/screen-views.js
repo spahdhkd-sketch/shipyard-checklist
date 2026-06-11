@@ -790,6 +790,174 @@
       </section>`;
   }
 
+
+  // 항목 관리: 공기구/작업 유형 통합 관리 홈 (읽기 전용 마크업)
+  // model: { pageHeadHtml, sessionLabel, logoutButtonHtml, toolManagerShellHtml, adminMode, categoryAddOpen, colors, pictogramPickerHtml, categoryToolAssignmentsHtml }
+  function renderItemManagerHomeView(model = {}) {
+    const colors = Array.isArray(model.colors) ? model.colors : [];
+    return `${model.pageHeadHtml}
+        <div class="panel panel-pad login-session-panel" style="margin-bottom:14px">
+          <div>
+            <strong>${esc(model.sessionLabel)}</strong>
+            <span>로그인 중</span>
+          </div>
+          ${model.logoutButtonHtml}
+        </div>
+        <div class="panel panel-pad" style="margin-bottom:14px">
+          ${model.toolManagerShellHtml}
+        </div>
+        <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
+          <div class="section-title">
+            작업 유형 관리
+            <button class="btn" data-action="toggle-category-add" ${model.adminMode ? "" : "disabled"} type="button">${model.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
+          </div>
+          <p class="section-help">작업 유형 카드 안에서 공기구 지정과 섹션/항목 관리를 함께 처리합니다. 카드를 누르면 공기구 지정 영역이 펼쳐집니다.</p>
+          ${model.categoryAddOpen ? `
+          <div class="collapsible-panel category-add-panel">
+          <div class="form-row">
+            <div class="field">
+              <label for="catLabel">작업 유형명</label>
+              <input class="input" id="catLabel" placeholder="예) 도장 작업" />
+            </div>
+            <div class="field">
+              <label for="catIcon">아이콘/픽토그램</label>
+              <input class="input" id="catIcon" placeholder="예) erection 또는 P" />
+            </div>
+            <div class="field">
+              <span class="field-label">색상</span>
+              <div class="color-row">${colors.map((color, index) => `<button class="color-dot ${index === 0 ? "active" : ""}" style="--dot:${color}" data-pick-color="${color}" type="button" aria-label="색상 선택"></button>`).join("")}</div>
+              <input type="hidden" id="catColor" value="${colors[0]}" />
+            </div>
+            <button class="btn" data-action="add-category" ${model.adminMode ? "" : "disabled"} type="button">추가</button>
+            <button class="btn-light" data-action="cancel-category-add" type="button">취소</button>
+          </div>
+          ${model.pictogramPickerHtml}
+          </div>` : ""}
+          ${model.categoryToolAssignmentsHtml}
+        </div>`;
+  }
+
+  // 항목 관리: 작업 유형별 섹션/항목 관리 화면 (읽기 전용 마크업)
+  // model: { pageHeadHtml, adminMode, sectionsHtml }
+  function renderItemManagerCategoryView(model = {}) {
+    return `${model.pageHeadHtml}
+      <div class="panel panel-pad">
+        <div class="section-title">섹션 추가</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="newSectionTitle">섹션명</label>
+            <input class="input" id="newSectionTitle" placeholder="예) 작업 전 준비" />
+          </div>
+          <button class="btn" data-action="add-section" ${model.adminMode ? "" : "disabled"} type="button">섹션 추가</button>
+        </div>
+      </div>
+      <div class="list" style="margin-top:14px">
+        ${model.sectionsHtml}
+      </div>`;
+  }
+
+  // 항목 관리: 섹션 카드 (읽기 전용 마크업)
+  // model: { sectionId, sectionTitle, editing, addOpen, adminMode, moreToggleHtml, visibilityOptionsHtml, toolPickerHtml, rows: [{ html, text, requiredLabel, visibilityLabel, badgeHtml }] }
+  function renderSectionManagerView(model = {}) {
+    const rows = Array.isArray(model.rows) ? model.rows : [];
+    return `<section class="section-card">
+        <div class="section-card-head">
+          ${model.editing ? `
+            <div class="field section-card-info">
+              <label for="editSectionTitle_${model.sectionId}">섹션명 수정</label>
+              <input class="input" id="editSectionTitle_${model.sectionId}" value="${esc(model.sectionTitle)}" />
+            </div>
+            <div class="item-actions manage-actions">
+              <button class="btn" data-save-section="${model.sectionId}" type="button">저장</button>
+              <button class="btn-light" data-action="cancel-edit-section" type="button">취소</button>
+            </div>` : `
+            <div class="section-card-info">
+              <div class="section-card-name" style="font-weight:800" title="${esc(model.sectionTitle)}">${esc(model.sectionTitle)}</div>
+              <div class="small muted">${rows.length}개 항목</div>
+            </div>
+            <div class="item-actions manage-actions">
+              <button class="btn-light" data-edit-section="${model.sectionId}" ${model.adminMode ? "" : "disabled"} type="button">수정</button>
+              <button class="btn-danger" data-delete-section="${model.sectionId}" ${model.adminMode ? "" : "disabled"} type="button">섹션 삭제</button>
+            </div>`}
+        </div>
+        <div class="section-card-body">
+          ${model.moreToggleHtml}
+          ${model.addOpen ? `<div class="inline-form item-add-form">
+            <div class="field">
+              <label for="itemText_${model.sectionId}">점검 항목</label>
+              <input class="input" id="itemText_${model.sectionId}" placeholder="점검 내용을 입력하세요" />
+            </div>
+            <div class="field">
+              <label for="itemRisk_${model.sectionId}">위험 등급</label>
+              <select class="select" id="itemRisk_${model.sectionId}">
+                <option value="high">위험</option>
+                <option value="medium" selected>주의</option>
+                <option value="low">정상</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="itemRequired_${model.sectionId}">필수 여부</label>
+              <select class="select" id="itemRequired_${model.sectionId}">
+                <option value="auto">위험만 필수</option>
+                <option value="yes">항상 필수</option>
+                <option value="no">필수 아님</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="itemVisibility_${model.sectionId}">표시 조건</label>
+              <select class="select" id="itemVisibility_${model.sectionId}">
+                ${model.visibilityOptionsHtml}
+              </select>
+            </div>
+            ${model.toolPickerHtml}
+            <button class="btn" data-add-item="${model.sectionId}" ${model.adminMode ? "" : "disabled"} type="button">항목 추가</button>
+          </div>` : ""}
+          <div class="list">
+            ${rows.map((row) => model.adminMode ? row.html : `<div class="item-row manage-item-row">
+              <div class="item-main">
+                <div class="item-name" title="${esc(row.text)}">${esc(row.text)}</div>
+                <div class="small muted" style="margin-top:5px">${row.requiredLabel}</div>
+                <div class="small muted" style="margin-top:5px">${row.visibilityLabel}</div>
+              </div>
+              ${row.badgeHtml}
+            </div>`).join("") || `<div class="empty">아직 항목이 없습니다.</div>`}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  // 작업지시서: 관리자 상태 변경 셀렉트 (읽기 전용 마크업)
+  // model: { status, recordId, ariaLabel, options: [{ value, label, selected }] }
+  function renderWorkPrepStatusControlView(model = {}) {
+    const options = Array.isArray(model.options) ? model.options : [];
+    return `<label class="work-prep-status-control status-${esc(model.status)}">
+        <span class="sr-only">작업지시서 상태</span>
+        <select class="select work-prep-status-select" data-work-prep-status="${esc(model.recordId)}" aria-label="${esc(model.ariaLabel)}">
+          ${options.map((option) => `<option value="${esc(option.value)}" ${option.selected ? "selected" : ""}>${esc(option.label)}</option>`).join("")}
+        </select>
+      </label>`;
+  }
+
+  // 작업지시서: 상태 타임라인 (읽기 전용 마크업)
+  // model: { entries: [{ changedAt, changedAtLabel, statusBadgeHtml, actor, memo }] }
+  function renderWorkPrepTimelineView(model = {}) {
+    const entries = Array.isArray(model.entries) ? model.entries : [];
+    if (!entries.length) return "";
+    return `<section class="work-prep-detail-panel work-prep-timeline-panel">
+        <span class="work-prep-detail-label">상태 타임라인</span>
+        <ol class="record-timeline">
+          ${entries.map((entry) => `<li>
+            <time class="record-timeline-time" datetime="${esc(entry.changedAt)}">${esc(entry.changedAtLabel)}</time>
+            <div class="record-timeline-main">
+              ${entry.statusBadgeHtml}
+              <span class="record-timeline-actor">${esc(entry.actor || "관리자")}</span>
+            </div>
+            ${entry.memo ? `<div class="record-timeline-note">${esc(entry.memo)}</div>` : ""}
+          </li>`).join("")}
+        </ol>
+      </section>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
@@ -810,5 +978,10 @@
     renderWorkPrepDetailView,
     renderInspectionRecordView,
     renderInspectionWorkPrepMiniCardView,
+    renderItemManagerHomeView,
+    renderItemManagerCategoryView,
+    renderSectionManagerView,
+    renderWorkPrepStatusControlView,
+    renderWorkPrepTimelineView,
   };
 }));

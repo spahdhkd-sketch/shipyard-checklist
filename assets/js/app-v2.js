@@ -5772,46 +5772,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderItems() {
       if (!state.manageCategoryId) {
-        return `${pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton())}
-        <div class="panel panel-pad login-session-panel" style="margin-bottom:14px">
-          <div>
-            <strong>${esc(currentWorkerSessionLabel())}</strong>
-            <span>로그인 중</span>
-          </div>
-          ${logoutButton()}
-        </div>
-        <div class="panel panel-pad" style="margin-bottom:14px">
-          ${renderToolManagerShell()}
-        </div>
-        <div class="panel panel-pad category-tool-assignment-panel" style="margin-bottom:14px">
-          <div class="section-title">
-            작업 유형 관리
-            <button class="btn" data-action="toggle-category-add" ${state.adminMode ? "" : "disabled"} type="button">${state.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
-          </div>
-          <p class="section-help">작업 유형 카드 안에서 공기구 지정과 섹션/항목 관리를 함께 처리합니다. 카드를 누르면 공기구 지정 영역이 펼쳐집니다.</p>
-          ${state.categoryAddOpen ? `
-          <div class="collapsible-panel category-add-panel">
-          <div class="form-row">
-            <div class="field">
-              <label for="catLabel">작업 유형명</label>
-              <input class="input" id="catLabel" placeholder="예) 도장 작업" />
-            </div>
-            <div class="field">
-              <label for="catIcon">아이콘/픽토그램</label>
-              <input class="input" id="catIcon" placeholder="예) erection 또는 P" />
-            </div>
-            <div class="field">
-              <span class="field-label">색상</span>
-              <div class="color-row">${COLORS.map((color, index) => `<button class="color-dot ${index === 0 ? "active" : ""}" style="--dot:${color}" data-pick-color="${color}" type="button" aria-label="색상 선택"></button>`).join("")}</div>
-              <input type="hidden" id="catColor" value="${COLORS[0]}" />
-            </div>
-            <button class="btn" data-action="add-category" ${state.adminMode ? "" : "disabled"} type="button">추가</button>
-            <button class="btn-light" data-action="cancel-category-add" type="button">취소</button>
-          </div>
-          ${renderPictogramPicker("erection")}
-          </div>` : ""}
-          ${renderCategoryToolAssignments()}
-        </div>`;
+        return SCREEN_VIEWS.renderItemManagerHomeView({
+          pageHeadHtml: pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton()),
+          sessionLabel: currentWorkerSessionLabel(),
+          logoutButtonHtml: logoutButton(),
+          toolManagerShellHtml: renderToolManagerShell(),
+          adminMode: state.adminMode,
+          categoryAddOpen: state.categoryAddOpen,
+          colors: COLORS,
+          pictogramPickerHtml: state.categoryAddOpen ? renderPictogramPicker("erection") : "",
+          categoryToolAssignmentsHtml: renderCategoryToolAssignments(),
+        });
       }
 
       const cat = categoryById(state.manageCategoryId);
@@ -5819,20 +5790,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.manageCategoryId = null;
         return renderItems();
       }
-      return `${pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>${adminToggleButton()}`)}
-      <div class="panel panel-pad">
-        <div class="section-title">섹션 추가</div>
-        <div class="form-row">
-          <div class="field">
-            <label for="newSectionTitle">섹션명</label>
-            <input class="input" id="newSectionTitle" placeholder="예) 작업 전 준비" />
-          </div>
-          <button class="btn" data-action="add-section" ${state.adminMode ? "" : "disabled"} type="button">섹션 추가</button>
-        </div>
-      </div>
-      <div class="list" style="margin-top:14px">
-        ${sectionsFor(cat.id).map((section) => renderSectionManager(cat, section)).join("") || `<div class="empty">섹션이 없습니다. 먼저 섹션을 추가하세요.</div>`}
-      </div>`;
+      return SCREEN_VIEWS.renderItemManagerCategoryView({
+        pageHeadHtml: pageHead(`${cat.label} 항목 관리`, "섹션별로 항목을 나누어 현장 점검 화면에 같은 구조로 표시합니다.", `<button class="btn-light" data-action="back-items" type="button">목록으로</button>${adminToggleButton()}`),
+        adminMode: state.adminMode,
+        sectionsHtml: sectionsFor(cat.id).map((section) => renderSectionManager(cat, section)).join("") || `<div class="empty">섹션이 없습니다. 먼저 섹션을 추가하세요.</div>`,
+      });
     }
 
     function renderUnsafe() {
@@ -6487,12 +6449,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const status = normalizeWorkPrepStatus(record.status);
       const label = WORK_PREP_STATUS_LABELS[status] || status;
       if (!canEdit) return statusChip(label);
-      return `<label class="work-prep-status-control status-${esc(status)}">
-        <span class="sr-only">작업지시서 상태</span>
-        <select class="select work-prep-status-select" data-work-prep-status="${esc(record.id)}" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 상태 변경`)}">
-          ${workPrepStatusOptions().map((option) => `<option value="${esc(option)}" ${option === status ? "selected" : ""}>${esc(WORK_PREP_STATUS_LABELS[option] || option)}</option>`).join("")}
-        </select>
-      </label>`;
+      return SCREEN_VIEWS.renderWorkPrepStatusControlView({
+        status,
+        recordId: record.id,
+        ariaLabel: `${record.shipNo || "-"} 작업지시서 상태 변경`,
+        options: workPrepStatusOptions().map((option) => ({
+          value: option,
+          label: WORK_PREP_STATUS_LABELS[option] || option,
+          selected: option === status,
+        })),
+      });
     }
 
     function renderWorkPrepInlineDetail(record) {
@@ -6545,19 +6511,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderWorkPrepTimeline(record) {
       const timeline = buildWorkPrepTimeline(record);
       if (!timeline.length) return "";
-      return `<section class="work-prep-detail-panel work-prep-timeline-panel">
-        <span class="work-prep-detail-label">상태 타임라인</span>
-        <ol class="record-timeline">
-          ${timeline.map((entry) => `<li>
-            <time class="record-timeline-time" datetime="${esc(entry.changedAt)}">${esc(formatDateTime(entry.changedAt))}</time>
-            <div class="record-timeline-main">
-              ${statusBadge(entry.status)}
-              <span class="record-timeline-actor">${esc(entry.actor || "관리자")}</span>
-            </div>
-            ${entry.memo ? `<div class="record-timeline-note">${esc(entry.memo)}</div>` : ""}
-          </li>`).join("")}
-        </ol>
-      </section>`;
+      return SCREEN_VIEWS.renderWorkPrepTimelineView({
+        entries: timeline.map((entry) => ({
+          changedAt: entry.changedAt,
+          changedAtLabel: formatDateTime(entry.changedAt),
+          statusBadgeHtml: statusBadge(entry.status),
+          actor: entry.actor,
+          memo: entry.memo,
+        })),
+      });
     }
 
     function renderWorkPrepToolBadges(toolNames) {
@@ -7666,72 +7628,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderSectionManager(cat, section) {
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
-      const editingSection = state.editSectionId === section.id;
       const addOpen = state.openAddItemSectionIds.includes(section.id);
-      return `<section class="section-card">
-        <div class="section-card-head">
-          ${editingSection ? `
-            <div class="field section-card-info">
-              <label for="editSectionTitle_${section.id}">섹션명 수정</label>
-              <input class="input" id="editSectionTitle_${section.id}" value="${esc(section.title)}" />
-            </div>
-            <div class="item-actions manage-actions">
-              <button class="btn" data-save-section="${section.id}" type="button">저장</button>
-              <button class="btn-light" data-action="cancel-edit-section" type="button">취소</button>
-            </div>` : `
-            <div class="section-card-info">
-              <div class="section-card-name" style="font-weight:800" title="${esc(section.title)}">${esc(section.title)}</div>
-              <div class="small muted">${items.length}개 항목</div>
-            </div>
-            <div class="item-actions manage-actions">
-              <button class="btn-light" data-edit-section="${section.id}" ${state.adminMode ? "" : "disabled"} type="button">수정</button>
-              <button class="btn-danger" data-delete-section="${section.id}" ${state.adminMode ? "" : "disabled"} type="button">섹션 삭제</button>
-            </div>`}
-        </div>
-        <div class="section-card-body">
-          ${moreToggle(`data-toggle-add-item="${esc(section.id)}"`, addOpen)}
-          ${addOpen ? `<div class="inline-form item-add-form">
-            <div class="field">
-              <label for="itemText_${section.id}">점검 항목</label>
-              <input class="input" id="itemText_${section.id}" placeholder="점검 내용을 입력하세요" />
-            </div>
-            <div class="field">
-              <label for="itemRisk_${section.id}">위험 등급</label>
-              <select class="select" id="itemRisk_${section.id}">
-                <option value="high">위험</option>
-                <option value="medium" selected>주의</option>
-                <option value="low">정상</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="itemRequired_${section.id}">필수 여부</label>
-              <select class="select" id="itemRequired_${section.id}">
-                <option value="auto">위험만 필수</option>
-                <option value="yes">항상 필수</option>
-                <option value="no">필수 아님</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="itemVisibility_${section.id}">표시 조건</label>
-              <select class="select" id="itemVisibility_${section.id}">
-                ${visibilityConditionOptions("항상 표시")}
-              </select>
-            </div>
-            ${renderItemToolPicker({ groupId: `add_${section.id}`, categoryId: cat.id, selectedIds: [] })}
-            <button class="btn" data-add-item="${section.id}" ${state.adminMode ? "" : "disabled"} type="button">항목 추가</button>
-          </div>` : ""}
-          <div class="list">
-            ${items.map((row) => state.adminMode ? renderEditableItemRow(row) : `<div class="item-row manage-item-row">
-              <div class="item-main">
-                <div class="item-name" title="${esc(row.text)}">${esc(row.text)}</div>
-                <div class="small muted" style="margin-top:5px">${row.required ? "제출 필수 항목" : "일반 항목"}</div>
-                <div class="small muted" style="margin-top:5px">${describeItemVisibility(row)}</div>
-              </div>
-              ${badge(row.risk)}
-            </div>`).join("") || `<div class="empty">아직 항목이 없습니다.</div>`}
-          </div>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderSectionManagerView({
+        sectionId: section.id,
+        sectionTitle: section.title,
+        editing: state.editSectionId === section.id,
+        addOpen,
+        adminMode: state.adminMode,
+        moreToggleHtml: moreToggle(`data-toggle-add-item="${esc(section.id)}"`, addOpen),
+        visibilityOptionsHtml: addOpen ? visibilityConditionOptions("항상 표시") : "",
+        toolPickerHtml: addOpen ? renderItemToolPicker({ groupId: `add_${section.id}`, categoryId: cat.id, selectedIds: [] }) : "",
+        rows: items.map((row) => ({
+          html: state.adminMode ? renderEditableItemRow(row) : "",
+          text: row.text,
+          requiredLabel: row.required ? "제출 필수 항목" : "일반 항목",
+          visibilityLabel: describeItemVisibility(row),
+          badgeHtml: badge(row.risk),
+        })),
+      });
     }
 
     function renderEditableItemRow(row) {
