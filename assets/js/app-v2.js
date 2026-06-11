@@ -4977,7 +4977,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         progressTotal,
         toolCount,
         team: record.team || "-",
-        summaryKind: status === "ordered" ? "ordered" : (isUsed || submissionProgress.complete) ? "done" : "pending",
+        summaryKind: status === "ordered" ? "ordered" : submissionProgress.complete ? "done" : "pending",
         pendingNames,
         canDelete,
         deleteDisabled: !canDelete,
