@@ -5,6 +5,7 @@ const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "assets/js/app-v2.js"), "utf8");
+const screenViews = fs.readFileSync(path.join(root, "assets/js/screen-views.js"), "utf8");
 
 function extractFunction(name) {
   const start = app.indexOf(`function ${name}(`);
@@ -133,7 +134,7 @@ assert.match(app, /renderWorkPrepDateSection\(selectedDate, selectedRecords, \{ 
 assert.doesNotMatch(app, /const nextDate = addDaysToLocalDate\(todayDate, 1\)/);
 
 assert.match(app, /function deleteWorkPrepRecord\(recordId\)/);
-assert.match(app, /data-action="delete-work-prep-record"/);
+assert.match(screenViews, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /rememberDeletedWorkPrepRecordId\(record\.id\)/);
 assert.match(app, /function filterDeletedWorkPrepRecords\(rows\)/);
@@ -142,7 +143,7 @@ assert.match(app, /!row\.deletedAt/);
 assert.match(app, /key === "workPrepRecords" \? filterDeletedWorkPrepRecords\(rows\) : rows/);
 assert.match(app, /function removePendingSyncRows\(key, ids\)/);
 assert.match(app, /"delete-work-prep-record": \(\) => deleteWorkPrepRecord\(workPrepRecordId\(\)\)/);
-assert.match(app, /const deleteDisabled = !canDelete;/);
+assert.match(app, /deleteDisabled: !canDelete,/);
 assert.match(app, /function renderWorkPrepTypeIcon\(category, className = "work-prep-record-type-icon"\)/);
 assert.match(app, /category \? categoryVisual\(category\) : lineIcon\("shieldCheck"\)/);
 assert.doesNotMatch(app, /이미 점검이 진행된 작업지시서는 삭제할 수 없습니다\./);
@@ -153,8 +154,10 @@ assert.match(app, /if \(enteringCheckView\) \{[\s\S]*state\.selectedWorkPrepDate
 assert.match(app, /function workPrepVisibleDateOptions\(todayDate = today\(\)/);
 assert.match(app, /function workPrepAppearanceMeta\(record, todayDate = today\(\)\)/);
 assert.match(app, /const WORK_PREP_START_LOCKED_MESSAGE = "작업당일 07:00부터 점검 시작 가능합니다"/);
-assert.match(app, /title="\$\{esc\(buttonHelp\)\}"/);
-assert.match(app, /workPrepAppearanceMeta\(record\) \? ` · \$\{esc\(workPrepAppearanceMeta\(record\)\)\}` : ""/);
+assert.match(app, /buttonHelp: !startAvailability\.canStart \? startAvailability\.message : ""/);
+assert.match(screenViews, /title="\$\{esc\(model\.buttonHelp\)\}"/);
+assert.match(app, /appearanceMeta: workPrepAppearanceMeta\(record\),/);
+assert.match(screenViews, /model\.appearanceMeta \? ` · \$\{esc\(model\.appearanceMeta\)\}` : ""/);
 assert.match(app, /function selectWorkPrepDate\(date\)/);
 assert.match(app, /state\.workPrepDateManuallySelected = true/);
 assert.match(app, /class="work-prep-date-nav"/);

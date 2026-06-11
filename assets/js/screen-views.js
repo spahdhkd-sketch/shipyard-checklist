@@ -426,6 +426,370 @@
       </div>`;
   }
 
+  // 점검: 작업지시서 카드 (읽기 전용 마크업)
+  // model: { status, recordId, ariaLabel, typeIconHtml, shipNo, categoryLabel, statusLabel, leaderName,
+  //          leaderBadgeHtml, workerCount, progressDone, progressTotal, toolCount, team, summaryKind,
+  //          pendingNames: [string], canDelete, deleteDisabled, deleteAriaLabel, buttonLight,
+  //          buttonDisabled, buttonHelp, buttonAction, buttonLabel }
+  function renderWorkPrepCardView(model = {}) {
+    const pendingNames = Array.isArray(model.pendingNames) ? model.pendingNames : [];
+    const pendingNameLimit = 4;
+    const hiddenPendingCount = Math.max(0, pendingNames.length - pendingNameLimit);
+    const pendingNamesHtml = pendingNames.length
+      ? `<span>${pendingNames.slice(0, pendingNameLimit).map(esc).join(" · ")}${hiddenPendingCount ? ` 외 ${hiddenPendingCount}명` : ""}</span>`
+      : "";
+    const summaryHtml = model.summaryKind === "ordered"
+      ? `<div class="work-prep-submission-summary neutral"><strong>작업지시 전</strong></div>`
+      : model.summaryKind === "done"
+        ? `<div class="work-prep-submission-summary done"><strong>전원 점검 완료</strong></div>`
+        : `<div class="work-prep-submission-summary pending"><strong>미점검 ${pendingNames.length}명</strong>${pendingNamesHtml}</div>`;
+    const disabledAttrs = model.buttonDisabled
+      ? `disabled${model.buttonHelp ? ` title="${esc(model.buttonHelp)}" aria-label="${esc(`${model.buttonLabel} - ${model.buttonHelp}`)}"` : ""}`
+      : `data-action="${model.buttonAction}" data-work-prep-record-id="${esc(model.recordId)}"`;
+    return `<article class="work-prep-record-card status-${esc(model.status)}" data-work-prep-record="${esc(model.recordId)}" role="button" tabindex="0" aria-label="${esc(model.ariaLabel)}">
+        <div class="work-prep-record-top">
+          <div class="work-prep-record-title-wrap">
+            ${model.typeIconHtml || ""}
+            <div>
+              <strong>${esc(model.shipNo)}</strong>
+              <span>${esc(model.categoryLabel)}</span>
+            </div>
+          </div>
+          <em>${esc(model.statusLabel)}</em>
+        </div>
+        <div class="work-prep-record-meta">
+          <span class="work-prep-record-worker"><strong>${esc(model.leaderName)}</strong>${model.leaderBadgeHtml || ""}</span>
+          <span>같이 ${model.workerCount}명</span>
+          <span class="work-prep-record-progress">점검 ${model.progressDone}/${model.progressTotal}명</span>
+          <span>공기구 ${model.toolCount}개</span>
+          <span>${esc(model.team)}</span>
+        </div>
+        <div class="work-prep-record-actions">
+          ${summaryHtml}
+          <div class="work-prep-record-buttons">
+            ${model.canDelete ? `<button class="btn-danger" ${model.deleteDisabled ? "disabled" : `data-action="delete-work-prep-record" data-work-prep-record-id="${esc(model.recordId)}"`} type="button" aria-label="${esc(model.deleteAriaLabel)}">삭제</button>` : ""}
+            <button class="btn ${model.buttonLight ? "btn-light" : ""}" ${disabledAttrs} type="button">${esc(model.buttonLabel)}</button>
+          </div>
+        </div>
+      </article>`;
+  }
+
+  // 점검/관리: 작업지시서 등록 화면 (읽기 전용 마크업)
+  // model: { manageContext, activeStatus, statusSteps: [{ status, label }], appearanceBadgeHtml,
+  //          workDate, team, teams: [string], shipNo, ships: [{ no, type }], categoryId,
+  //          categories: [{ id, label }], leaderWorkerId, leaders: [{ id, name, team }], teamLabel,
+  //          workerChoices: [{ id, name, checked, badgeHtml }], otherWorkersOpen, otherSelectedCount,
+  //          otherWorkerChoices: [{ id, name, checked, badgeHtml }], toolCategoryLabel,
+  //          tools: [{ id, name, natureLabel, checked }] }
+  function renderWorkPrepRegisterView(model = {}) {
+    const manageContext = Boolean(model.manageContext);
+    const statusSteps = Array.isArray(model.statusSteps) ? model.statusSteps : [];
+    const teams = Array.isArray(model.teams) ? model.teams : [];
+    const ships = Array.isArray(model.ships) ? model.ships : [];
+    const categories = Array.isArray(model.categories) ? model.categories : [];
+    const leaders = Array.isArray(model.leaders) ? model.leaders : [];
+    const workerChoices = Array.isArray(model.workerChoices) ? model.workerChoices : [];
+    const otherWorkerChoices = Array.isArray(model.otherWorkerChoices) ? model.otherWorkerChoices : [];
+    const tools = Array.isArray(model.tools) ? model.tools : [];
+    const body = `<div class="work-prep-status-strip" aria-label="작업지시서 상태">
+        ${statusSteps.map((step) => `<span class="${step.status === model.activeStatus ? "active" : ""}">${esc(step.label)}</span>`).join("")}
+      </div>
+      <section class="work-prep-register-card">
+        <div class="work-prep-register-card-head">
+          <div class="section-title">작업지시 기본 정보</div>
+          ${model.appearanceBadgeHtml || ""}
+        </div>
+        <div class="work-prep-register-grid">
+          <div class="field material-flow-field">
+            <label for="workPrepDate">작업일</label>
+            <input class="input" id="workPrepDate" data-work-prep-field="workDate" type="date" value="${esc(model.workDate)}" />
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepTeam">팀/소속</label>
+            <select class="select" id="workPrepTeam" data-work-prep-field="team">
+              ${teams.map((team) => `<option value="${esc(team)}" ${team === model.team ? "selected" : ""}>${esc(team)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepShip">호선</label>
+            <select class="select" id="workPrepShip" data-work-prep-field="shipNo">
+              ${ships.map((ship) => `<option value="${esc(ship.no)}" ${ship.no === model.shipNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` · ${esc(ship.type)}` : ""}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field material-flow-field">
+            <label for="workPrepCategory">작업 유형</label>
+            <select class="select" id="workPrepCategory" data-work-prep-field="categoryId">
+              ${categories.map((cat) => `<option value="${esc(cat.id)}" ${cat.id === model.categoryId ? "selected" : ""}>${esc(cat.label)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+      </section>
+      <section class="work-prep-register-card">
+        <div class="section-title">조장 / 같이 작업자</div>
+        <div class="field material-flow-field">
+          <label for="workPrepLeader">조장 <small>선택 시 같이 작업자 목록에서 제외</small></label>
+          <select class="select" id="workPrepLeader" data-work-prep-field="leaderWorkerId">
+            ${leaders.map((worker) => `<option value="${esc(worker.id)}" ${worker.id === model.leaderWorkerId ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}</option>`).join("")}
+          </select>
+        </div>
+        <div class="work-prep-worker-subhead">
+          <strong>같이 작업자</strong>
+          <span>${esc(model.teamLabel)} ${workerChoices.length}명</span>
+        </div>
+        <div class="work-prep-chip-grid" aria-label="같이 작업자 선택">
+          ${workerChoices.map((worker) => `<label class="work-prep-chip ${worker.checked ? "checked" : ""}">
+                <input type="checkbox" data-work-prep-worker="${esc(worker.id)}" ${worker.checked ? "checked" : ""} />
+                <span>${esc(worker.name)}</span>
+                ${worker.badgeHtml || ""}
+              </label>`).join("")}
+        </div>
+        <div class="work-prep-other-workers-group ${model.otherWorkersOpen ? "open" : ""}" data-work-prep-other-workers-group role="button" tabindex="0" aria-expanded="${model.otherWorkersOpen ? "true" : "false"}">
+          <div class="work-prep-other-workers-toggle" data-work-prep-other-workers-toggle>
+            <strong>타 소속 작업자</strong>
+            <em>${model.otherSelectedCount ? `${model.otherSelectedCount}명 선택` : `${otherWorkerChoices.length}명`}</em>
+          </div>
+          ${model.otherWorkersOpen ? `<div class="work-prep-chip-grid other-workers" aria-label="타 소속 작업자 선택">
+            ${otherWorkerChoices.length ? otherWorkerChoices.map((worker) => `<label class="work-prep-chip ${worker.checked ? "checked" : ""}">
+                <input type="checkbox" data-work-prep-other-worker="${esc(worker.id)}" ${worker.checked ? "checked" : ""} />
+                <span>${esc(worker.name)}</span>
+                ${worker.badgeHtml || ""}
+              </label>`).join("") : `<div class="notice">추가할 타 소속 작업자가 없습니다.</div>`}
+          </div>` : ""}
+        </div>
+      </section>
+      <section class="work-prep-register-card">
+        <div class="section-title">공기구 / 준비물 <span class="small muted">${esc(model.toolCategoryLabel)} 기준</span></div>
+        ${tools.length ? `<div class="work-prep-chip-grid tools" aria-label="공기구 준비물 선택">
+          ${tools.map((tool) => `<label class="work-prep-chip ${tool.checked ? "checked" : ""}">
+            <input type="checkbox" data-work-prep-tool="${esc(tool.id)}" ${tool.checked ? "checked" : ""} />
+            <span>${esc(tool.name)}</span>
+            <em>${esc(tool.natureLabel)}</em>
+          </label>`).join("")}
+        </div>` : `<div class="notice">선택한 작업 유형에 지정된 공기구/준비물이 없습니다.</div>`}
+      </section>`;
+
+    const footer = `<button class="btn-light material-flow-secondary" data-action="close-work-prep-register" type="button">${manageContext ? "관리 목록으로" : "작업 선택으로"}</button>
+        <button class="material-flow-primary" data-action="save-work-prep-registration" type="button">${manageContext ? "작업지시서 저장" : "준비 시작"}</button>`;
+    return `<section class="material-flow check-flow work-prep-register-flow">
+        <div class="material-flow-head">
+          <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업지시서 등록"}</div>
+          <div class="material-flow-title">
+            <button class="material-back" data-action="close-work-prep-register" type="button" aria-label="${manageContext ? "작업지시서 관리 목록으로 돌아가기" : "작업 선택으로 돌아가기"}">‹</button>
+            <h1>${manageContext ? "작업지시서 등록" : "작업지시서 등록"}</h1>
+          </div>
+          <p>${manageContext ? "작업일, 호선, 조장, 작업자, 공기구 기준을 한 번에 관리합니다." : "작업지시 기준으로 조장, 같이 작업자, 공기구/준비물을 먼저 정리합니다."}</p>
+          <div class="material-flow-progress" role="progressbar" aria-label="작업지시서 등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><span style="width:25%"></span></div>
+        </div>
+        <div class="material-flow-body">${body}</div>
+        <div class="material-flow-footer">${footer}</div>
+      </section>`;
+  }
+
+  // 관리: 작업지시서 관리 보드 (읽기 전용 마크업)
+  // model: { totalCount, progressCount, usedCount, canEdit, kpiHtml, allShipsActive, filterPanelCount,
+  //          shipGroups: [{ shipNo, active, progressText, count }], filteredCount, rowsHtml }
+  function renderWorkPrepManagerView(model = {}) {
+    const shipGroups = Array.isArray(model.shipGroups) ? model.shipGroups : [];
+    return `<section class="admin-board work-prep-board">
+        <div class="admin-board-top">
+          <div>
+            <h2>작업지시서 관리</h2>
+            <p>${model.totalCount}건 등록 · ${model.progressCount}건 진행 · ${model.usedCount}건 사용됨</p>
+          </div>
+          <div class="admin-board-actions">
+            <button class="btn" data-action="open-work-prep-register" ${model.canEdit ? "" : "disabled"} type="button">+ 신규 등록</button>
+          </div>
+        </div>
+        <div class="material-kpi-grid work-prep-kpi-grid">
+          ${model.kpiHtml || ""}
+        </div>
+        <div class="material-layout work-prep-layout">
+          <aside class="material-filter-panel">
+            <div class="section-title">호선별 필터</div>
+            <button class="material-ship-filter ${model.allShipsActive ? "active" : ""}" data-record-filter="workPrep:shipNo" value="" type="button">
+              <span>전체 호선</span><strong>${model.filterPanelCount}</strong>
+            </button>
+            ${shipGroups.map((group) => `<button class="material-ship-filter ${group.active ? "active" : ""}" data-record-filter="workPrep:shipNo" value="${esc(group.shipNo)}" type="button">
+              <span><strong>${esc(group.shipNo)}</strong><em>${esc(group.progressText)}</em></span><strong>${group.count}</strong>
+            </button>`).join("")}
+          </aside>
+          <section class="material-table-card work-prep-table-card">
+            <div class="material-table-head">
+              <div><strong>작업지시서 목록</strong><span>${model.filteredCount}건 표시 중</span></div>
+            </div>
+            <div class="work-prep-admin-table work-prep-admin-card-list">
+              ${model.rowsHtml || `<div class="empty">표시할 작업지시서가 없습니다.</div>`}
+            </div>
+          </section>
+        </div>
+      </section>`;
+  }
+
+  // 관리: 작업지시서 관리 행 카드 (읽기 전용 마크업)
+  // model: { status, active, recordId, ariaLabel, typeIconHtml, shipNo, categoryLabel, leaderName,
+  //          leaderBadgeHtml, participantNames, progressDone, progressTotal, toolCount, team, dateLabel,
+  //          appearanceMeta, statusControlHtml, canEdit, deleteAriaLabel, timelineSummaryHtml }
+  function renderWorkPrepAdminRowView(model = {}) {
+    return `<div class="work-prep-admin-row work-prep-admin-card status-${esc(model.status)} ${model.active ? "active" : ""}" data-work-prep-record-detail="${esc(model.recordId)}" role="button" tabindex="0" aria-label="${esc(model.ariaLabel)}">
+        <div class="work-prep-admin-card-main">
+          <div class="work-prep-admin-card-mark">${model.typeIconHtml || ""}</div>
+          <div class="work-prep-admin-card-content">
+            <div class="work-prep-admin-card-title">
+              <strong>${esc(model.shipNo)}</strong>
+              <em>${esc(model.categoryLabel)}</em>
+            </div>
+            <div class="work-prep-admin-card-meta">
+              <span><strong>${esc(model.leaderName)}</strong>${model.leaderBadgeHtml || ""}</span>
+              <span>같이 ${esc(model.participantNames)}</span>
+              <span class="work-prep-record-progress">점검 ${model.progressDone}/${model.progressTotal}명</span>
+              <span>공기구 ${model.toolCount}개</span>
+              <span>${esc(model.team)} · ${esc(model.dateLabel)}${model.appearanceMeta ? ` · ${esc(model.appearanceMeta)}` : ""}</span>
+            </div>
+          </div>
+        </div>
+        <div class="work-prep-admin-card-side">
+          ${model.statusControlHtml || ""}
+          <button class="btn-danger" data-action="delete-work-prep-record" data-work-prep-record-id="${esc(model.recordId)}" ${model.canEdit ? "" : "disabled"} type="button" aria-label="${esc(model.deleteAriaLabel)}">삭제</button>
+        </div>
+        ${model.timelineSummaryHtml || ""}
+      </div>`;
+  }
+
+  // 관리: 작업지시서 상세 (읽기 전용 마크업)
+  // model: { shipNo, categoryLabel, metaLine, statusChipHtml, progressDone, progressTotal,
+  //          progressPercent, progressNote, leaderName, participantLine, toolBadgesHtml, timelineHtml,
+  //          createdAtLabel, canEdit, recordId }
+  function renderWorkPrepDetailView(model = {}) {
+    return `<section class="work-prep-detail">
+        <div class="work-prep-detail-shell">
+          <div class="work-prep-detail-head">
+            <button class="work-prep-detail-back" data-action="back-work-prep-list" type="button">목록</button>
+            <div class="work-prep-detail-title">
+              <span>${esc(model.shipNo)}</span>
+              <strong>${esc(model.categoryLabel)}</strong>
+              <em>${esc(model.metaLine)}</em>
+            </div>
+            <div class="work-prep-detail-status">${model.statusChipHtml || ""}</div>
+          </div>
+
+          <div class="work-prep-detail-body">
+            <section class="work-prep-detail-panel lead">
+              <span class="work-prep-detail-label">점검 진행</span>
+              <div class="work-prep-progress-line"><strong>${esc(model.progressDone)}</strong><span>/ ${esc(model.progressTotal)}</span></div>
+              <div class="work-prep-progress-track" aria-label="${esc(`점검 진행 ${model.progressPercent}%`)}"><span style="width:${esc(model.progressPercent)}%"></span></div>
+              <p>${esc(model.progressNote)}</p>
+            </section>
+            <section class="work-prep-detail-panel people">
+              <span class="work-prep-detail-label">조장 / 참여</span>
+              <strong>${esc(model.leaderName)}</strong>
+              <p>${esc(model.participantLine)}</p>
+            </section>
+            <section class="work-prep-detail-panel tools">
+              <span class="work-prep-detail-label">공기구 / 준비물</span>
+              ${model.toolBadgesHtml || ""}
+            </section>
+          </div>
+
+          ${model.timelineHtml || ""}
+
+          <div class="work-prep-detail-foot">
+            <span>등록 ${esc(model.createdAtLabel)}</span>
+            <div class="work-prep-detail-actions">
+              <button class="btn-light" data-action="edit-work-prep-record" data-work-prep-record-id="${esc(model.recordId)}" ${model.canEdit ? "" : "disabled"} type="button">수정</button>
+              <button class="btn-danger" data-action="delete-work-prep-record" data-work-prep-record-id="${esc(model.recordId)}" ${model.canEdit ? "" : "disabled"} type="button">삭제</button>
+            </div>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  // 이력: 점검 기록 상세 (읽기 전용 마크업)
+  // model: { pageHeadHtml, miniCardHtml, worker, shipNo, dateTime, safetyPledge, signatureImage,
+  //          toolNames: [string], sectionsHtml, accent, categoryVisualHtml, categoryLabelHtml,
+  //          progressHtml, checkedCount, itemCount, statusBadgeHtml, warningBadgeHtml, completionBadgeHtml }
+  function renderInspectionRecordView(model = {}) {
+    const toolNames = Array.isArray(model.toolNames) ? model.toolNames : [];
+    return `${model.pageHeadHtml || ""}
+      <div class="split">
+        <div>
+          ${model.miniCardHtml || ""}
+          <div class="panel panel-pad" style="margin-bottom:12px">
+            <div class="form-row">
+              <div class="field">
+                <label>담당자명</label>
+                <input class="input" value="${esc(model.worker)}" readonly />
+              </div>
+              <div class="field">
+                <label>호선 번호</label>
+                <input class="input" value="${esc(model.shipNo)}" readonly />
+              </div>
+              <div class="field">
+                <label>점검 일시</label>
+                <input class="input" value="${esc(model.dateTime)}" readonly />
+              </div>
+              <div class="field safety-pledge-field">
+                <label>안전다짐</label>
+                <textarea class="textarea" readonly>${esc(model.safetyPledge)}</textarea>
+              </div>
+            </div>
+            ${model.signatureImage ? `<div class="signature-history">
+              <span>서명 이미지</span>
+              <img src="${esc(model.signatureImage)}" alt="서명 이미지" />
+            </div>` : ""}
+          </div>
+          ${toolNames.length ? `<div class="panel panel-pad" style="margin-bottom:12px">
+            <div class="section-title">사용 공기구와 준비물</div>
+            <div class="tool-history-list">${toolNames.map((name) => `<span class="tool-history-chip">${esc(name)}</span>`).join("")}</div>
+          </div>` : ""}
+          ${model.sectionsHtml || `<div class="empty">이 기록에는 제출 당시 항목별 체크 내역이 저장되어 있지 않습니다.</div>`}
+        </div>
+        <aside class="panel panel-pad">
+          <div class="section-title">점검 결과</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <span class="work-icon" style="--accent:${esc(model.accent)};margin:0;flex:0 0 auto">${model.categoryVisualHtml || ""}</span>
+            <div>
+              <div style="font-size:18px;font-weight:900;color:#0f2440">${model.categoryLabelHtml || ""}</div>
+              <div class="small muted">${esc(model.shipNo)} · ${esc(model.worker)}</div>
+            </div>
+          </div>
+          ${model.progressHtml || ""}
+          <div class="small muted" style="margin-top:8px">${model.checkedCount}/${model.itemCount} 항목 확인됨</div>
+          <div class="list" style="margin-top:16px">
+            ${model.statusBadgeHtml || ""}
+            ${model.warningBadgeHtml || ""}
+            ${model.completionBadgeHtml || ""}
+          </div>
+        </aside>
+      </div>`;
+  }
+
+  // 이력: 점검 기록의 작업지시서 미니 카드 (읽기 전용 마크업)
+  // model: { fallback, recordId, status, title, subtitle, statusLabel, leaderName, progressDone,
+  //          progressTotal, toolCount, team }
+  function renderInspectionWorkPrepMiniCardView(model = {}) {
+    if (model.fallback) {
+      return `<div class="inspection-work-prep-mini-card fallback">
+          <strong>작업지시서 연결 기록만 남아 있습니다.</strong>
+          <span>${esc(model.recordId)}</span>
+        </div>`;
+    }
+    return `<section class="inspection-work-prep-mini-card status-${esc(model.status)}">
+        <div class="inspection-work-prep-mini-top">
+          <div>
+            <strong>${esc(model.title)}</strong>
+            <span>${esc(model.subtitle)}</span>
+          </div>
+          <em>${esc(model.statusLabel)}</em>
+        </div>
+        <div class="inspection-work-prep-mini-meta">
+          <span>조장 ${esc(model.leaderName)}</span>
+          <span>점검 ${model.progressDone}/${model.progressTotal}명</span>
+          <span>공기구 ${model.toolCount}개</span>
+          <span>${esc(model.team)}</span>
+        </div>
+      </section>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
@@ -439,5 +803,12 @@
     renderWorkerPushDeviceRowView,
     renderWorkerPushDeviceManagerView,
     renderPushTemplateEditorView,
+    renderWorkPrepCardView,
+    renderWorkPrepRegisterView,
+    renderWorkPrepManagerView,
+    renderWorkPrepAdminRowView,
+    renderWorkPrepDetailView,
+    renderInspectionRecordView,
+    renderInspectionWorkPrepMiniCardView,
   };
 }));

@@ -4947,24 +4947,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const startAvailability = workPrepStartAvailability(record);
       const checkDisabled = !isUsed && (!startAvailability.canStart || (status === "ordered" ? false : (!canStartCheck || currentWorkerSubmitted)));
       const canDelete = canOpenWorkPrepRegister();
-      const deleteDisabled = !canDelete;
-      const buttonAction = status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep";
       const submittedIds = new Set(submissionProgress.submittedIds || []);
-      const pendingWorkers = workPrepParticipantWorkerIds(record)
+      const pendingNames = workPrepParticipantWorkerIds(record)
         .filter((id) => !submittedIds.has(id))
         .map((id) => state.workers.find((worker) => worker.id === id))
-        .filter(Boolean);
-      const pendingNames = pendingWorkers.map((worker) => worker.name || "이름 없음");
-      const pendingNameLimit = 4;
-      const hiddenPendingCount = Math.max(0, pendingNames.length - pendingNameLimit);
-      const pendingNamesHtml = pendingNames.length
-        ? `<span>${pendingNames.slice(0, pendingNameLimit).map(esc).join(" · ")}${hiddenPendingCount ? ` 외 ${hiddenPendingCount}명` : ""}</span>`
-        : "";
-      const summaryHtml = status === "ordered"
-        ? `<div class="work-prep-submission-summary neutral"><strong>작업지시 전</strong></div>`
-        : (isUsed || submissionProgress.complete)
-          ? `<div class="work-prep-submission-summary done"><strong>전원 점검 완료</strong></div>`
-          : `<div class="work-prep-submission-summary pending"><strong>미점검 ${pendingNames.length}명</strong>${pendingNamesHtml}</div>`;
+        .filter(Boolean)
+        .map((worker) => worker.name || "이름 없음");
       const buttonLabel = status === "ordered"
         ? "준비 시작"
         : isUsed
@@ -4974,36 +4962,32 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             : canStartCheck
               ? "점검 시작"
               : "점검 대기";
-      const buttonHelp = !startAvailability.canStart ? startAvailability.message : "";
-      const disabledAttrs = isUsed || checkDisabled
-        ? `disabled${buttonHelp ? ` title="${esc(buttonHelp)}" aria-label="${esc(`${buttonLabel} - ${buttonHelp}`)}"` : ""}`
-        : `data-action="${buttonAction}" data-work-prep-record-id="${esc(record.id)}"`;
-      return `<article class="work-prep-record-card status-${esc(status)}" data-work-prep-record="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 수정`)}">
-        <div class="work-prep-record-top">
-          <div class="work-prep-record-title-wrap">
-            ${renderWorkPrepTypeIcon(category)}
-            <div>
-              <strong>${esc(record.shipNo || "-")}</strong>
-              <span>${esc(category ? workLabel(category) : "작업 유형 없음")}</span>
-            </div>
-          </div>
-          <em>${esc(WORK_PREP_STATUS_LABELS[status])}</em>
-        </div>
-        <div class="work-prep-record-meta">
-          <span class="work-prep-record-worker"><strong>${esc(leader?.name || "미정")}</strong>${workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION })}</span>
-          <span>같이 ${workerCount}명</span>
-          <span class="work-prep-record-progress">점검 ${submissionProgress.done}/${progressTotal}명</span>
-          <span>공기구 ${toolCount}개</span>
-          <span>${esc(record.team || "-")}</span>
-        </div>
-        <div class="work-prep-record-actions">
-          ${summaryHtml}
-          <div class="work-prep-record-buttons">
-            ${canDelete ? `<button class="btn-danger" ${deleteDisabled ? "disabled" : `data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}"`} type="button" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 삭제`)}">삭제</button>` : ""}
-            <button class="btn ${status === "ordered" || isUsed || checkDisabled ? "btn-light" : ""}" ${disabledAttrs} type="button">${esc(buttonLabel)}</button>
-          </div>
-        </div>
-      </article>`;
+      return SCREEN_VIEWS.renderWorkPrepCardView({
+        status,
+        recordId: record.id,
+        ariaLabel: `${record.shipNo || "-"} 작업지시서 수정`,
+        typeIconHtml: renderWorkPrepTypeIcon(category),
+        shipNo: record.shipNo || "-",
+        categoryLabel: category ? workLabel(category) : "작업 유형 없음",
+        statusLabel: WORK_PREP_STATUS_LABELS[status],
+        leaderName: leader?.name || "미정",
+        leaderBadgeHtml: workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION }),
+        workerCount,
+        progressDone: submissionProgress.done,
+        progressTotal,
+        toolCount,
+        team: record.team || "-",
+        summaryKind: status === "ordered" ? "ordered" : (isUsed || submissionProgress.complete) ? "done" : "pending",
+        pendingNames,
+        canDelete,
+        deleteDisabled: !canDelete,
+        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 삭제`,
+        buttonLight: status === "ordered" || isUsed || checkDisabled,
+        buttonDisabled: isUsed || checkDisabled,
+        buttonHelp: !startAvailability.canStart ? startAvailability.message : "",
+        buttonAction: status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep",
+        buttonLabel,
+      });
     }
 
     function renderWorkPrepDateSection(date, records, options = {}) {
@@ -5066,111 +5050,39 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const selectedWorkers = new Set(draft.workerIds || []);
       const selectedOtherWorkers = new Set(draft.otherTeamWorkerIds || []);
       const selectedTools = new Set(draft.toolIds || []);
-
-      const statusSteps = [
-        ["ordered", "작업지시"],
-        ["preparing", "점검 대기"],
-        ["confirmed", "확정"],
-        ["used", WORK_PREP_STATUS_LABELS.used],
-      ];
-      const body = `<div class="work-prep-status-strip" aria-label="작업지시서 상태">
-        ${statusSteps.map(([status, label]) => `<span class="${normalizeWorkPrepStatus(draft.status) === status ? "active" : ""}">${esc(label)}</span>`).join("")}
-      </div>
-      <section class="work-prep-register-card">
-        <div class="work-prep-register-card-head">
-          <div class="section-title">작업지시 기본 정보</div>
-          ${renderWorkPrepAppearanceBadge(draft)}
-        </div>
-        <div class="work-prep-register-grid">
-          <div class="field material-flow-field">
-            <label for="workPrepDate">작업일</label>
-            <input class="input" id="workPrepDate" data-work-prep-field="workDate" type="date" value="${esc(draft.workDate)}" />
-          </div>
-          <div class="field material-flow-field">
-            <label for="workPrepTeam">팀/소속</label>
-            <select class="select" id="workPrepTeam" data-work-prep-field="team">
-              ${teams.map((team) => `<option value="${esc(team)}" ${team === draft.team ? "selected" : ""}>${esc(team)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field material-flow-field">
-            <label for="workPrepShip">호선</label>
-            <select class="select" id="workPrepShip" data-work-prep-field="shipNo">
-              ${ships.map((ship) => `<option value="${esc(ship.no)}" ${ship.no === draft.shipNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` · ${esc(ship.type)}` : ""}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field material-flow-field">
-            <label for="workPrepCategory">작업 유형</label>
-            <select class="select" id="workPrepCategory" data-work-prep-field="categoryId">
-              ${categories.map((cat) => `<option value="${esc(cat.id)}" ${cat.id === draft.categoryId ? "selected" : ""}>${esc(workLabel(cat))}</option>`).join("")}
-            </select>
-          </div>
-        </div>
-      </section>
-      <section class="work-prep-register-card">
-        <div class="section-title">조장 / 같이 작업자</div>
-        <div class="field material-flow-field">
-          <label for="workPrepLeader">조장 <small>선택 시 같이 작업자 목록에서 제외</small></label>
-          <select class="select" id="workPrepLeader" data-work-prep-field="leaderWorkerId">
-            ${leaders.map((worker) => `<option value="${esc(worker.id)}" ${worker.id === draft.leaderWorkerId ? "selected" : ""}>${esc(worker.name)}${worker.team ? ` · ${esc(worker.team)}` : ""}</option>`).join("")}
-          </select>
-        </div>
-        <div class="work-prep-worker-subhead">
-          <strong>같이 작업자</strong>
-          <span>${esc(draft.team || "같은 소속")} ${workerChoices.length}명</span>
-        </div>
-        <div class="work-prep-chip-grid" aria-label="같이 작업자 선택">
-          ${workerChoices.map((worker) => {
-            const checked = selectedWorkers.has(worker.id);
-              return `<label class="work-prep-chip ${checked ? "checked" : ""}">
-                <input type="checkbox" data-work-prep-worker="${esc(worker.id)}" ${checked ? "checked" : ""} />
-                <span>${esc(worker.name)}</span>
-                ${workerBadgeRow(worker)}
-              </label>`;
-          }).join("")}
-        </div>
-        <div class="work-prep-other-workers-group ${state.workPrepOtherWorkersOpen ? "open" : ""}" data-work-prep-other-workers-group role="button" tabindex="0" aria-expanded="${state.workPrepOtherWorkersOpen ? "true" : "false"}">
-          <div class="work-prep-other-workers-toggle" data-work-prep-other-workers-toggle>
-            <strong>타 소속 작업자</strong>
-            <em>${selectedOtherWorkers.size ? `${selectedOtherWorkers.size}명 선택` : `${otherWorkerChoices.length}명`}</em>
-          </div>
-          ${state.workPrepOtherWorkersOpen ? `<div class="work-prep-chip-grid other-workers" aria-label="타 소속 작업자 선택">
-            ${otherWorkerChoices.length ? otherWorkerChoices.map((worker) => {
-              const checked = selectedOtherWorkers.has(worker.id);
-              return `<label class="work-prep-chip ${checked ? "checked" : ""}">
-                <input type="checkbox" data-work-prep-other-worker="${esc(worker.id)}" ${checked ? "checked" : ""} />
-                <span>${esc(worker.name)}</span>
-                ${workerBadgeRow(worker)}
-              </label>`;
-            }).join("") : `<div class="notice">추가할 타 소속 작업자가 없습니다.</div>`}
-          </div>` : ""}
-        </div>
-      </section>
-      <section class="work-prep-register-card">
-        <div class="section-title">공기구 / 준비물 <span class="small muted">${esc(selectedCategory ? workLabel(selectedCategory) : "작업 유형")} 기준</span></div>
-        ${tools.length ? `<div class="work-prep-chip-grid tools" aria-label="공기구 준비물 선택">
-          ${tools.map((tool) => `<label class="work-prep-chip ${selectedTools.has(tool.id) ? "checked" : ""}">
-            <input type="checkbox" data-work-prep-tool="${esc(tool.id)}" ${selectedTools.has(tool.id) ? "checked" : ""} />
-            <span>${esc(tool.name)}</span>
-            <em>${esc(normalizeToolNature(tool.nature))}</em>
-          </label>`).join("")}
-        </div>` : `<div class="notice">선택한 작업 유형에 지정된 공기구/준비물이 없습니다.</div>`}
-      </section>`;
-
-      const footer = `<button class="btn-light material-flow-secondary" data-action="close-work-prep-register" type="button">${manageContext ? "관리 목록으로" : "작업 선택으로"}</button>
-        <button class="material-flow-primary" data-action="save-work-prep-registration" type="button">${manageContext ? "작업지시서 저장" : "준비 시작"}</button>`;
-      return `<section class="material-flow check-flow work-prep-register-flow">
-        <div class="material-flow-head">
-          <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업지시서 등록"}</div>
-          <div class="material-flow-title">
-            <button class="material-back" data-action="close-work-prep-register" type="button" aria-label="${manageContext ? "작업지시서 관리 목록으로 돌아가기" : "작업 선택으로 돌아가기"}">‹</button>
-            <h1>${manageContext ? "작업지시서 등록" : "작업지시서 등록"}</h1>
-          </div>
-          <p>${manageContext ? "작업일, 호선, 조장, 작업자, 공기구 기준을 한 번에 관리합니다." : "작업지시 기준으로 조장, 같이 작업자, 공기구/준비물을 먼저 정리합니다."}</p>
-          <div class="material-flow-progress" role="progressbar" aria-label="작업지시서 등록 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><span style="width:25%"></span></div>
-        </div>
-        <div class="material-flow-body">${body}</div>
-        <div class="material-flow-footer">${footer}</div>
-      </section>`;
+      const workerChipModel = (worker, checked) => ({
+        id: worker.id,
+        name: worker.name,
+        checked,
+        badgeHtml: workerBadgeRow(worker),
+      });
+      return SCREEN_VIEWS.renderWorkPrepRegisterView({
+        manageContext,
+        activeStatus: normalizeWorkPrepStatus(draft.status),
+        statusSteps: [
+          { status: "ordered", label: "작업지시" },
+          { status: "preparing", label: "점검 대기" },
+          { status: "confirmed", label: "확정" },
+          { status: "used", label: WORK_PREP_STATUS_LABELS.used },
+        ],
+        appearanceBadgeHtml: renderWorkPrepAppearanceBadge(draft),
+        workDate: draft.workDate,
+        team: draft.team,
+        teams,
+        shipNo: draft.shipNo,
+        ships: ships.map((ship) => ({ no: ship.no, type: ship.type })),
+        categoryId: draft.categoryId,
+        categories: categories.map((cat) => ({ id: cat.id, label: workLabel(cat) })),
+        leaderWorkerId: draft.leaderWorkerId,
+        leaders: leaders.map((worker) => ({ id: worker.id, name: worker.name, team: worker.team })),
+        teamLabel: draft.team || "같은 소속",
+        workerChoices: workerChoices.map((worker) => workerChipModel(worker, selectedWorkers.has(worker.id))),
+        otherWorkersOpen: state.workPrepOtherWorkersOpen,
+        otherSelectedCount: selectedOtherWorkers.size,
+        otherWorkerChoices: otherWorkerChoices.map((worker) => workerChipModel(worker, selectedOtherWorkers.has(worker.id))),
+        toolCategoryLabel: selectedCategory ? workLabel(selectedCategory) : "작업 유형",
+        tools: tools.map((tool) => ({ id: tool.id, name: tool.name, natureLabel: normalizeToolNature(tool.nature), checked: selectedTools.has(tool.id) })),
+      });
     }
 
     function renderCheck() {
@@ -5513,58 +5425,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const checkedCount = items.filter((item) => item.checked).length;
       const pct = Number(row.completion || (items.length ? Math.round(checkedCount / items.length * 100) : 0));
       const accent = categoryAccent(cat);
-      return `${pageHead(`${cat.label} 점검 기록`, "제출 당시 점검 화면을 읽기 전용으로 확인합니다.", `<button class="btn-light" data-action="back-history-list" type="button">목록으로</button>`)}
-      <div class="split">
-        <div>
-          ${renderInspectionWorkPrepMiniCard(row)}
-          <div class="panel panel-pad" style="margin-bottom:12px">
-            <div class="form-row">
-              <div class="field">
-                <label>담당자명</label>
-                <input class="input" value="${esc(row.worker || "-")}" readonly />
-              </div>
-              <div class="field">
-                <label>호선 번호</label>
-                <input class="input" value="${esc(row.shipNo || "-")}" readonly />
-              </div>
-              <div class="field">
-                <label>점검 일시</label>
-                <input class="input" value="${esc(`${row.date || "-"} ${row.time || ""}`.trim())}" readonly />
-              </div>
-              <div class="field safety-pledge-field">
-                <label>안전다짐</label>
-                <textarea class="textarea" readonly>${esc(row.safetyPledge || "-")}</textarea>
-              </div>
-            </div>
-            ${row.signatureImage ? `<div class="signature-history">
-              <span>서명 이미지</span>
-              <img src="${esc(row.signatureImage)}" alt="서명 이미지" />
-            </div>` : ""}
-          </div>
-          ${Array.isArray(row.tools) && row.tools.length ? `<div class="panel panel-pad" style="margin-bottom:12px">
-            <div class="section-title">사용 공기구와 준비물</div>
-            <div class="tool-history-list">${row.tools.map((tool) => `<span class="tool-history-chip">${esc(tool.name || tool.id || "-")}</span>`).join("")}</div>
-          </div>` : ""}
-          ${items.length ? renderInspectionRecordSections(items) : `<div class="empty">이 기록에는 제출 당시 항목별 체크 내역이 저장되어 있지 않습니다.</div>`}
-        </div>
-        <aside class="panel panel-pad">
-          <div class="section-title">점검 결과</div>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <span class="work-icon" style="--accent:${esc(accent)};margin:0;flex:0 0 auto">${categoryVisual(cat)}</span>
-            <div>
-              <div style="font-size:18px;font-weight:900;color:#0f2440">${firstSpaceBreakHtml(cat.label)}</div>
-              <div class="small muted">${esc(row.shipNo || "-")} · ${esc(row.worker || "-")}</div>
-            </div>
-          </div>
-          ${progress(pct, accent)}
-          <div class="small muted" style="margin-top:8px">${checkedCount}/${items.length} 항목 확인됨</div>
-          <div class="list" style="margin-top:16px">
-            ${statusBadge(row.status || "완료")}
-            ${badge(Number(row.warnings || 0) ? "high" : "low", Number(row.warnings || 0) ? `위험 ${row.warnings}건 미확인` : "위험 확인 완료")}
-            ${badge("medium", `완료율 ${pct}%`)}
-          </div>
-        </aside>
-      </div>`;
+      return SCREEN_VIEWS.renderInspectionRecordView({
+        pageHeadHtml: pageHead(`${cat.label} 점검 기록`, "제출 당시 점검 화면을 읽기 전용으로 확인합니다.", `<button class="btn-light" data-action="back-history-list" type="button">목록으로</button>`),
+        miniCardHtml: renderInspectionWorkPrepMiniCard(row),
+        worker: row.worker || "-",
+        shipNo: row.shipNo || "-",
+        dateTime: `${row.date || "-"} ${row.time || ""}`.trim(),
+        safetyPledge: row.safetyPledge || "-",
+        signatureImage: row.signatureImage,
+        toolNames: Array.isArray(row.tools) ? row.tools.map((tool) => tool.name || tool.id || "-") : [],
+        sectionsHtml: items.length ? renderInspectionRecordSections(items) : "",
+        accent,
+        categoryVisualHtml: categoryVisual(cat),
+        categoryLabelHtml: firstSpaceBreakHtml(cat.label),
+        progressHtml: progress(pct, accent),
+        checkedCount,
+        itemCount: items.length,
+        statusBadgeHtml: statusBadge(row.status || "완료"),
+        warningBadgeHtml: badge(Number(row.warnings || 0) ? "high" : "low", Number(row.warnings || 0) ? `위험 ${row.warnings}건 미확인` : "위험 확인 완료"),
+        completionBadgeHtml: badge("medium", `완료율 ${pct}%`),
+      });
     }
 
     function renderInspectionRecordSections(items) {
@@ -6091,10 +5971,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!recordId) return "";
       const record = workPrepRecordForInspection(inspection);
       if (!record) {
-        return `<div class="inspection-work-prep-mini-card fallback">
-          <strong>작업지시서 연결 기록만 남아 있습니다.</strong>
-          <span>${esc(recordId)}</span>
-        </div>`;
+        return SCREEN_VIEWS.renderInspectionWorkPrepMiniCardView({ fallback: true, recordId });
       }
       const category = categoryById(record.categoryId);
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
@@ -6103,27 +5980,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const toolCount = (record.toolIds || []).length;
       const submissionProgress = workPrepSubmissionProgress(record);
       const titlePrefix = options.compact ? "" : "작업지시서 ";
-      const title = `${titlePrefix}${record.shipNo || "-"}`;
       const workDateTitle = workPrepDateSectionTitle(record.workDate);
       const workType = category ? workLabel(category) : "작업 유형 없음";
-      const subtitle = options.compact
-        ? `${workDateTitle} · ${workType}`
-        : `${workDateTitle.replace(" 작업지시서", "")} · ${workType} · 작업지시서 기준 점검 완료`;
-      return `<section class="inspection-work-prep-mini-card status-${esc(status)}">
-        <div class="inspection-work-prep-mini-top">
-          <div>
-            <strong>${esc(title)}</strong>
-            <span>${esc(subtitle)}</span>
-          </div>
-          <em>${esc(WORK_PREP_STATUS_LABELS[status])}</em>
-        </div>
-        <div class="inspection-work-prep-mini-meta">
-          <span>조장 ${esc(leader?.name || "미정")}</span>
-          <span>점검 ${submissionProgress.done}/${submissionProgress.total || workerCount + 1}명</span>
-          <span>공기구 ${toolCount}개</span>
-          <span>${esc(record.team || "-")}</span>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderInspectionWorkPrepMiniCardView({
+        status,
+        title: `${titlePrefix}${record.shipNo || "-"}`,
+        subtitle: options.compact
+          ? `${workDateTitle} · ${workType}`
+          : `${workDateTitle.replace(" 작업지시서", "")} · ${workType} · 작업지시서 기준 점검 완료`,
+        statusLabel: WORK_PREP_STATUS_LABELS[status],
+        leaderName: leader?.name || "미정",
+        progressDone: submissionProgress.done,
+        progressTotal: submissionProgress.total || workerCount + 1,
+        toolCount,
+        team: record.team || "-",
+      });
     }
 
     function renderUnsafeConfirmStep() {
@@ -6484,46 +6355,32 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const ordered = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "ordered").length;
       const used = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "used").length;
       const activeId = records.some((row) => row.id === state.workPrepDetailId) ? state.workPrepDetailId : "";
-      return `<section class="admin-board work-prep-board">
-        <div class="admin-board-top">
-          <div>
-            <h2>작업지시서 관리</h2>
-            <p>${state.workPrepRecords.length}건 등록 · ${confirmed + ordered}건 진행 · ${used}건 사용됨</p>
-          </div>
-          <div class="admin-board-actions">
-            <button class="btn" data-action="open-work-prep-register" ${canEdit ? "" : "disabled"} type="button">+ 신규 등록</button>
-          </div>
-        </div>
-        <div class="material-kpi-grid work-prep-kpi-grid">
-          ${workPrepKpi("전체", state.workPrepRecords.length, "건", "#0b1d3a", "")}
-          ${workPrepKpi("준비", preparing, "건", "#d97706", "preparing")}
-          ${workPrepKpi("지시", ordered, "건", "#2E5DA6", "ordered")}
-          ${workPrepKpi("진행", confirmed, "건", "#0f766e", "confirmed")}
-          ${workPrepKpi("완료", used, "건", "#64748b", "used")}
-        </div>
-        <div class="material-layout work-prep-layout">
-          <aside class="material-filter-panel">
-            <div class="section-title">호선별 필터</div>
-            <button class="material-ship-filter ${filters.shipNo ? "" : "active"}" data-record-filter="workPrep:shipNo" value="" type="button">
-              <span>전체 호선</span><strong>${filterPanelRows.length}</strong>
-            </button>
-            ${shipGroups.map((group) => `<button class="material-ship-filter ${filters.shipNo === group.shipNo ? "active" : ""}" data-record-filter="workPrep:shipNo" value="${esc(group.shipNo)}" type="button">
-              <span><strong>${esc(group.shipNo)}</strong><em>${esc(workPrepGroupProgressText(group))}</em></span><strong>${group.records.length}</strong>
-            </button>`).join("")}
-          </aside>
-          <section class="material-table-card work-prep-table-card">
-            <div class="material-table-head">
-              <div><strong>작업지시서 목록</strong><span>${filtered.length}건 표시 중</span></div>
-            </div>
-            <div class="work-prep-admin-table work-prep-admin-card-list">
-              ${records.length ? records.map((row) => {
-                const active = row.id === activeId;
-                return `${renderWorkPrepAdminRow(row, active)}${active ? renderWorkPrepInlineDetail(row) : ""}`;
-              }).join("") : `<div class="empty">표시할 작업지시서가 없습니다.</div>`}
-            </div>
-          </section>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderWorkPrepManagerView({
+        totalCount: state.workPrepRecords.length,
+        progressCount: confirmed + ordered,
+        usedCount: used,
+        canEdit,
+        kpiHtml: [
+          workPrepKpi("전체", state.workPrepRecords.length, "건", "#0b1d3a", ""),
+          workPrepKpi("준비", preparing, "건", "#d97706", "preparing"),
+          workPrepKpi("지시", ordered, "건", "#2E5DA6", "ordered"),
+          workPrepKpi("진행", confirmed, "건", "#0f766e", "confirmed"),
+          workPrepKpi("완료", used, "건", "#64748b", "used"),
+        ].join("\n          "),
+        allShipsActive: !filters.shipNo,
+        filterPanelCount: filterPanelRows.length,
+        shipGroups: shipGroups.map((group) => ({
+          shipNo: group.shipNo,
+          active: filters.shipNo === group.shipNo,
+          progressText: workPrepGroupProgressText(group),
+          count: group.records.length,
+        })),
+        filteredCount: filtered.length,
+        rowsHtml: records.map((row) => {
+          const active = row.id === activeId;
+          return `${renderWorkPrepAdminRow(row, active)}${active ? renderWorkPrepInlineDetail(row) : ""}`;
+        }).join(""),
+      });
     }
 
     function workPrepKpi(label, value, unit, color, status) {
@@ -6591,33 +6448,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
       const progressInfo = workPrepSubmissionProgress(record);
       const participantCount = workPrepParticipantWorkerIds(record).length;
-      const toolCount = sanitizeToolIds(record.toolIds).length;
       const status = normalizeWorkPrepStatus(record.status);
-      const participantNames = workPrepParticipantNameSummary(record);
       const canEdit = state.adminMode || isRedesignPreviewPage();
-      return `<div class="work-prep-admin-row work-prep-admin-card status-${esc(status)} ${active ? "active" : ""}" data-work-prep-record-detail="${esc(record.id)}" role="button" tabindex="0" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 상세 보기`)}">
-        <div class="work-prep-admin-card-main">
-          <div class="work-prep-admin-card-mark">${renderWorkPrepTypeIcon(category, "work-prep-admin-type-icon")}</div>
-          <div class="work-prep-admin-card-content">
-            <div class="work-prep-admin-card-title">
-              <strong>${esc(record.shipNo || "-")}</strong>
-              <em>${esc(category ? workLabel(category) : "작업 유형 없음")}</em>
-            </div>
-            <div class="work-prep-admin-card-meta">
-              <span><strong>${esc(leader?.name || "미정")}</strong>${workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION })}</span>
-              <span>같이 ${esc(participantNames)}</span>
-              <span class="work-prep-record-progress">점검 ${progressInfo.done}/${progressInfo.total || participantCount}명</span>
-              <span>공기구 ${toolCount}개</span>
-              <span>${esc(record.team || "-")} · ${esc(shortDate(record.workDate || record.createdAt))}${workPrepAppearanceMeta(record) ? ` · ${esc(workPrepAppearanceMeta(record))}` : ""}</span>
-            </div>
-          </div>
-        </div>
-        <div class="work-prep-admin-card-side">
-          ${renderWorkPrepStatusControl(record, canEdit)}
-          <button class="btn-danger" data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}" ${canEdit ? "" : "disabled"} type="button" aria-label="${esc(`${record.shipNo || "-"} 작업지시서 삭제`)}">삭제</button>
-        </div>
-        ${renderWorkPrepAdminTimelineSummary(record)}
-      </div>`;
+      return SCREEN_VIEWS.renderWorkPrepAdminRowView({
+        status,
+        active,
+        recordId: record.id,
+        ariaLabel: `${record.shipNo || "-"} 작업지시서 상세 보기`,
+        typeIconHtml: renderWorkPrepTypeIcon(category, "work-prep-admin-type-icon"),
+        shipNo: record.shipNo || "-",
+        categoryLabel: category ? workLabel(category) : "작업 유형 없음",
+        leaderName: leader?.name || "미정",
+        leaderBadgeHtml: workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION }),
+        participantNames: workPrepParticipantNameSummary(record),
+        progressDone: progressInfo.done,
+        progressTotal: progressInfo.total || participantCount,
+        toolCount: sanitizeToolIds(record.toolIds).length,
+        team: record.team || "-",
+        dateLabel: shortDate(record.workDate || record.createdAt),
+        appearanceMeta: workPrepAppearanceMeta(record),
+        statusControlHtml: renderWorkPrepStatusControl(record, canEdit),
+        canEdit,
+        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 삭제`,
+        timelineSummaryHtml: renderWorkPrepAdminTimelineSummary(record),
+      });
     }
 
     function renderWorkPrepAdminTimelineSummary(record) {
@@ -6669,47 +6523,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const total = progressInfo.total || workPrepParticipantWorkerIds(record).length;
       const progressPercent = total ? Math.round(progressInfo.done / total * 100) : 0;
       const statusLabel = WORK_PREP_STATUS_LABELS[status] || status;
-      return `<section class="work-prep-detail">
-        <div class="work-prep-detail-shell">
-          <div class="work-prep-detail-head">
-            <button class="work-prep-detail-back" data-action="back-work-prep-list" type="button">목록</button>
-            <div class="work-prep-detail-title">
-              <span>${esc(record.shipNo || "-")}</span>
-              <strong>${esc(category ? workLabel(category) : "작업 유형 없음")}</strong>
-              <em>${esc([record.team || "-", shortDate(record.workDate || record.createdAt), workPrepAppearanceMeta(record)].filter(Boolean).join(" · "))}</em>
-            </div>
-            <div class="work-prep-detail-status">${statusChip(statusLabel)}</div>
-          </div>
-
-          <div class="work-prep-detail-body">
-            <section class="work-prep-detail-panel lead">
-              <span class="work-prep-detail-label">점검 진행</span>
-              <div class="work-prep-progress-line"><strong>${esc(progressInfo.done)}</strong><span>/ ${esc(total || 0)}</span></div>
-              <div class="work-prep-progress-track" aria-label="${esc(`점검 진행 ${progressPercent}%`)}"><span style="width:${esc(progressPercent)}%"></span></div>
-              <p>${esc(submittedNames.length ? `완료: ${submittedNames.join(" · ")}` : "아직 완료한 작업자가 없습니다.")}</p>
-            </section>
-            <section class="work-prep-detail-panel people">
-              <span class="work-prep-detail-label">조장 / 참여</span>
-              <strong>${esc(leader?.name || "미정")}</strong>
-              <p>${esc(participantNames.length ? participantNames.join(" · ") : "참여 작업자 없음")}</p>
-            </section>
-            <section class="work-prep-detail-panel tools">
-              <span class="work-prep-detail-label">공기구 / 준비물</span>
-              ${renderWorkPrepToolBadges(toolNames)}
-            </section>
-          </div>
-
-          ${renderWorkPrepTimeline(record)}
-
-          <div class="work-prep-detail-foot">
-            <span>등록 ${esc(formatDateTime(record.createdAt || record.updatedAt || ""))}</span>
-            <div class="work-prep-detail-actions">
-              <button class="btn-light" data-action="edit-work-prep-record" data-work-prep-record-id="${esc(record.id)}" ${canEdit ? "" : "disabled"} type="button">수정</button>
-              <button class="btn-danger" data-action="delete-work-prep-record" data-work-prep-record-id="${esc(record.id)}" ${canEdit ? "" : "disabled"} type="button">삭제</button>
-            </div>
-          </div>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderWorkPrepDetailView({
+        shipNo: record.shipNo || "-",
+        categoryLabel: category ? workLabel(category) : "작업 유형 없음",
+        metaLine: [record.team || "-", shortDate(record.workDate || record.createdAt), workPrepAppearanceMeta(record)].filter(Boolean).join(" · "),
+        statusChipHtml: statusChip(statusLabel),
+        progressDone: progressInfo.done,
+        progressTotal: total || 0,
+        progressPercent,
+        progressNote: submittedNames.length ? `완료: ${submittedNames.join(" · ")}` : "아직 완료한 작업자가 없습니다.",
+        leaderName: leader?.name || "미정",
+        participantLine: participantNames.length ? participantNames.join(" · ") : "참여 작업자 없음",
+        toolBadgesHtml: renderWorkPrepToolBadges(toolNames),
+        timelineHtml: renderWorkPrepTimeline(record),
+        createdAtLabel: formatDateTime(record.createdAt || record.updatedAt || ""),
+        canEdit,
+        recordId: record.id,
+      });
     }
 
     function renderWorkPrepTimeline(record) {
