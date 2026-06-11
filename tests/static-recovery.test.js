@@ -19,6 +19,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/js/app-v2.js",
   "assets/js/dashboard-view.js",
   "assets/js/screen-views.js",
+  "assets/js/push-rules.js",
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
   "assets/icons/icon-512.png",
@@ -48,6 +49,7 @@ assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.match(html, /assets\/dist\/js\/xlsx-helpers\.min\.js\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/js\/analytics-model\.min\.js\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/js\/ship-import-rules\.min\.js\?v=20260610-design-unify-1/);
+assert.match(html, /assets\/dist\/js\/push-rules\.min\.js\?v=20260610-design-unify-1/);
 assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260610-design-unify-1/);
 assert.doesNotMatch(html, /http-equiv="Content-Security-Policy"/); // CSP single source of truth: vercel.json headers
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
@@ -76,6 +78,7 @@ assert.doesNotMatch(html, /version 0\.3/);
   assert.match(page, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260610-design-unify-1/, `${file} should use monthly worker feature styles with cache busting`);
   assert.match(page, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260610-design-unify-1/, `${file} should use disabled-reason component styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
+  assert.match(page, /assets\/dist\/js\/push-rules\.min\.js\?v=20260610-design-unify-1/, `${file} should load push rules before the v2 app runtime`);
   assert.match(page, /assets\/dist\/js\/app-v2\.min\.js\?v=20260610-design-unify-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
@@ -119,6 +122,8 @@ assert.ok(illustrations.length >= 40, "shipyard illustration PNGs should be gene
 assert.ok(fs.existsSync(path.join(root, "assets/icons/shipyard/shipyard-illustration-sheet.png")));
 
 const app = read("assets/js/app-v2.js");
+const pushRules = read("assets/js/push-rules.js");
+const screenViews = read("assets/js/screen-views.js");
 const dashboardView = read("assets/js/dashboard-view.js");
 const styles = read("assets/css/styles-v2.css");
 const notFoundStyles = read("assets/css/30-feature-not-found.css");
@@ -293,11 +298,13 @@ assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
 assert.match(app, /const PUSH_VAPID_PUBLIC_KEY = "/);
 assert.match(app, /function unsafePushTargetWorkerIds\(\)/);
 assert.match(app, /const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date\.parse\("2026-05-26T11:59:00\+09:00"\)/);
-assert.match(app, /const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = \{/);
-assert.match(app, /pledgePending: \{[\s\S]*title: "안전 서약 미완료"/);
-assert.match(app, /unsafeIssue: \{[\s\S]*body: "\{호선\} · \{등록자\} · \{내용\}"/);
-assert.match(app, /adminManual: \{[\s\S]*title: "GS 안전 체크리스트 안내"/);
-assert.match(app, /const ADMIN_PUSH_STYLES = \[/);
+assert.match(pushRules, /const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = \{/);
+assert.match(app, /const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = PUSH_RULES\.DEFAULT_PUSH_NOTIFICATION_TEMPLATES/);
+assert.match(pushRules, /pledgePending: \{[\s\S]*title: "안전 서약 미완료"/);
+assert.match(pushRules, /unsafeIssue: \{[\s\S]*body: "\{호선\} · \{등록자\} · \{내용\}"/);
+assert.match(pushRules, /adminManual: \{[\s\S]*title: "GS 안전 체크리스트 안내"/);
+assert.match(pushRules, /const ADMIN_PUSH_STYLES = \[/);
+assert.match(app, /const ADMIN_PUSH_STYLES = PUSH_RULES\.ADMIN_PUSH_STYLES/);
 assert.match(app, /function pushNotificationsSupported\(\)/);
 assert.match(app, /function pushRegisteredForCurrentDevice\(\)/);
 assert.match(app, /function pushDeviceName\(\)/);
@@ -312,19 +319,19 @@ assert.match(app, /function renderWorkerPushDeviceRow\(device\)/);
 assert.match(app, /function renderPushManager\(\)/);
 assert.match(app, /function adminPushTargetWorkers\(\)/);
 assert.match(app, /async function sendAdminPush\(\)/);
-assert.match(app, /알림 유형/);
-assert.match(app, /브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다\./);
-assert.match(app, /발송할 작업자 카드를 직접 눌러 선택하세요/);
+assert.match(screenViews, /알림 유형/);
+assert.match(screenViews, /브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다\./);
+assert.match(screenViews, /발송할 작업자 카드를 직접 눌러 선택하세요/);
 assert.match(app, /function adminPushTargetWorkers\(\) \{\s*const selected = new Set\(normalizeAdminPushWorkerIds\(state\.adminPushDraft\.selectedWorkerIds\)\);/);
-assert.doesNotMatch(app, /data-action="set-admin-push-target-mode"/);
-assert.doesNotMatch(app, /push-target-modes/);
+assert.doesNotMatch(app + screenViews, /data-action="set-admin-push-target-mode"/);
+assert.doesNotMatch(app + screenViews, /push-target-modes/);
 assert.doesNotMatch(styles, /\.push-target-summary/);
 assert.match(app, /async function saveWorkerPushDevice\(event\)/);
 assert.match(app, /async function deleteWorkerPushDevice\(event\)/);
 assert.match(app, /data-worker-push-badge/);
 assert.match(app, /data-worker-push-manage/);
 assert.match(app, /\["push", "푸시"\]/);
-assert.match(app, /data-action="send-admin-push"/);
+assert.match(screenViews, /data-action="send-admin-push"/);
 assert.match(app, /sendKind: options\.kind \|\| ""/);
 assert.match(app, /\{ kind: "adminManual" \}/);
 assert.match(app, /action: "status"/);
@@ -369,7 +376,6 @@ assert.doesNotMatch(app, /worker_push_subscription_status/);
 assert.match(app, /senderWorkerId/);
 assert.match(app, /senderEmployeeNo/);
 assert.match(app, /sendKind: options\.kind \|\| ""/);
-const screenViews = read("assets/js/screen-views.js");
 assert.match(app + screenViews, /data-action="notify-pledge-pending"/);
 assert.match(app + screenViews, /data-action="edit-push-template" data-push-template-kind="pledgePending"/);
 assert.match(app + screenViews, /data-action="edit-push-template" data-push-template-kind="unsafeIssue"/);
@@ -485,9 +491,9 @@ assert.match(pushManagementStyles, /\.push-manager-panel/);
 assert.match(pushManagementStyles, /\.push-style-option/);
 assert.match(pushManagementStyles, /\.push-worker-card/);
 assert.match(pushManagementStyles, /\.push-target-send-btn/);
-assert.match(app, /class="section-title compact">발송 대상 <span class="small muted">\$\{targetWorkers\.length\}명<\/span>/);
-assert.match(app, /class="btn push-target-send-btn" data-action="send-admin-push"/);
-assert.doesNotMatch(app, /push-target-summary/);
+assert.match(screenViews, /class="section-title compact">발송 대상 <span class="small muted">\$\{model\.targetCount\}명<\/span>/);
+assert.match(screenViews, /class="btn push-target-send-btn" data-action="send-admin-push"/);
+assert.doesNotMatch(app + screenViews, /push-target-summary/);
 assert.doesNotMatch(app, /push-send-bar/);
 assert.doesNotMatch(app, /알림 등록 \$\{esc\(subscribedWorkers\.length\)\}명/);
 assert.doesNotMatch(app, /\$\{esc\(targetWorkers\.length\)\}명 대상/);

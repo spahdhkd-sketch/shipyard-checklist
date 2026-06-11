@@ -7,62 +7,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1dXJvb2N2eHZ6Z21zZGVlaXdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTc2OTMsImV4cCI6MjA5MzczMzY5M30.pW-yyuI5B1YeKT_7DCGBAKmFzLH33O6Eb8OVKYPM2L4";
     const PUSH_VAPID_PUBLIC_KEY = "BKlPDt9ioyub9HDzHMBpTqXjK70PpfoeoLsO7u2sQzSS-Ut5YQIIpJaXof0nJEq7MZpzwu6rT5CaCMCGI0SaVM8";
     const PUSH_TEST_NOTIFICATION_DISABLE_AT = Date.parse("2026-05-26T11:59:00+09:00");
-    const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = {
-      pledgePending: {
-        title: "안전 서약 미완료",
-        body: "오늘 작업 전 안전 서약을 완료해주세요.",
-      },
-      unsafeIssue: {
-        title: "불안전요소 등록",
-        body: "{호선} · {등록자} · {내용}",
-      },
-      adminManual: {
-        title: "GS 안전 체크리스트 안내",
-        body: "현장 안전 알림을 확인해주세요.",
-      },
-    };
-    const ADMIN_PUSH_STYLES = [
-      {
-        id: "notice",
-        label: "안내",
-        description: "일반 공지",
-        tone: "teal",
-        titlePrefix: "",
-        requireInteraction: false,
-        renotify: true,
-        vibrate: [80, 40, 80],
-      },
-      {
-        id: "warning",
-        label: "확인 요청",
-        description: "확인할 때까지 유지",
-        tone: "orange",
-        titlePrefix: "[주의] ",
-        requireInteraction: true,
-        renotify: true,
-        vibrate: [120, 60, 120],
-      },
-      {
-        id: "urgent",
-        label: "긴급 호출",
-        description: "확인 유지 + 강한 진동",
-        tone: "red",
-        titlePrefix: "[긴급] ",
-        requireInteraction: true,
-        renotify: true,
-        vibrate: [180, 80, 180, 80, 180],
-      },
-      {
-        id: "done",
-        label: "처리 완료",
-        description: "완료 안내",
-        tone: "green",
-        titlePrefix: "[확인] ",
-        requireInteraction: false,
-        renotify: false,
-        vibrate: [80],
-      },
-    ];
+    const PUSH_RULES = typeof window !== "undefined" && window.PushRules ? window.PushRules : {};
+    const DEFAULT_PUSH_NOTIFICATION_TEMPLATES = PUSH_RULES.DEFAULT_PUSH_NOTIFICATION_TEMPLATES;
+    const ADMIN_PUSH_STYLES = PUSH_RULES.ADMIN_PUSH_STYLES;
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
     const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
@@ -1883,13 +1830,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeWorkerPushSubscriptionStatus(workerId, row) {
-      const source = row && typeof row === "object" ? row : {};
-      return {
-        workerId: String(source.workerId || source.worker_id || workerId || "").trim(),
-        registered: Boolean(source.registered),
-        subscriptionCount: Number(source.subscriptionCount || source.subscription_count || 0),
-        checkedAt: serverNow().toISOString(),
-      };
+      return PUSH_RULES.normalizeWorkerPushSubscriptionStatus(workerId, row, serverNow().toISOString());
     }
 
     async function fetchWorkerPushSubscriptionStatuses(workerIds) {
@@ -1977,19 +1918,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeWorkerPushDevice(row) {
-      const source = row && typeof row === "object" ? row : {};
-      return {
-        id: String(source.id || "").trim(),
-        workerId: String(source.workerId || source.worker_id || "").trim(),
-        deviceLabel: String(source.deviceLabel || source.device_label || "알림 기기").trim() || "알림 기기",
-        userAgent: String(source.userAgent || source.user_agent || "").trim(),
-        enabled: source.enabled !== false,
-        lastSeenAt: source.lastSeenAt || source.last_seen_at || "",
-        lastSentAt: source.lastSentAt || source.last_sent_at || "",
-        lastError: String(source.lastError || source.last_error || "").trim(),
-        lastErrorAt: source.lastErrorAt || source.last_error_at || "",
-        updatedAt: source.updatedAt || source.updated_at || "",
-      };
+      return PUSH_RULES.normalizeWorkerPushDevice(row);
     }
 
     function currentWorkerPushDeviceWorker() {
@@ -2381,14 +2310,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizePushTemplateKind(kind) {
-      return Object.prototype.hasOwnProperty.call(DEFAULT_PUSH_NOTIFICATION_TEMPLATES, kind) ? kind : "";
+      return PUSH_RULES.normalizePushTemplateKind(kind);
     }
 
     function normalizePushTemplate(template, fallback) {
-      const source = template && typeof template === "object" ? template : {};
-      const title = String(source.title || "").trim() || fallback.title;
-      const body = String(source.body || "").trim() || fallback.body;
-      return { title, body };
+      return PUSH_RULES.normalizePushTemplate(template, fallback);
     }
 
     function pushNotificationTemplates() {
@@ -2414,72 +2340,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function replacePushTemplateTokens(text, context = {}) {
-      return String(text || "").replace(/\{([^{}]+)\}/g, (match, key) => {
-        const value = context[String(key || "").trim()];
-        return value === undefined || value === null || value === "" ? match : String(value);
-      });
+      return PUSH_RULES.replacePushTemplateTokens(text, context);
     }
 
     function pushNotificationFromTemplate(kind, context = {}) {
-      const templateKind = normalizePushTemplateKind(kind);
-      const fallback = DEFAULT_PUSH_NOTIFICATION_TEMPLATES[templateKind] || { title: "", body: "" };
-      const template = pushNotificationTemplate(templateKind);
-      return {
-        title: replacePushTemplateTokens(template.title, context).trim() || fallback.title,
-        body: replacePushTemplateTokens(template.body, context).trim() || fallback.body,
-      };
+      return PUSH_RULES.pushNotificationFromTemplate(kind, context, pushNotificationTemplates());
     }
 
     function pushTemplateMeta(kind) {
-      const meta = {
-        pledgePending: {
-          heading: "미완료자 알림 푸시 문구",
-          description: "오늘 서약 현황에서 상태가 미완료인 작업자에게 발송됩니다.",
-          tokens: ["{날짜}", "{인원}"],
-          previewContext: { 날짜: today().replace(/-/g, "."), 인원: pledgePendingRows().length || 1 },
-        },
-        unsafeIssue: {
-          heading: "불안전요소 푸시 문구",
-          description: "불안전요소가 등록되면 허지원, 김준혁, 김경제 작업자에게 발송됩니다.",
-          tokens: ["{호선}", "{등록자}", "{내용}"],
-          previewContext: { 호선: "호선 101", 등록자: "김준혁", 내용: "가스 호스 정리 필요" },
-        },
-        adminManual: {
-          heading: "관리자 수동 푸시 문구",
-          description: "관리 메뉴의 푸시 탭에서 직접 선택한 작업자에게 즉시 발송됩니다.",
-          tokens: ["{날짜}", "{발신자}", "{대상수}"],
-          previewContext: { 날짜: today().replace(/-/g, "."), 발신자: currentWorkerSessionWorker()?.name || "관리자", 대상수: 1 },
-        },
-      };
-      return meta[normalizePushTemplateKind(kind)] || null;
+      return PUSH_RULES.pushTemplateMeta(kind, {
+        todayLabel: today().replace(/-/g, "."),
+        pledgePendingCount: pledgePendingRows().length || 1,
+        senderName: currentWorkerSessionWorker()?.name || "관리자",
+      });
     }
 
     function adminPushStyleMeta(styleId) {
-      return ADMIN_PUSH_STYLES.find((style) => style.id === styleId) || ADMIN_PUSH_STYLES[0];
+      return PUSH_RULES.adminPushStyleMeta(styleId);
     }
 
     function normalizeAdminPushTargetMode(value) {
-      return "selected";
+      return PUSH_RULES.normalizeAdminPushTargetMode(value);
     }
 
     function normalizeAdminPushWorkerIds(value) {
-      return [...new Set((Array.isArray(value) ? value : [])
-        .map((id) => String(id || "").trim())
-        .filter(Boolean))];
+      return PUSH_RULES.normalizeAdminPushWorkerIds(value);
     }
 
     function createAdminPushDraft(overrides = {}) {
-      const source = overrides && typeof overrides === "object" ? overrides : {};
-      const fallback = DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual;
-      const style = adminPushStyleMeta(source.style);
-      return {
-        targetMode: "selected",
-        selectedWorkerIds: normalizeAdminPushWorkerIds(source.selectedWorkerIds),
-        title: String(source.title || "").trim() || fallback.title,
-        body: String(source.body || "").trim() || fallback.body,
-        url: String(source.url || "").trim() || "/index.html",
-        style: style.id,
-      };
+      return PUSH_RULES.createAdminPushDraft(overrides);
     }
 
     function saveAdminPushDraft() {
@@ -6919,80 +6808,34 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             : !draft.title.trim() || !draft.body.trim()
               ? "제목과 내용을 입력하세요."
               : "";
-      const sendButtonLabel = state.adminPushSending ? "발송중" : "즉시발송";
-      return `<section class="panel panel-pad push-manager-panel">
-        <div class="push-manager-head">
-          <div>
-            <div class="section-title">푸시 발송 관리 <span class="small muted">${subscribedWorkers.length}/${workers.length}명 구독</span></div>
-            <p>브라우저 알림을 등록한 작업자 휴대폰으로 즉시 푸시를 발송합니다.</p>
-          </div>
-          <button class="btn-light" data-action="refresh-worker-push-statuses" ${state.workerPushSubscriptionStatusesChecking ? "disabled" : ""} type="button">${state.workerPushSubscriptionStatusesChecking ? "확인 중" : "구독 상태 새로고침"}</button>
-        </div>
-
-        <div class="push-manager-grid">
-          <div class="push-compose-card">
-            <div class="section-title compact">푸시 문구</div>
-            <div class="field">
-              <label for="adminPushTitle">제목</label>
-              <input id="adminPushTitle" class="input" data-admin-push-field="title" value="${esc(draft.title)}" maxlength="80" />
-            </div>
-            <div class="field">
-              <label for="adminPushBody">내용</label>
-              <textarea id="adminPushBody" class="textarea" data-admin-push-field="body" rows="4" maxlength="220">${esc(draft.body)}</textarea>
-            </div>
-            <div class="field">
-              <label for="adminPushUrl">클릭 시 이동 화면</label>
-              <select id="adminPushUrl" class="select" data-admin-push-field="url">
-                ${[["/index.html", "홈"], ["/check.html", "작업 전 점검"], ["/unsafe.html", "불안전요소"], ["/materials.html", "자재누락"], ["/history.html", "점검 이력"]]
-                  .map(([url, label]) => `<option value="${esc(url)}" ${draft.url === url ? "selected" : ""}>${esc(label)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="push-token-help">사용 가능 문구: <code>{날짜}</code> <code>{발신자}</code> <code>{대상수}</code></div>
-          </div>
-
-          <div class="push-style-card">
-              <div class="section-title compact">알림 유형</div>
-              <p class="push-token-help">브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다.</p>
-              <div class="push-style-grid">
-                ${ADMIN_PUSH_STYLES.map((style) => `<button class="push-style-option tone-${esc(style.tone)} ${draft.style === style.id ? "active" : ""}" data-action="set-admin-push-style" data-admin-push-style="${esc(style.id)}" type="button">
-                  <strong>${esc(style.label)}</strong>
-                  <span>${esc(style.description)}</span>
-                </button>`).join("")}
-              </div>
-            <article class="push-preview tone-${esc(preview.style.tone)}">
-              <span>미리보기</span>
-              <strong>${esc(preview.title)}</strong>
-              <p>${esc(preview.body)}</p>
-              <em>${esc(preview.url)}</em>
-            </article>
-          </div>
-        </div>
-
-        <div class="push-target-card">
-          <div class="push-target-head">
-            <div class="section-title compact">발송 대상 <span class="small muted">${targetWorkers.length}명</span></div>
-            <button class="btn push-target-send-btn" data-action="send-admin-push" ${canSend ? "" : "disabled"} title="${esc(disabledReason || "즉시 푸시 발송")}" aria-label="${esc(disabledReason || "즉시 푸시 발송")}" type="button">${esc(sendButtonLabel)}</button>
-          </div>
-          <p class="push-token-help">발송할 작업자 카드를 직접 눌러 선택하세요. 알림 미등록 작업자는 선택해도 실제 수신되지 않습니다.</p>
-          <div class="push-worker-grid">
-            ${workers.length ? workers.map((worker) => renderPushTargetWorker(worker, draft)).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
-          </div>
-        </div>
-      </section>`;
+      return SCREEN_VIEWS.renderPushManagerView({
+        subscribedCount: subscribedWorkers.length,
+        workerCount: workers.length,
+        statusesChecking: state.workerPushSubscriptionStatusesChecking,
+        draft,
+        styles: ADMIN_PUSH_STYLES,
+        preview,
+        targetCount: targetWorkers.length,
+        canSend,
+        disabledReason,
+        sendButtonLabel: state.adminPushSending ? "발송중" : "즉시발송",
+        workersHtml: workers.length ? workers.map((worker) => renderPushTargetWorker(worker, draft)).join("") : "",
+      });
     }
 
     function renderPushTargetWorker(worker, draft) {
       const status = workerPushSubscriptionStatusFor(worker.id);
       const count = Number(status.subscriptionCount || 0);
       const checked = normalizeAdminPushWorkerIds(draft.selectedWorkerIds).includes(worker.id);
-      return `<label class="push-worker-card ${checked ? "checked" : ""} ${count ? "" : "is-empty"}">
-        <input type="checkbox" data-admin-push-worker="${esc(worker.id)}" ${checked ? "checked" : ""} />
-        <span>
-          <strong>${esc(worker.name)}</strong>
-          <em>${esc(worker.team || "소속 없음")} · ${esc(workerDisplayPosition(worker))}</em>
-        </span>
-        ${workerPushSubscriptionBadgeHtml(worker.id)}
-      </label>`;
+      return SCREEN_VIEWS.renderPushTargetWorkerView({
+        id: worker.id,
+        name: worker.name,
+        team: worker.team || "소속 없음",
+        position: workerDisplayPosition(worker),
+        count,
+        checked,
+        badgeHtml: workerPushSubscriptionBadgeHtml(worker.id),
+      });
     }
 
     function renderWorkerPositionOptions(selectedPosition) {
@@ -7014,36 +6857,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function workerPushSubscriptionBadgeMeta(workerId) {
-      const status = workerPushSubscriptionStatusFor(workerId);
-      const checked = Boolean(status.checkedAt);
-      const count = Number(status.subscriptionCount || 0);
-      if (state.workerPushSubscriptionStatusesChecking && !checked) {
-        return {
-          className: "is-checking",
-          text: "알림 확인 중",
-          title: "서버 알림 등록 상태를 확인하고 있습니다",
-        };
-      }
-      if (status.registered) {
-        const registeredCount = count || 1;
-        return {
-          className: "is-registered",
-          text: `알림 ${registeredCount}대`,
-          title: `서버에 등록된 브라우저 알림 ${registeredCount}건`,
-        };
-      }
-      if (checked) {
-        return {
-          className: "is-empty",
-          text: "알림 없음",
-          title: "서버에 등록된 브라우저 알림이 없습니다",
-        };
-      }
-      return {
-        className: "is-unknown",
-        text: "알림 확인 전",
-        title: "아직 서버 알림 등록 상태를 확인하지 않았습니다",
-      };
+      return PUSH_RULES.workerPushSubscriptionBadgeMeta(workerPushSubscriptionStatusFor(workerId), Boolean(state.workerPushSubscriptionStatusesChecking));
     }
 
     function workerPushSubscriptionBadgeHtml(workerId) {
@@ -7062,45 +6876,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function workerPushDeviceBrowserLabel(userAgent) {
-      const ua = String(userAgent || "");
-      if (/Whale/i.test(ua)) return "웨일";
-      if (/Edg\//i.test(ua)) return "Edge";
-      if (/Chrome/i.test(ua)) return "Chrome";
-      if (/Safari/i.test(ua)) return "Safari";
-      return "브라우저";
+      return PUSH_RULES.workerPushDeviceBrowserLabel(userAgent);
     }
 
     function workerPushDevicePlatformLabel(userAgent) {
-      const ua = String(userAgent || "");
-      if (/Android/i.test(ua)) return "Android";
-      if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
-      if (/Windows/i.test(ua)) return "Windows";
-      if (/Macintosh|Mac OS/i.test(ua)) return "macOS";
-      return "기기";
+      return PUSH_RULES.workerPushDevicePlatformLabel(userAgent);
     }
 
     function renderWorkerPushDeviceRow(device) {
       const saving = state.workerPushDeviceSavingId === device.id;
-      const lastSeen = formatDateTime(device.lastSeenAt);
-      const lastSent = formatDateTime(device.lastSentAt);
-      const deviceMeta = `${workerPushDevicePlatformLabel(device.userAgent)} · ${workerPushDeviceBrowserLabel(device.userAgent)}`;
-      return `<article class="push-device-row ${device.enabled ? "" : "is-disabled"}">
-        <label class="push-device-toggle">
-          <input type="checkbox" data-worker-push-device-enabled data-worker-push-device-id="${esc(device.id)}" ${device.enabled ? "checked" : ""} ${saving ? "disabled" : ""} />
-          <span>수신</span>
-        </label>
-        <div class="push-device-main">
-          <label class="sr-only" for="pushDeviceLabel_${esc(device.id)}">기기 이름</label>
-          <input id="pushDeviceLabel_${esc(device.id)}" class="input push-device-label-input" data-worker-push-device-label data-worker-push-device-id="${esc(device.id)}" value="${esc(device.deviceLabel)}" ${saving ? "disabled" : ""} />
-          <div class="small muted push-device-meta">${esc(deviceMeta)} · 최근 확인 ${esc(lastSeen)}</div>
-          ${device.lastSentAt ? `<div class="small muted push-device-meta">최근 발송 ${esc(lastSent)}</div>` : ""}
-          ${device.lastError ? `<div class="small danger push-device-error">최근 오류 ${esc(device.lastError)}</div>` : ""}
-        </div>
-        <div class="push-device-actions">
-          <button class="btn-light" data-action="save-worker-push-device" data-worker-push-device-save="${esc(device.id)}" ${saving ? "disabled" : ""} type="button">${saving ? "저장 중" : "저장"}</button>
-          <button class="btn-danger" data-action="delete-worker-push-device" data-worker-push-device-delete="${esc(device.id)}" ${saving ? "disabled" : ""} type="button">삭제</button>
-        </div>
-      </article>`;
+      return SCREEN_VIEWS.renderWorkerPushDeviceRowView({
+        id: device.id,
+        enabled: device.enabled,
+        saving,
+        deviceLabel: device.deviceLabel,
+        deviceMeta: `${workerPushDevicePlatformLabel(device.userAgent)} · ${workerPushDeviceBrowserLabel(device.userAgent)}`,
+        lastSeen: formatDateTime(device.lastSeenAt),
+        lastSentAt: device.lastSentAt,
+        lastSent: formatDateTime(device.lastSentAt),
+        lastError: device.lastError,
+      });
     }
 
     function renderWorkerPushDeviceManager() {
@@ -7109,22 +6904,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const loading = Boolean(state.workerPushDeviceLoading);
       const devices = Array.isArray(state.workerPushDevices) ? state.workerPushDevices : [];
       const enabledCount = devices.filter((device) => device.enabled !== false).length;
-      return `<div class="push-device-overlay" role="dialog" aria-modal="true" aria-labelledby="pushDeviceTitle">
-        <button class="push-device-backdrop" data-action="close-worker-push-devices" type="button" aria-label="알림 기기 관리 닫기"></button>
-        <section class="push-device-panel">
-          <div class="push-device-head">
-            <div>
-              <strong id="pushDeviceTitle">${esc(worker.name)} 알림 기기</strong>
-              <span>${devices.length}대 등록 · 수신 ${enabledCount}대</span>
-            </div>
-            <button class="push-device-close" data-action="close-worker-push-devices" type="button" aria-label="닫기">×</button>
-          </div>
-          <p class="push-device-description">수신을 켠 기기에만 서약 미완료와 불안전요소 브라우저 알림이 발송됩니다.</p>
-          <div class="push-device-list">
-            ${loading ? `<div class="empty">알림 기기 상태를 확인하고 있습니다.</div>` : devices.length ? devices.map(renderWorkerPushDeviceRow).join("") : `<div class="empty">등록된 알림 기기가 없습니다.</div>`}
-          </div>
-        </section>
-      </div>`;
+      return SCREEN_VIEWS.renderWorkerPushDeviceManagerView({
+        workerName: worker.name,
+        deviceCount: devices.length,
+        enabledCount,
+        loading,
+        rowsHtml: devices.map(renderWorkerPushDeviceRow).join(""),
+      });
     }
 
     function workerFieldId(worker, field) {
@@ -7313,35 +7099,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const meta = pushTemplateMeta(kind);
       const template = pushNotificationTemplate(kind);
       const preview = pushNotificationFromTemplate(kind, meta?.previewContext || {});
-      return `<div class="push-template-overlay" role="dialog" aria-modal="true" aria-labelledby="pushTemplateTitleText">
-        <button class="push-template-backdrop" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기"></button>
-        <section class="push-template-panel">
-          <div class="push-template-head">
-            <div>
-              <strong id="pushTemplateTitleText">${esc(meta?.heading || "푸시 문구 수정")}</strong>
-              <span>${esc(meta?.description || "브라우저 푸시 알림에 표시될 문구입니다.")}</span>
-            </div>
-            <button class="push-template-close" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기">닫기</button>
-          </div>
-          <div class="push-template-form">
-            <label for="pushTemplateTitleInput">제목</label>
-            <input id="pushTemplateTitleInput" class="input" value="${esc(template.title)}" autocomplete="off" />
-            <label for="pushTemplateBodyInput">내용</label>
-            <textarea id="pushTemplateBodyInput" class="textarea">${esc(template.body)}</textarea>
-            <p>사용 가능 변수: ${esc((meta?.tokens || []).join(" "))}</p>
-          </div>
-          <div class="push-template-preview">
-            <span>미리보기</span>
-            <strong>${esc(preview.title)}</strong>
-            <p>${esc(preview.body)}</p>
-          </div>
-          <div class="push-template-actions">
-            <button class="btn-light" data-action="reset-push-template" type="button">기본값</button>
-            <button class="btn-light" data-action="cancel-push-template" type="button">취소</button>
-            <button class="btn" data-action="save-push-template" type="button">저장</button>
-          </div>
-        </section>
-      </div>`;
+      return SCREEN_VIEWS.renderPushTemplateEditorView({
+        heading: meta?.heading || "",
+        description: meta?.description || "",
+        tokens: meta?.tokens || [],
+        title: template.title,
+        body: template.body,
+        previewTitle: preview.title,
+        previewBody: preview.body,
+      });
     }
 
     function pendingPhotoUploadsFor(issueId) {

@@ -263,6 +263,169 @@
       </section>`;
   }
 
+
+  // 관리: 푸시 발송 관리 화면 (읽기 전용 마크업)
+  // model: { subscribedCount, workerCount, statusesChecking, draft: { title, body, url, style },
+  //          styles: [{ id, label, description, tone }], preview: { title, body, url, style: { tone } },
+  //          targetCount, canSend, disabledReason, sendButtonLabel, workersHtml }
+  function renderPushManagerView(model = {}) {
+    const draft = model.draft || {};
+    const preview = model.preview || {};
+    const previewStyle = preview.style || {};
+    const styles = Array.isArray(model.styles) ? model.styles : [];
+    return `<section class="panel panel-pad push-manager-panel">
+        <div class="push-manager-head">
+          <div>
+            <div class="section-title">푸시 발송 관리 <span class="small muted">${model.subscribedCount}/${model.workerCount}명 구독</span></div>
+            <p>브라우저 알림을 등록한 작업자 휴대폰으로 즉시 푸시를 발송합니다.</p>
+          </div>
+          <button class="btn-light" data-action="refresh-worker-push-statuses" ${model.statusesChecking ? "disabled" : ""} type="button">${model.statusesChecking ? "확인 중" : "구독 상태 새로고침"}</button>
+        </div>
+
+        <div class="push-manager-grid">
+          <div class="push-compose-card">
+            <div class="section-title compact">푸시 문구</div>
+            <div class="field">
+              <label for="adminPushTitle">제목</label>
+              <input id="adminPushTitle" class="input" data-admin-push-field="title" value="${esc(draft.title)}" maxlength="80" />
+            </div>
+            <div class="field">
+              <label for="adminPushBody">내용</label>
+              <textarea id="adminPushBody" class="textarea" data-admin-push-field="body" rows="4" maxlength="220">${esc(draft.body)}</textarea>
+            </div>
+            <div class="field">
+              <label for="adminPushUrl">클릭 시 이동 화면</label>
+              <select id="adminPushUrl" class="select" data-admin-push-field="url">
+                ${[["/index.html", "홈"], ["/check.html", "작업 전 점검"], ["/unsafe.html", "불안전요소"], ["/materials.html", "자재누락"], ["/history.html", "점검 이력"]]
+                  .map(([url, label]) => `<option value="${esc(url)}" ${draft.url === url ? "selected" : ""}>${esc(label)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="push-token-help">사용 가능 문구: <code>{날짜}</code> <code>{발신자}</code> <code>{대상수}</code></div>
+          </div>
+
+          <div class="push-style-card">
+              <div class="section-title compact">알림 유형</div>
+              <p class="push-token-help">브라우저 푸시는 별도 템플릿이 아니라 제목, 내용, 아이콘, 배지, 진동, 클릭 이동 옵션 조합입니다.</p>
+              <div class="push-style-grid">
+                ${styles.map((style) => `<button class="push-style-option tone-${esc(style.tone)} ${draft.style === style.id ? "active" : ""}" data-action="set-admin-push-style" data-admin-push-style="${esc(style.id)}" type="button">
+                  <strong>${esc(style.label)}</strong>
+                  <span>${esc(style.description)}</span>
+                </button>`).join("")}
+              </div>
+            <article class="push-preview tone-${esc(previewStyle.tone)}">
+              <span>미리보기</span>
+              <strong>${esc(preview.title)}</strong>
+              <p>${esc(preview.body)}</p>
+              <em>${esc(preview.url)}</em>
+            </article>
+          </div>
+        </div>
+
+        <div class="push-target-card">
+          <div class="push-target-head">
+            <div class="section-title compact">발송 대상 <span class="small muted">${model.targetCount}명</span></div>
+            <button class="btn push-target-send-btn" data-action="send-admin-push" ${model.canSend ? "" : "disabled"} title="${esc(model.disabledReason || "즉시 푸시 발송")}" aria-label="${esc(model.disabledReason || "즉시 푸시 발송")}" type="button">${esc(model.sendButtonLabel)}</button>
+          </div>
+          <p class="push-token-help">발송할 작업자 카드를 직접 눌러 선택하세요. 알림 미등록 작업자는 선택해도 실제 수신되지 않습니다.</p>
+          <div class="push-worker-grid">
+            ${model.workersHtml || `<div class="empty">등록된 작업자가 없습니다.</div>`}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  // 관리: 푸시 발송 대상 작업자 카드 (읽기 전용 마크업)
+  // model: { id, name, team, position, count, checked, badgeHtml }
+  function renderPushTargetWorkerView(model = {}) {
+    return `<label class="push-worker-card ${model.checked ? "checked" : ""} ${model.count ? "" : "is-empty"}">
+        <input type="checkbox" data-admin-push-worker="${esc(model.id)}" ${model.checked ? "checked" : ""} />
+        <span>
+          <strong>${esc(model.name)}</strong>
+          <em>${esc(model.team)} · ${esc(model.position)}</em>
+        </span>
+        ${model.badgeHtml || ""}
+      </label>`;
+  }
+
+  // 관리: 작업자 알림 기기 행 (읽기 전용 마크업)
+  // model: { id, enabled, saving, deviceLabel, deviceMeta, lastSeen, lastSentAt, lastSent, lastError }
+  function renderWorkerPushDeviceRowView(model = {}) {
+    const saving = Boolean(model.saving);
+    return `<article class="push-device-row ${model.enabled ? "" : "is-disabled"}">
+        <label class="push-device-toggle">
+          <input type="checkbox" data-worker-push-device-enabled data-worker-push-device-id="${esc(model.id)}" ${model.enabled ? "checked" : ""} ${saving ? "disabled" : ""} />
+          <span>수신</span>
+        </label>
+        <div class="push-device-main">
+          <label class="sr-only" for="pushDeviceLabel_${esc(model.id)}">기기 이름</label>
+          <input id="pushDeviceLabel_${esc(model.id)}" class="input push-device-label-input" data-worker-push-device-label data-worker-push-device-id="${esc(model.id)}" value="${esc(model.deviceLabel)}" ${saving ? "disabled" : ""} />
+          <div class="small muted push-device-meta">${esc(model.deviceMeta)} · 최근 확인 ${esc(model.lastSeen)}</div>
+          ${model.lastSentAt ? `<div class="small muted push-device-meta">최근 발송 ${esc(model.lastSent)}</div>` : ""}
+          ${model.lastError ? `<div class="small danger push-device-error">최근 오류 ${esc(model.lastError)}</div>` : ""}
+        </div>
+        <div class="push-device-actions">
+          <button class="btn-light" data-action="save-worker-push-device" data-worker-push-device-save="${esc(model.id)}" ${saving ? "disabled" : ""} type="button">${saving ? "저장 중" : "저장"}</button>
+          <button class="btn-danger" data-action="delete-worker-push-device" data-worker-push-device-delete="${esc(model.id)}" ${saving ? "disabled" : ""} type="button">삭제</button>
+        </div>
+      </article>`;
+  }
+
+  // 관리: 작업자 알림 기기 관리 오버레이 (읽기 전용 마크업)
+  // model: { workerName, deviceCount, enabledCount, loading, rowsHtml }
+  function renderWorkerPushDeviceManagerView(model = {}) {
+    return `<div class="push-device-overlay" role="dialog" aria-modal="true" aria-labelledby="pushDeviceTitle">
+        <button class="push-device-backdrop" data-action="close-worker-push-devices" type="button" aria-label="알림 기기 관리 닫기"></button>
+        <section class="push-device-panel">
+          <div class="push-device-head">
+            <div>
+              <strong id="pushDeviceTitle">${esc(model.workerName)} 알림 기기</strong>
+              <span>${model.deviceCount}대 등록 · 수신 ${model.enabledCount}대</span>
+            </div>
+            <button class="push-device-close" data-action="close-worker-push-devices" type="button" aria-label="닫기">×</button>
+          </div>
+          <p class="push-device-description">수신을 켠 기기에만 서약 미완료와 불안전요소 브라우저 알림이 발송됩니다.</p>
+          <div class="push-device-list">
+            ${model.loading ? `<div class="empty">알림 기기 상태를 확인하고 있습니다.</div>` : model.rowsHtml || `<div class="empty">등록된 알림 기기가 없습니다.</div>`}
+          </div>
+        </section>
+      </div>`;
+  }
+
+  // 관리: 푸시 문구 편집 오버레이 (읽기 전용 마크업)
+  // model: { heading, description, tokens: [string], title, body, previewTitle, previewBody }
+  function renderPushTemplateEditorView(model = {}) {
+    const tokens = Array.isArray(model.tokens) ? model.tokens : [];
+    return `<div class="push-template-overlay" role="dialog" aria-modal="true" aria-labelledby="pushTemplateTitleText">
+        <button class="push-template-backdrop" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기"></button>
+        <section class="push-template-panel">
+          <div class="push-template-head">
+            <div>
+              <strong id="pushTemplateTitleText">${esc(model.heading || "푸시 문구 수정")}</strong>
+              <span>${esc(model.description || "브라우저 푸시 알림에 표시될 문구입니다.")}</span>
+            </div>
+            <button class="push-template-close" data-action="cancel-push-template" type="button" aria-label="푸시 문구 닫기">닫기</button>
+          </div>
+          <div class="push-template-form">
+            <label for="pushTemplateTitleInput">제목</label>
+            <input id="pushTemplateTitleInput" class="input" value="${esc(model.title)}" autocomplete="off" />
+            <label for="pushTemplateBodyInput">내용</label>
+            <textarea id="pushTemplateBodyInput" class="textarea">${esc(model.body)}</textarea>
+            <p>사용 가능 변수: ${esc(tokens.join(" "))}</p>
+          </div>
+          <div class="push-template-preview">
+            <span>미리보기</span>
+            <strong>${esc(model.previewTitle)}</strong>
+            <p>${esc(model.previewBody)}</p>
+          </div>
+          <div class="push-template-actions">
+            <button class="btn-light" data-action="reset-push-template" type="button">기본값</button>
+            <button class="btn-light" data-action="cancel-push-template" type="button">취소</button>
+            <button class="btn" data-action="save-push-template" type="button">저장</button>
+          </div>
+        </section>
+      </div>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
@@ -271,5 +434,10 @@
     renderWorkerManagerView,
     renderUnsafeManagerView,
     renderMaterialManagerView,
+    renderPushManagerView,
+    renderPushTargetWorkerView,
+    renderWorkerPushDeviceRowView,
+    renderWorkerPushDeviceManagerView,
+    renderPushTemplateEditorView,
   };
 }));

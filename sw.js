@@ -17,6 +17,7 @@ const SHELL = [
   `/assets/dist/css/20-component-disabled-reason.min.css?v=${ASSET_TOKEN}`,
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
   `/assets/dist/js/checklist-rules.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/push-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/issue-material-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/ship-helpers.min.js?v=${ASSET_TOKEN}`,
