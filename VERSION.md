@@ -1,10 +1,10 @@
 # Version
 
-Current version: `1.2-20260610`
+Current version: `1.2-20260611`
 
-Recorded at: `2026-06-10 02:01:28 +09:00`
+Recorded at: `2026-06-11 (view-split release)`
 
-Baseline commit: `cfe3d4b`
+Baseline commit: `8acd67e`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
