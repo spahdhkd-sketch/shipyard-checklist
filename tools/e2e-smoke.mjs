@@ -45,6 +45,8 @@ function dateInTz(tz) {
 
 function buildSeed(todayStr) {
   const now = new Date().toISOString();
+  // 실서버 동기화 환경에서 이전 실행의 제출 이력과 충돌하지 않도록 작업지시서 ID는 실행마다 고유하게 만든다
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const W = (id, name, team, position) => ({ id, name, team, position, active: true, unsafePushTarget: true, createdAt: now, updatedAt: now });
   const ship = (id, no, type, stage, order) => ({ id, no, type, note: "", processStage: stage, deliveryType: "", deliveryDate: "", lcDate: "2099-01-01", stDate: "", clDate: "", dlDate: "", createdAt: now, order });
   return {
@@ -56,7 +58,7 @@ function buildSeed(todayStr) {
       { id: "t-grinder", categoryId: "welding", name: "그라인더", nature: "선행/후행", deleted: false, createdAt: now, order: 2 },
     ],
     [PRE + "workPrepRecords"]: [{
-      id: "wp-e2e", workDate: todayStr, appearanceTime: "08:00", team: "선행", shipNo: "2401", categoryId: "welding",
+      id: `wp-e2e-${runId}`, workDate: todayStr, appearanceTime: "08:00", team: "선행", shipNo: "2401", categoryId: "welding",
       leaderWorkerId: "w-kim", workerIds: ["w-kim", "w-hong", "w-lee"], otherTeamWorkerIds: [], toolIds: ["t-welder", "t-grinder"],
       status: "preparing", statusHistory: [], createdAt: now, updatedAt: now, deletedAt: "",
     }],
