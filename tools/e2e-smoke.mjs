@@ -85,6 +85,9 @@ function startServer() {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// 단계가 영원히 멈추지 않도록(크래시된 탭의 evaluate 등) 시간 상한을 둔다
+const withTimeout = (promise, ms, label = "단계 시간 초과") =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
 let failures = 0;
 function check(label, ok) {
   console.log(`${ok ? "  ✓" : "  ✗ FAIL"} ${label}`);
@@ -136,10 +139,36 @@ async function main() {
     defaultViewport: { width: 390, height: 844 },
   });
   let browser = await launchBrowser();
+  // 헤르메틱 가드 — 실서버(Supabase)로의 모든 요청을 차단해 실데이터 오염/유입을 막는다.
+  // 차단(abort)은 샌드박스 프록시 차단과 동일하게 동작하며, 앱은 로컬 데이터로 정상 폴백한다(pullRemote catch).
+  let blockedBackendRequests = 0;
+  const LOCAL_ORIGINS = [`http://localhost:${PORT}/`, `http://127.0.0.1:${PORT}/`];
   const makePage = async () => {
     const newPage = await browser.newPage();
     await newPage.emulateTimezone(tz);
     newPage.on("dialog", (d) => d.accept());
+    await newPage.setRequestInterception(true);
+    newPage.on("request", (req) => {
+      const url = req.url();
+      if (LOCAL_ORIGINS.some((o) => url.startsWith(o)) || url.startsWith("data:") || url.startsWith("blob:")) {
+        req.continue().catch(() => {});
+        return;
+      }
+      if (/supabase\./i.test(url)) blockedBackendRequests += 1;
+      req.abort("failed").catch(() => {});
+    });
+    // WebSocket(realtime)은 요청 인터셉션 대상이 아니므로, 실서버 주소를 닿을 수 없는 로컬 포트로 돌린다
+    await newPage.evaluateOnNewDocument(() => {
+      const NativeWebSocket = window.WebSocket;
+      window.WebSocket = new Proxy(NativeWebSocket, {
+        construct(target, args) {
+          if (/supabase\./i.test(String(args[0] || ""))) {
+            return new target("ws://127.0.0.1:9/", ...args.slice(1));
+          }
+          return new target(...args);
+        },
+      });
+    });
     await newPage.evaluateOnNewDocument((PRE, SEED) => {
       for (const [k, v] of Object.entries(SEED)) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
       sessionStorage.setItem(PRE + "workerSession", JSON.stringify({ workerId: "w-hong", workerName: "홍길동", employeeNo: "1234", loggedInAt: new Date().toISOString() }));
@@ -220,7 +249,10 @@ async function main() {
   check("불안전: 접수 클릭", await clickBtn(page, "불안전요소 접수")); await wait(1800);
   check("불안전: 접수 완료 화면", (await bodyText(page)).includes("신고가 접수되었습니다"));
 
-  // 5. 자재누락 등록 플로우 (불안정 환경 대비 1회 재시도)
+  // 5. 헤르메틱 검증 — 앱이 실서버 요청을 시도했고, 전부 인터셉터에서 차단되었는지
+  check(`차단: Supabase 요청 인터셉트 동작 (${blockedBackendRequests}건 차단)`, blockedBackendRequests > 0);
+
+  // 6. 자재누락 등록 플로우 (불안정 환경 대비 1회 재시도)
   const runMaterialsFlow = async () => {
     await goto("materials.html");
     await page.evaluate(() => {
@@ -242,23 +274,25 @@ async function main() {
   };
   let materialsOk = false;
   for (let attempt = 0; attempt < 2 && !materialsOk; attempt += 1) {
-    try { await page.close(); } catch {}
-    try { page = await makePage(); } catch {
-      try { await browser.close(); } catch {}
+    try { await withTimeout(page.close(), 10000); } catch {}
+    try { page = await withTimeout(makePage(), 20000); } catch {
+      try { await withTimeout(browser.close(), 10000); } catch {}
+      try { browser.process()?.kill("SIGKILL"); } catch {}
       browser = await launchBrowser();
       page = await makePage();
     }
-    try { materialsOk = await runMaterialsFlow(); } catch { materialsOk = false; }
+    try { materialsOk = await withTimeout(runMaterialsFlow(), 120000); } catch { materialsOk = false; }
   }
   check("자재: 등록 플로우 완료", materialsOk);
 
-  await browser.close();
+  try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
   srv.close();
   if (failures) {
     console.error(`\nE2E 실패: ${failures}건`);
     process.exit(1);
   }
   console.log("\nE2E 스모크 전체 통과");
+  process.exit(0);
 }
 
 main().catch((error) => { console.error("E2E 오류:", error.message); process.exit(1); });
