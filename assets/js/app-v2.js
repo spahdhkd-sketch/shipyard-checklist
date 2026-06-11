@@ -8605,15 +8605,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return true;
     }
 
-    function dispatchAction(action, event) {
-      if (ADMIN_ACTIONS.has(action)) return dispatchAdminAction(action, event);
-      const workPrepRecordId = () => event?.target?.closest("[data-work-prep-record-id]")?.dataset.workPrepRecordId || "";
-      const actions = {
+    function runActionMap(actions, action, event) {
+      const handler = actions[action];
+      if (!handler) return false;
+      handler(event);
+      return true;
+    }
+
+    function dispatchWorkerSessionAction(action, event) {
+      return runActionMap({
         "worker-login": submitWorkerLogin,
         "worker-logout": logoutWorker,
         "refresh-workers": refreshWorkerList,
         "clear-pledge-signature": clearPledgeSignature,
         "notify-pledge-pending": notifyPledgePendingWorkers,
+      }, action, event);
+    }
+
+    function dispatchPushAction(action, event) {
+      return runActionMap({
         "edit-push-template": openPushTemplateEditor,
         "save-push-template": savePushTemplateEditor,
         "cancel-push-template": closePushTemplateEditor,
@@ -8627,11 +8637,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "refresh-worker-push-statuses": refreshPushManagerStatuses,
         "set-admin-push-style": () => setAdminPushStyle(event.target.closest("[data-admin-push-style]")?.dataset.adminPushStyle),
         "send-admin-push": sendAdminPush,
+      }, action, event);
+    }
+
+    function dispatchWorkPrepAction(action, event) {
+      const workPrepRecordId = () => event?.target?.closest("[data-work-prep-record-id]")?.dataset.workPrepRecordId || "";
+      return runActionMap({
         "open-work-prep-register": openWorkPrepRegister,
         "close-work-prep-register": closeWorkPrepRegister,
         "save-work-prep-registration": saveWorkPrepRegistration,
-        "import-ships": triggerShipImport,
-        "export-ships": exportShips,
         "start-work-prep-record": () => startWorkPrepRecord(workPrepRecordId()),
         "start-check-from-work-prep": () => startCheckFromWorkPrepRecord(workPrepRecordId()),
         "edit-work-prep-record": () => openWorkPrepRecordForEdit(workPrepRecordId()),
@@ -8649,16 +8663,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           state.workPrepDirectOpen = !state.workPrepDirectOpen;
           renderPreservingScroll();
         },
-        "submit-inspection": submitInspection,
-        "submit-unsafe": submitUnsafeIssue,
-        "submit-material": submitMissingMaterial,
-        "new-unsafe": startNewUnsafeIssue,
-        "new-material": startNewMissingMaterial,
+      }, action, event);
+    }
+
+    function dispatchShipDataAction(action, event) {
+      return runActionMap({
+        "import-ships": triggerShipImport,
+        "export-ships": exportShips,
         "toggle-ship-data-card": () => toggleShipDataCard(event.target.closest("[data-ship-id]")?.dataset.shipId),
         "open-ship-data-target": () => openShipDataTarget(
           event.target.closest("[data-ship-data-target]")?.dataset.shipDataTarget,
           event.target.closest("[data-ship-no]")?.dataset.shipNo,
         ),
+      }, action, event);
+    }
+
+    function dispatchInspectionAction(action, event) {
+      return runActionMap({
+        "submit-inspection": submitInspection,
+        "submit-unsafe": submitUnsafeIssue,
+        "submit-material": submitMissingMaterial,
+        "new-unsafe": startNewUnsafeIssue,
+        "new-material": startNewMissingMaterial,
+      }, action, event);
+    }
+
+    function dispatchHistoryAdminAction(action, event) {
+      return runActionMap({
         "clear-history-ship-filter": clearHistoryShipFilter,
         "toggle-admin": toggleAdminMode,
         "reset-history": resetHistory,
@@ -8667,11 +8698,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "delete-selected-history": deleteSelectedHistory,
         "load-more-history": loadMoreHistory,
         "retry-photo-upload": retryPendingPhotoUpload,
-      };
-      const handler = actions[action];
-      if (!handler) return false;
-      handler(event);
-      return true;
+      }, action, event);
+    }
+
+    function dispatchAction(action, event) {
+      if (ADMIN_ACTIONS.has(action)) return dispatchAdminAction(action, event);
+      return (
+        dispatchWorkerSessionAction(action, event) ||
+        dispatchPushAction(action, event) ||
+        dispatchWorkPrepAction(action, event) ||
+        dispatchShipDataAction(action, event) ||
+        dispatchInspectionAction(action, event) ||
+        dispatchHistoryAdminAction(action, event)
+      );
     }
 
     document.addEventListener("submit", (event) => {
@@ -8687,101 +8726,101 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       submitWorkerLogin();
     });
 
-    document.addEventListener("click", (event) => {
+    function handleDelegatedClick(event) {
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
         const enabledAction = disabledReason.querySelector("button:not(:disabled)");
-        if (enabledAction) return;
+        if (enabledAction) return true;
         event.preventDefault();
         toast(disabledReason.dataset.disabledReason);
-        return;
+        return true;
       }
 
       const historyCard = event.target.closest("[data-history-detail-card]");
       if (historyCard && !event.target.closest("button,input,label,select,textarea")) {
         openHistoryDetail(historyCard.dataset.historyDetailCard);
-        return;
+        return true;
       }
 
       const workPrepCard = event.target.closest("[data-work-prep-record]");
       if (workPrepCard && !event.target.closest("button,input,label,select,textarea")) {
         openWorkPrepRecordForEdit(workPrepCard.dataset.workPrepRecord);
-        return;
+        return true;
       }
 
       const workPrepOtherWorkersGroup = event.target.closest("[data-work-prep-other-workers-group]");
       if (workPrepOtherWorkersGroup && !event.target.closest("input,label,select,textarea")) {
         state.workPrepOtherWorkersOpen = !state.workPrepOtherWorkersOpen;
         renderPreservingScroll();
-        return;
+        return true;
       }
 
       const photoViewerClose = event.target.closest("[data-photo-viewer-close]");
       if (photoViewerClose) {
         closePhotoViewer();
-        return;
+        return true;
       }
 
       const photoViewerTarget = event.target.closest("[data-photo-viewer-src]");
       if (photoViewerTarget) {
         openPhotoViewer(photoViewerTarget.dataset.photoViewerSrc, photoViewerTarget.dataset.photoViewerLabel);
-        return;
+        return true;
       }
 
       const unsafeCard = event.target.closest("[data-unsafe-record-detail]");
       if (unsafeCard && !event.target.closest("button,input,label,select,textarea")) {
         openUnsafeDetail(unsafeCard.dataset.unsafeRecordDetail);
-        return;
+        return true;
       }
 
       const materialCard = event.target.closest("[data-material-record-detail]");
       if (materialCard && !event.target.closest("button,input,label,select,textarea")) {
         openMaterialDetail(materialCard.dataset.materialRecordDetail);
-        return;
+        return true;
       }
 
       const workPrepDetailRow = event.target.closest("[data-work-prep-record-detail]");
       if (workPrepDetailRow && !event.target.closest("button,input,label,select,textarea")) {
         openWorkPrepDetail(workPrepDetailRow.dataset.workPrepRecordDetail);
-        return;
+        return true;
       }
 
       const analyticsRow = event.target.closest("[data-analytics-record-id]");
       if (analyticsRow && !event.target.closest("button,input,label,select,textarea")) {
         openAnalyticsRecord(analyticsRow.dataset.analyticsRecordKind, analyticsRow.dataset.analyticsRecordId);
-        return;
+        return true;
       }
 
       const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
       if (categoryToolRow && !event.target.closest("button,input,label,select,textarea,.category-edit-panel,.category-tool-picker")) {
         toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
-        return;
+        return true;
       }
 
       const workerCard = event.target.closest("[data-worker-card-toggle]");
       if (workerCard && !event.target.closest("button,input,label,select,textarea,.worker-edit-panel")) {
         toggleWorkerCard(workerCard.dataset.workerCardToggle);
-        return;
+        return true;
       }
 
       if (state.loginWorkerPickerOpen && !event.target.closest("[data-login-worker-picker]")) {
         state.loginWorkerPickerOpen = false;
         render();
-        return;
+        return true;
       }
+      return false;
+    }
 
-      const button = event.target.closest("button");
-      if (!button) return;
-
+    function handleWorkerBoardButtonClick(button) {
       if (button.dataset.monthlyWorkerMonth) {
         setMonthlyWorkerMonth(button.dataset.monthlyWorkerMonth);
-        return;
+        return true;
       }
       if (button.dataset.action === "toggle-login-worker-picker") {
         state.loginWorkerPickerOpen = !state.loginWorkerPickerOpen;
         if (state.loginWorkerPickerOpen) state.loginWorkerSearch = "";
         render();
-        return;
+        return true;
       }
       if (button.dataset.loginRememberWorker) {
         state.loginWorkerId = button.dataset.loginRememberWorker;
@@ -8789,7 +8828,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.loginWorkerSearch = "";
         render();
         requestAnimationFrame(() => $("loginEmployeeNo")?.focus());
-        return;
+        return true;
       }
       if (button.dataset.loginWorkerSelect) {
         state.loginWorkerId = button.dataset.loginWorkerSelect;
@@ -8797,150 +8836,165 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.loginWorkerSearch = "";
         render();
         requestAnimationFrame(() => $("loginEmployeeNo")?.focus());
-        return;
+        return true;
       }
       if (button.dataset.monthlyWorkerToggle) {
         toggleMonthlyWorkerCard(button.dataset.monthlyWorkerToggle);
-        return;
+        return true;
       }
       if (button.dataset.action === "toggle-monthly-rest-settings") {
         state.monthlyRestDayPanelOpen = !state.monthlyRestDayPanelOpen;
         render();
-        return;
+        return true;
       }
       if (button.dataset.action === "add-monthly-rest-day") {
         addCustomMonthlyRestDay(document.querySelector("[data-monthly-custom-rest-date]")?.value || "");
-        return;
+        return true;
       }
       if (button.dataset.deleteMonthlyRestDay) {
         deleteCustomMonthlyRestDay(button.dataset.deleteMonthlyRestDay);
-        return;
+        return true;
       }
+      return false;
+    }
+
+    function handleRecordShortcutButtonClick(button) {
       if (button.dataset.unsafeRecordDetail) {
         openUnsafeDetail(button.dataset.unsafeRecordDetail);
-        return;
+        return true;
       }
       if (button.dataset.materialRecordDetail) {
         openMaterialDetail(button.dataset.materialRecordDetail);
-        return;
+        return true;
       }
       if (button.dataset.exportRecords) {
         exportRecords(button.dataset.exportRecords);
-        return;
+        return true;
       }
+      return false;
+    }
+
+    function handlePledgeButtonClick(button) {
       if (button.dataset.selectPledgeWorker) {
         selectPledgeWorker(button.dataset.selectPledgeWorker);
-        return;
+        return true;
       }
       if (button.dataset.action === "expand-pledge-worker") {
         state.pledgeWorkerCollapsed = false;
         renderPreservingScroll();
-        return;
+        return true;
       }
       if (button.dataset.action === "expand-pledge-ship") {
         state.pledgeShipCollapsed = false;
         renderPreservingScroll();
-        return;
+        return true;
       }
       if (button.dataset.action === "toggle-other-workers") {
         state.workerFallbackOpen = !state.workerFallbackOpen;
         render();
-        return;
+        return true;
       }
       if (button.dataset.selectPledgeShip) {
         state.draft.shipNo = button.dataset.selectPledgeShip;
         saveJson("draft", state.draft);
         state.pledgeShipCollapsed = true;
         renderPreservingScroll();
-        return;
+        return true;
       }
+      return false;
+    }
+
+    function handleUnsafeDraftButtonClick(button) {
       if (button.dataset.unsafeSelectShip) {
         state.unsafeDraft.shipNo = button.dataset.unsafeSelectShip;
         saveUnsafeDraft();
         render();
-        return;
+        return true;
       }
       if (button.dataset.unsafeSelectWorker) {
         state.unsafeDraft.workerId = button.dataset.unsafeSelectWorker;
         saveUnsafeDraft();
         render();
-        return;
+        return true;
       }
       if (button.dataset.removeUnsafePhoto !== undefined) {
         removeUnsafePhotoFile(Number(button.dataset.removeUnsafePhoto));
-        return;
+        return true;
       }
       if (button.dataset.unsafeEditStep) {
         state.unsafeDraft.step = Number(button.dataset.unsafeEditStep) || 1;
         saveUnsafeDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
       if (button.dataset.unsafeStepBack !== undefined) {
         state.unsafeDraft.step = Math.max(unsafeDraftStep() - 1, 1);
         saveUnsafeDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
       if (button.dataset.unsafeNext !== undefined) {
         syncUnsafeDraftFromDom();
         saveUnsafeDraft();
-        if (!unsafeStepReady()) return toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요.");
+        if (!unsafeStepReady()) { toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요."); return true; }
         state.unsafeDraft.step = Math.min(unsafeDraftStep() + 1, 3);
         saveUnsafeDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
+      return false;
+    }
+
+    function handleMaterialDraftButtonClick(button) {
       if (button.dataset.materialSelectShip) {
         state.materialDraft.shipNo = button.dataset.materialSelectShip;
         saveMaterialDraft();
         render();
-        return;
+        return true;
       }
       if (button.dataset.materialSelectType) {
         state.materialDraft.materialType = button.dataset.materialSelectType;
         saveMaterialDraft();
         render();
-        return;
+        return true;
       }
       if (button.dataset.materialSelectWorker) {
         state.materialDraft.workerId = button.dataset.materialSelectWorker;
         saveMaterialDraft();
         render();
-        return;
+        return true;
       }
       if (button.dataset.materialEditStep) {
         state.materialDraft.step = Number(button.dataset.materialEditStep) || 1;
         saveMaterialDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
       if (button.dataset.materialStepBack !== undefined) {
         state.materialDraft.step = Math.max(materialDraftStep() - 1, 1);
         saveMaterialDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
       if (button.dataset.materialNext !== undefined) {
         syncMaterialDraftFromDom();
         saveMaterialDraft();
-        if (!materialStepReady()) return toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요.");
+        if (!materialStepReady()) { toast(button.dataset.requiredMessage || "필수 항목을 먼저 입력하세요."); return true; }
         state.materialDraft.step = Math.min(materialDraftStep() + 1, 4);
         saveMaterialDraft();
         render();
         scrollScreenTop();
-        return;
+        return true;
       }
-      if (button.dataset.recordFilter) {
-        updateRecordFilter(button.dataset.recordFilter, button.value || "");
-        return;
-      }
+      return false;
+    }
 
+    function handleViewNavigationClick(button) {
       if (button.dataset.view) {
         if (button.dataset.view === "manage") {
           state.manageTab = "unsafe";
@@ -8986,7 +9040,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
         scrollScreenTop();
       }
-      if (button.dataset.action && dispatchAction(button.dataset.action, event)) return;
+    }
+
+    function handleHistoryManageButtonClick(button) {
       if (button.dataset.action === "view-unsafe-list") {
         state.manageTab = "unsafe";
         setUnsafeStatusFilter("");
@@ -9051,6 +9107,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workPrepDetailId = "";
         renderPreservingScroll();
       }
+      return false;
+    }
+
+    function handleAdminRecordButtonClick(button) {
       if (button.dataset.action === "add-worker") addWorker();
       if (button.dataset.saveWorker) saveWorker(button.dataset.saveWorker);
       if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
@@ -9061,6 +9121,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         $("newShipNos")?.focus();
       }
       if (button.dataset.deleteShip) deleteShip(button.dataset.deleteShip);
+      return false;
+    }
+
+    function handleCategoryToolButtonClick(button) {
       if (button.dataset.pickColor) {
         document.querySelectorAll("[data-pick-color]").forEach((node) => node.classList.toggle("active", node === button));
         const colorInput = $("catColor");
@@ -9080,7 +9144,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "save-category-icon") saveCategoryIcon();
       if (button.dataset.action === "toggle-category-add") {
-        if (!requireAdminWrite()) return;
+        if (!requireAdminWrite()) return true;
         state.categoryAddOpen = !state.categoryAddOpen;
         state.editCategoryId = null;
         render();
@@ -9095,7 +9159,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
       }
       if (button.dataset.action === "toggle-tool-add") {
-        if (!requireAdminWrite()) return;
+        if (!requireAdminWrite()) return true;
         state.toolManagerOpen = true;
         state.toolAddOpen = !state.toolAddOpen;
         state.editToolId = null;
@@ -9103,7 +9167,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "add-tool") addTool();
       if (button.dataset.editTool) {
-        if (!requireAdminWrite()) return;
+        if (!requireAdminWrite()) return true;
         state.toolManagerOpen = true;
         state.editToolId = button.dataset.editTool;
         state.toolAddOpen = false;
@@ -9147,6 +9211,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.categoryVisualOpen = false;
         render();
       }
+      return false;
+    }
+
+    function handleSectionItemButtonClick(button) {
       if (button.dataset.action === "add-section") addSection();
       if (button.dataset.editSection) editSection(button.dataset.editSection);
       if (button.dataset.saveSection) saveSection(button.dataset.saveSection);
@@ -9172,6 +9240,31 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.editSectionId = null;
         render();
       }
+      return false;
+    }
+
+    document.addEventListener("click", (event) => {
+      if (handleDelegatedClick(event)) return;
+
+      const button = event.target.closest("button");
+      if (!button) return;
+
+      if (handleWorkerBoardButtonClick(button)) return;
+      if (handleRecordShortcutButtonClick(button)) return;
+      if (handlePledgeButtonClick(button)) return;
+      if (handleUnsafeDraftButtonClick(button)) return;
+      if (handleMaterialDraftButtonClick(button)) return;
+      if (button.dataset.recordFilter) {
+        updateRecordFilter(button.dataset.recordFilter, button.value || "");
+        return;
+      }
+
+      handleViewNavigationClick(button);
+      if (button.dataset.action && dispatchAction(button.dataset.action, event)) return;
+      if (handleHistoryManageButtonClick(button)) return;
+      if (handleAdminRecordButtonClick(button)) return;
+      if (handleCategoryToolButtonClick(button)) return;
+      if (handleSectionItemButtonClick(button)) return;
     });
 
     document.addEventListener("keydown", (event) => {
