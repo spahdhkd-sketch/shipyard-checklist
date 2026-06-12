@@ -1,5 +1,5 @@
 const assert = require("node:assert");
-const { analyticsPercent, buildAnalyticsDashboardModel, monthlyWorkerDayStatus } = require("../assets/js/analytics-model.js");
+const { analyticsPercent, buildAnalyticsDashboardModel, monthlyWorkerDayStatus, combineInspectionRows } = require("../assets/js/analytics-model.js");
 
 assert.strictEqual(analyticsPercent(1, 4), 25);
 assert.strictEqual(analyticsPercent(0, 0), 0);
@@ -87,5 +87,26 @@ assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, d
 assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: true, isFuture: false, dayInspections: [doneRow], hasObligation: true }), "rest");
 // 미래일은 excluded
 assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: true, dayInspections: [], hasObligation: true }), "excluded");
+
+// 결합 점검 목록: 최근 목록(윈도) + 기간 캐시 병합. 본 목록 우선, id 중복 제거.
+const windowRows = [
+  { id: "i-new", date: "2026-06-11", status: "완료", completion: 100 },
+  { id: "i-dup", date: "2026-06-09", status: "진행중", completion: 40 },
+];
+const archivedRows = [
+  { id: "i-dup", date: "2026-06-09", status: "완료", completion: 100 }, // 본 목록 행이 이긴다
+  { id: "i-old", date: "2026-06-02", status: "완료", completion: 100 }, // 윈도 밖 과거 행 추가
+  { id: "", date: "2026-06-01" }, // id 없는 행은 무시
+];
+const combined = combineInspectionRows(windowRows, archivedRows);
+assert.deepStrictEqual(combined.map((row) => row.id), ["i-new", "i-dup", "i-old"]);
+assert.strictEqual(combined.find((row) => row.id === "i-dup").status, "진행중"); // 본 목록 우선
+// 캐시가 비어 있으면 본 목록을 그대로 반환 (불필요한 복사 없음)
+assert.strictEqual(combineInspectionRows(windowRows, []), windowRows);
+assert.strictEqual(combineInspectionRows(windowRows, null), windowRows);
+assert.deepStrictEqual(combineInspectionRows(null, archivedRows).map((row) => row.id), ["i-dup", "i-old"]);
+// 입력 배열은 변경되지 않는다
+assert.strictEqual(windowRows.length, 2);
+assert.strictEqual(archivedRows.length, 3);
 
 console.log("analytics model tests passed");

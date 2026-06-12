@@ -2602,6 +2602,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pledgeTemplateEditing: false,
       remoteLoadedInspectionItemIds: [],
       remoteLoadedIssuePhotoTargetIds: [],
+      archivedInspections: [],
+      remoteLoadedInspectionRanges: {},
       remoteListLimits: loadJson("remoteListLimits", {}),
     };
     let cachedSupabaseClient = null;
@@ -7063,9 +7065,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </section>`;
     }
 
+    // 분석/서약 화면용 결합 점검 목록: 최근 목록(state.inspections) + 기간 캐시(state.archivedInspections).
+    // 기간 캐시는 읽기 전용이라 동기화(pullRemote)의 본 목록 갱신과 충돌하지 않는다.
+    function combinedInspectionRows() {
+      const archived = Array.isArray(state.archivedInspections) ? state.archivedInspections : [];
+      if (!archived.length) return state.inspections;
+      return ANALYTICS_MODEL.combineInspectionRows(state.inspections, archived);
+    }
+
     function pledgeDashboardRows(date = today()) {
       const dateValue = dateOnly(date) || today();
-      const dayInspections = state.inspections.filter((row) => row.date === dateValue);
+      const dayInspections = combinedInspectionRows().filter((row) => row.date === dateValue);
       const byWorker = new Map();
       dayInspections.forEach((row) => {
         const name = row.worker || "미지정";
@@ -7090,7 +7100,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function pledgeWeekStats(anchorDate = today()) {
       return Array.from({ length: 7 }, (_, index) => addDays(anchorDate, index - 6)).map((date) => {
-        const rows = state.inspections.filter((row) => row.date === date && !hiddenPledgeAnalyticsWorkerName(row.worker));
+        const rows = combinedInspectionRows().filter((row) => row.date === date && !hiddenPledgeAnalyticsWorkerName(row.worker));
         const total = Math.max(visiblePledgeAnalyticsWorkers().length, rows.length);
         const done = rows.filter((row) => String(row.safetyPledge || "").trim()).length;
         const pct = total ? Math.round(done / total * 100) : 0;
@@ -7136,6 +7146,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderPledgeManager() {
       const viewDate = pledgeViewDate();
+      ensureInspectionRangeLoaded(addDays(viewDate, -6), viewDate);
       const isToday = viewDate === today();
       const rows = pledgeDashboardRows(viewDate);
       const completed = rows.filter((row) => pledgeRowStatus(row) === "완료").length;
@@ -7351,7 +7362,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function workerDayInspectionStatus(workerName, date) {
       const key = normalizedWorkerName(workerName);
-      const dayInspections = state.inspections.filter((row) => normalizedWorkerName(row.worker || "") === key && monthlyInspectionDate(row) === date);
+      const dayInspections = combinedInspectionRows().filter((row) => normalizedWorkerName(row.worker || "") === key && monthlyInspectionDate(row) === date);
       return ANALYTICS_MODEL.monthlyWorkerDayStatus({
         isRestDay: Boolean(isMonthlyRestDay(date)),
         isFuture: date > today(),
@@ -7467,6 +7478,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderMonthlyWorkerAnalytics() {
+      const range = currentMonthRange(selectedMonthlyWorkerMonth());
+      ensureInspectionRangeLoaded(range.start, range.end);
       return DASHBOARD_VIEW.renderMonthlyWorkerAnalyticsView(buildMonthlyWorkerAnalyticsModel(), { analyticsKpi });
     }
 
@@ -12185,6 +12198,46 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       applyRemoteTableRows(config.key, (data || []).map(config.fromDb));
       state.remoteLoadedIssuePhotoTargetIds = [...new Set([...state.remoteLoadedIssuePhotoTargetIds, id])];
       persist();
+    }
+
+    const INSPECTION_RANGE_RETRY_MS = 60 * 1000;
+
+    // 월간 작업자 통계/서약 지난 날짜 조회용 기간 점검 이력 로더.
+    // 최근 N건 윈도(state.inspections)와 별개인 읽기 전용 캐시(state.archivedInspections)에 병합하므로
+    // 이후 pullRemote가 본 목록을 갱신해도 통계/서약 화면 데이터가 사라지지 않는다.
+    // 같은 기간(키)은 세션당 1회만 조회하고, 실패 시 잠시 후에만 재시도해 무한 재조회를 막는다.
+    // 오프라인/차단 환경에서는 조용히 실패하고 로컬 데이터 기준 표시를 유지한다.
+    async function ensureInspectionRangeLoaded(startDate, endDate) {
+      const todayValue = today();
+      const start = dateOnly(startDate);
+      let end = dateOnly(endDate);
+      if (end && end > todayValue) end = todayValue;
+      if (!start || !end || start > end) return;
+      const key = `${start}~${end}`;
+      if (!state.remoteLoadedInspectionRanges || typeof state.remoteLoadedInspectionRanges !== "object") {
+        state.remoteLoadedInspectionRanges = {};
+      }
+      const ranges = state.remoteLoadedInspectionRanges;
+      const entry = ranges[key];
+      if (entry && (entry.status === "loaded" || entry.status === "loading"
+        || (entry.status === "error" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_RETRY_MS))) return;
+      const client = supabaseClient();
+      const config = remoteConfigByKey("inspections");
+      if (!client || !config) return;
+      ranges[key] = { status: "loading", at: Date.now() };
+      try {
+        const data = await selectDetailRows(client, config, (query) => query
+          .gte("date", start)
+          .lte("date", end)
+          .order("created_at", { ascending: false }));
+        const rows = (data || []).map(config.fromDb);
+        state.archivedInspections = mergeRecordArrays(state.archivedInspections, rows);
+        ranges[key] = { status: "loaded", at: Date.now() };
+        if (rows.length) renderPreservingScroll();
+      } catch (error) {
+        console.warn("점검 이력 기간 로드 실패:", error);
+        ranges[key] = { status: "error", at: Date.now() };
+      }
     }
 
     boot();

@@ -125,9 +125,24 @@
       return input.hasObligation ? "missing" : "excluded";
     }
 
+    // 결합 점검 목록 (app-v2.js combinedInspectionRows에서 호출).
+    // 본 목록(primary, 최근 N건 윈도)을 우선하고, 기간 캐시(archived)에서 id가 겹치지 않는 행만 덧붙인다.
+    // 순수 계산: 입력 배열을 변경하지 않는다.
+    function combineInspectionRows(primaryRows, archivedRows) {
+      const primary = Array.isArray(primaryRows) ? primaryRows : [];
+      const archived = Array.isArray(archivedRows) ? archivedRows : [];
+      const seen = new Set();
+      primary.forEach((row) => {
+        if (row && row.id) seen.add(String(row.id));
+      });
+      const extras = archived.filter((row) => row && row.id && !seen.has(String(row.id)));
+      return extras.length ? [...primary, ...extras] : primary;
+    }
+
   return {
     analyticsPercent,
     buildAnalyticsDashboardModel,
     monthlyWorkerDayStatus,
+    combineInspectionRows,
   };
 }));

@@ -35,6 +35,12 @@ expectNoMatch(pictogramImage, /Response\.redirect\(src,\s*302\)/, "pictogram laz
 expectMatch(egressMigration, /name\s+like\s+'unsafe\/%'/i, "issue photo Storage inserts should be path-limited to unsafe uploads");
 expectNoMatch(egressMigration, /for delete\s+to anon,\s*authenticated/i, "issue photo Storage deletes should not be public");
 
+// 월간 통계/서약 지난 날짜 조회는 전체 테이블이 아닌 날짜 범위로만 추가 조회해야 한다.
+expectMatch(app, /async function ensureInspectionRangeLoaded\(/, "analytics/pledge views should lazy-load inspection history by range");
+expectMatch(app, /\.gte\("date", start\)[\s\S]{0,80}\.lte\("date", end\)/, "inspection range pulls must be date-bounded (gte/lte)");
+expectMatch(app, /remoteLoadedInspectionRanges/, "inspection range pulls must be cached per session to avoid refetch loops");
+expectMatch(app, /state\.archivedInspections = mergeRecordArrays\(state\.archivedInspections, rows\)/, "range rows must merge into the read-only archive cache, not the synced list");
+
 expectMatch(pkg.scripts.verify, /tests\/egress-optimization-static\.test\.js/, "verify script should include egress optimization static test");
 
 console.log("egress optimization static tests passed");

@@ -389,7 +389,7 @@ assert.match(app, /"notify-pledge-pending": notifyPledgePendingWorkers/);
 assert.match(app, /pledgeViewDate: ""/);
 assert.match(app, /function pledgeDashboardRows\(date = today\(\)\)/);
 assert.match(app, /const dateValue = dateOnly\(date\) \|\| today\(\);/);
-assert.match(app, /state\.inspections\.filter\(\(row\) => row\.date === dateValue\)/);
+assert.match(app, /combinedInspectionRows\(\)\.filter\(\(row\) => row\.date === dateValue\)/);
 assert.match(app, /function pledgeWeekStats\(anchorDate = today\(\)\)/);
 assert.match(app, /function pledgeViewDate\(\)/);
 assert.match(app, /function setPledgeViewDate\(mode, value = ""\)/);
