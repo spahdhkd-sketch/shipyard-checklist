@@ -106,7 +106,7 @@ const monthlyHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
     start: "2026-05-01",
     end: "2026-05-31",
     monthKey: "2026-05",
-    dates: ["2026-05-01", "2026-05-02"],
+    dates: ["2026-05-01", "2026-05-02", "2026-05-03"],
     canGoNext: false,
     isCurrentMonth: true,
   },
@@ -121,6 +121,7 @@ const monthlyHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
       dayStatuses: [
         { date: "2026-05-01", day: 1, status: "done" },
         { date: "2026-05-02", day: 2, status: "partial" },
+        { date: "2026-05-03", day: 3, status: "excluded" },
       ],
     },
   ],
@@ -147,6 +148,7 @@ assert(monthlyHtml.includes('data-monthly-worker-toggle="hong"'));
 assert(monthlyHtml.includes('aria-expanded="true"'));
 assert(monthlyHtml.includes('aria-label="홍길동 2026-05 점검 달력"'));
 assert(monthlyHtml.includes("1일 완료"));
+assert(monthlyHtml.includes("3일 제외")); // 작업지시서 미참여일은 누락이 아닌 제외로 표시
 assert(monthlyHtml.includes("대한민국 국경일/공휴일/대체공휴일 자동 휴무 적용"));
 assert(monthlyHtml.includes("05-05 · 어린이날"));
 assert(monthlyHtml.includes('data-delete-monthly-rest-day="2026-05-06"'));

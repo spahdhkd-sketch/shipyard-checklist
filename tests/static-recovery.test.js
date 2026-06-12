@@ -649,6 +649,11 @@ const analyticsModelJs = read("assets/js/analytics-model.js");
 assert.match(analyticsModelJs, /\]\.filter\(\(row\) => isVisibleWorkerName\(row\.worker\)\)\.sort/);
 assert.match(app, /isVisibleWorkerName: visiblePledgeAnalyticsWorkerName/);
 assert.match(app, /function workerDayInspectionStatus\(workerName, date\)/);
+// 월간 작업자 점검 의무: 해당 일 작업지시서 참여자만 대상(누락 가능), 분류는 analytics-model의 순수 함수로 위임
+assert.match(app, /function workerHasWorkPrepObligation\(workerName, date\)/);
+assert.match(app, /ANALYTICS_MODEL\.monthlyWorkerDayStatus\(/);
+assert.match(app, /hasObligation: workerHasWorkPrepObligation\(workerName, date\)/);
+assert.match(analyticsModelJs, /function monthlyWorkerDayStatus\(rawInput\)/);
 assert.match(app, /function buildMonthlyWorkerAnalyticsModel\(/);
 assert.match(app, /function renderMonthlyWorkerAnalytics\(/);
 assert.match(app, /DASHBOARD_VIEW\.renderMonthlyWorkerAnalyticsView\(buildMonthlyWorkerAnalyticsModel\(\), \{ analyticsKpi \}\)/);

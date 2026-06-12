@@ -7307,14 +7307,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
     }
 
-    function workerDayInspectionStatus(workerName, date) {
-      if (isMonthlyRestDay(date)) return "rest";
-      if (date > today()) return "excluded";
+    function workerHasWorkPrepObligation(workerName, date) {
       const key = normalizedWorkerName(workerName);
-      const rows = state.inspections.filter((row) => normalizedWorkerName(row.worker || "") === key && monthlyInspectionDate(row) === date);
-      if (rows.some((row) => row.status === "완료" && Number(row.completion || 0) >= 100)) return "done";
-      if (rows.length) return "partial";
-      return "missing";
+      if (!key || !date) return false;
+      const workerIds = new Set(state.workers
+        .filter((worker) => normalizedWorkerName(worker.name || "") === key)
+        .map((worker) => String(worker.id || "").trim())
+        .filter(Boolean));
+      if (!workerIds.size) return false;
+      return state.workPrepRecords.some((record) =>
+        String(record?.workDate || "") === date
+        && workPrepParticipantWorkerIds(record).some((id) => workerIds.has(id)));
+    }
+
+    function workerDayInspectionStatus(workerName, date) {
+      const key = normalizedWorkerName(workerName);
+      const dayInspections = state.inspections.filter((row) => normalizedWorkerName(row.worker || "") === key && monthlyInspectionDate(row) === date);
+      return ANALYTICS_MODEL.monthlyWorkerDayStatus({
+        isRestDay: Boolean(isMonthlyRestDay(date)),
+        isFuture: date > today(),
+        dayInspections,
+        hasObligation: workerHasWorkPrepObligation(workerName, date),
+      });
     }
 
     function monthlyWorkerInspectionStats() {

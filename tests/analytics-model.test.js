@@ -1,5 +1,5 @@
 const assert = require("node:assert");
-const { analyticsPercent, buildAnalyticsDashboardModel } = require("../assets/js/analytics-model.js");
+const { analyticsPercent, buildAnalyticsDashboardModel, monthlyWorkerDayStatus } = require("../assets/js/analytics-model.js");
 
 assert.strictEqual(analyticsPercent(1, 4), 25);
 assert.strictEqual(analyticsPercent(0, 0), 0);
@@ -68,5 +68,24 @@ assert.strictEqual(model.weeklyAverage, "0.9"); // 6건/7일
 // recent: 숨김작업자 제외, 최신순
 assert.deepStrictEqual(model.recent.map((row) => row.id), ["u1", "m1"]);
 assert.strictEqual(model.recent[0].type, "불안전요소 등록");
+
+// 월간 작업자 일별 상태 분류: 작업지시서 참여(점검 의무)가 있는 날만 대상으로 집계한다.
+const doneRow = { status: "완료", completion: 100 };
+const partialRow = { status: "진행중", completion: 40 };
+// 의무 있음 + 점검 제출(완료) = done
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [doneRow], hasObligation: true }), "done");
+// 의무 있음 + 미제출 = missing(누락)
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [], hasObligation: true }), "missing");
+// 의무 있음 + 미완료 점검 = partial
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [partialRow], hasObligation: true }), "partial");
+// 의무 없음(해당 일 작업지시서 미참여) = excluded(제외) — 누락 아님, 대상일에서 제외
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [], hasObligation: false }), "excluded");
+// 의무 없어도 제출된 점검이 있으면 완료/미완료로 집계
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [doneRow], hasObligation: false }), "done");
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: false, dayInspections: [partialRow], hasObligation: false }), "partial");
+// 휴무일은 의무와 무관하게 rest
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: true, isFuture: false, dayInspections: [doneRow], hasObligation: true }), "rest");
+// 미래일은 excluded
+assert.strictEqual(monthlyWorkerDayStatus({ isRestDay: false, isFuture: true, dayInspections: [], hasObligation: true }), "excluded");
 
 console.log("analytics model tests passed");

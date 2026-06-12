@@ -111,8 +111,23 @@
       };
     }
 
+    // 월간 작업자 일별 점검 상태 분류 (app-v2.js workerDayInspectionStatus에서 호출).
+    // 작업지시서 참여(점검 의무)가 없는 날은 "excluded"로 분류해 대상일/점검률 분모에서 제외한다.
+    // 단, 해당 일에 제출된 점검이 있으면 의무 여부와 무관하게 완료/미완료로 집계한다.
+    // input: { isRestDay, isFuture, dayInspections, hasObligation }
+    function monthlyWorkerDayStatus(rawInput) {
+      const input = rawInput || {};
+      if (input.isRestDay) return "rest";
+      if (input.isFuture) return "excluded";
+      const rows = Array.isArray(input.dayInspections) ? input.dayInspections : [];
+      if (rows.some((row) => row && row.status === "완료" && Number(row.completion || 0) >= 100)) return "done";
+      if (rows.length) return "partial";
+      return input.hasObligation ? "missing" : "excluded";
+    }
+
   return {
     analyticsPercent,
     buildAnalyticsDashboardModel,
+    monthlyWorkerDayStatus,
   };
 }));
