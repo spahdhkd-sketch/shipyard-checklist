@@ -4458,6 +4458,20 @@
       background: var(--surface);
     }
 
+    .pledge-date-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .pledge-date-nav .pledge-date-input {
+      width: auto;
+      min-width: 150px;
+      flex: 0 1 auto;
+    }
+
     .material-kpi-grid,
     .pledge-kpi-grid,
     .analytics-kpi-grid {

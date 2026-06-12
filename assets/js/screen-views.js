@@ -65,21 +65,29 @@
 
   // 서약: 안전 서약 관리 화면 (읽기 전용 마크업)
   // model: { dateLabel, rows: [{ name, team, shipNo, time, statusChipHtml }], totalCount, pendingCount,
-  //          kpiHtml, canNotifyPledge, adminMode, editing, rules: [string], weekBars: [{ label, pct }], todayIso }
+  //          kpiHtml, canNotifyPledge, adminMode, editing, rules: [string], weekBars: [{ label, pct }], todayIso,
+  //          viewDate, isToday, maxDate }
   function renderPledgeManagerView(model = {}) {
     const rows = Array.isArray(model.rows) ? model.rows : [];
     const rules = Array.isArray(model.rules) ? model.rules : [];
     const weekBars = Array.isArray(model.weekBars) ? model.weekBars : [];
+    const isToday = model.isToday !== false;
     return `<section class="admin-board pledge-board">
         <div class="admin-board-top">
           <div>
             <h2>안전 서약 관리</h2>
-            <p>${esc(model.dateLabel)} · 오늘 서약 현황 실시간</p>
+            <p>${esc(model.dateLabel)} · ${isToday ? "오늘 서약 현황 실시간" : "지난 서약 기록 조회 (읽기 전용)"}</p>
           </div>
           <div class="admin-board-actions">
             <button class="btn-light" data-export-records="pledge" type="button">내보내기</button>
             <button class="btn" data-action="edit-pledge-template" type="button">서약 양식 편집</button>
           </div>
+        </div>
+        <div class="pledge-date-nav">
+          <button class="btn-light" data-action="pledge-prev-day" type="button" aria-label="이전 날 서약 보기">◀ 이전 날</button>
+          <input class="input pledge-date-input" type="date" data-pledge-view-date value="${esc(model.viewDate || "")}" max="${esc(model.maxDate || "")}" aria-label="서약 조회 날짜" />
+          <button class="btn-light" data-action="pledge-next-day" ${isToday ? "disabled" : ""} type="button" aria-label="다음 날 서약 보기">다음 날 ▶</button>
+          ${isToday ? "" : `<button class="btn" data-action="pledge-view-today" type="button">오늘로</button>`}
         </div>
         <div class="pledge-kpi-grid">
           ${model.kpiHtml || ""}
@@ -87,7 +95,7 @@
         <div class="pledge-layout">
           <section class="pledge-table-card">
             <div class="material-table-head">
-              <div><strong>오늘 서약 현황</strong><span>${esc(model.dateLabel)} · ${rows.length}명</span></div>
+              <div><strong>${isToday ? "오늘 서약 현황" : "서약 현황"}</strong><span>${esc(model.dateLabel)} · ${rows.length}명</span></div>
               ${model.canNotifyPledge || model.adminMode ? `<div class="material-table-actions pledge-notify-actions">
                 ${model.adminMode ? `<button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>` : ""}
                 ${model.canNotifyPledge ? `<button class="btn" data-action="notify-pledge-pending" ${model.pendingCount ? "" : "disabled"} title="${model.pendingCount ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>` : ""}
@@ -101,7 +109,7 @@
                 <span><strong>${esc(row.shipNo)}</strong></span>
                 <span>${esc(row.time)}</span>
                 <span>${row.statusChipHtml || ""}</span>
-              </div>`).join("") : `<div class="empty">오늘 표시할 작업자 정보가 없습니다.</div>`}
+              </div>`).join("") : `<div class="empty">${isToday ? "오늘" : "선택한 날짜에"} 표시할 작업자 정보가 없습니다.</div>`}
             </div>
           </section>
           <aside class="pledge-side">

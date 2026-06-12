@@ -384,6 +384,73 @@ assert.match(app + screenViews, /data-action="edit-push-template" data-push-temp
 assert.match(app, /data-action="register-push-notifications"/);
 assert.match(app, /data-action="test-push-notification"/);
 assert.match(app, /"notify-pledge-pending": notifyPledgePendingWorkers/);
+
+// 서약 화면 날짜 이동 (지난 서약 조회)
+assert.match(app, /pledgeViewDate: ""/);
+assert.match(app, /function pledgeDashboardRows\(date = today\(\)\)/);
+assert.match(app, /const dateValue = dateOnly\(date\) \|\| today\(\);/);
+assert.match(app, /state\.inspections\.filter\(\(row\) => row\.date === dateValue\)/);
+assert.match(app, /function pledgeWeekStats\(anchorDate = today\(\)\)/);
+assert.match(app, /function pledgeViewDate\(\)/);
+assert.match(app, /function setPledgeViewDate\(mode, value = ""\)/);
+// 다음 날 이동은 오늘을 넘지 못한다
+assert.match(app, /if \(mode === "next"\) nextDate = addDays\(selected, 1\) <= todayValue \? addDays\(selected, 1\) : selected;/);
+// 날짜 직접 선택도 오늘 이후는 막는다
+assert.match(app, /nextDate = picked && picked <= todayValue \? picked : selected;/);
+assert.match(app, /const rows = pledgeDashboardRows\(viewDate\);/);
+assert.match(app, /const week = pledgeWeekStats\(viewDate\);/);
+// 지난 날짜에서는 미완료자 알림 발송 불가 (읽기 전용)
+assert.match(app, /canNotifyPledge: canSendPledgeNotifications\(\) && isToday/);
+assert.match(app, /"pledge-prev-day": \(\) => setPledgeViewDate\("prev"\)/);
+assert.match(app, /"pledge-next-day": \(\) => setPledgeViewDate\("next"\)/);
+assert.match(app, /"pledge-view-today": \(\) => setPledgeViewDate\("today"\)/);
+assert.match(app, /dispatchPledgeManagerAction\(action, event\) \|\|/);
+assert.match(app, /setPledgeViewDate\("pick", event\.target\.value\)/);
+assert.match(screenViews, /data-action="pledge-prev-day"/);
+assert.match(screenViews, /data-action="pledge-next-day"/);
+assert.match(screenViews, /data-action="pledge-view-today"/);
+assert.match(screenViews, /data-pledge-view-date value="\$\{esc\(model\.viewDate \|\| ""\)\}" max="\$\{esc\(model\.maxDate \|\| ""\)\}"/);
+assert.match(read("assets/css/styles-v2.css"), /\.pledge-date-nav/);
+
+// 서약 뷰 동작: 날짜 필터·읽기 전용·오늘 클램프
+{
+  const screenViewsApi = require(path.join(root, "assets/js/screen-views.js"));
+  const pastHtml = screenViewsApi.renderPledgeManagerView({
+    dateLabel: "2026.06.10",
+    todayIso: "2026-06-12",
+    viewDate: "2026-06-10",
+    maxDate: "2026-06-12",
+    isToday: false,
+    rows: [{ name: "김민수", team: "용접", shipNo: "H-101", time: "08:10", statusChipHtml: "" }],
+    pendingCount: 1,
+    canNotifyPledge: false,
+    adminMode: false,
+    rules: [],
+    weekBars: [],
+  });
+  assert.ok(pastHtml.includes("지난 서약 기록 조회 (읽기 전용)"));
+  assert.ok(!pastHtml.includes('data-action="notify-pledge-pending"'), "past date must not offer notify action");
+  assert.ok(pastHtml.includes('data-action="pledge-view-today"'), "past date must offer 오늘로 button");
+  assert.ok(!pastHtml.includes('data-action="pledge-next-day" disabled'), "past date keeps 다음 날 enabled");
+  assert.ok(pastHtml.includes('max="2026-06-12"'), "date picker must clamp at today");
+
+  const todayHtml = screenViewsApi.renderPledgeManagerView({
+    dateLabel: "2026.06.12",
+    todayIso: "2026-06-12",
+    viewDate: "2026-06-12",
+    maxDate: "2026-06-12",
+    isToday: true,
+    rows: [],
+    pendingCount: 0,
+    canNotifyPledge: true,
+    adminMode: false,
+    rules: [],
+    weekBars: [],
+  });
+  assert.ok(todayHtml.includes('data-action="notify-pledge-pending"'), "today keeps notify action");
+  assert.ok(todayHtml.includes('data-action="pledge-next-day" disabled'), "today disables 다음 날");
+  assert.ok(!todayHtml.includes('data-action="pledge-view-today"'), "today hides 오늘로 button");
+}
 assert.match(app, /"edit-push-template": openPushTemplateEditor/);
 assert.match(app, /"save-push-template": savePushTemplateEditor/);
 assert.match(app, /"cancel-push-template": closePushTemplateEditor/);

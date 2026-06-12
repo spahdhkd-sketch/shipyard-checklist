@@ -2518,6 +2518,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workerFallbackOpen: false,
       pledgeWorkerCollapsed: false,
       pledgeShipCollapsed: false,
+      pledgeViewDate: "",
       workPrepRegisterOpen: false,
       workPrepRecords: loadWorkPrepRecords(),
       deletedWorkPrepRecordIds: loadJson("deletedWorkPrepRecordIds", []),
@@ -7062,11 +7063,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </section>`;
     }
 
-    function pledgeDashboardRows() {
-      const todayValue = today();
-      const todayInspections = state.inspections.filter((row) => row.date === todayValue);
+    function pledgeDashboardRows(date = today()) {
+      const dateValue = dateOnly(date) || today();
+      const dayInspections = state.inspections.filter((row) => row.date === dateValue);
       const byWorker = new Map();
-      todayInspections.forEach((row) => {
+      dayInspections.forEach((row) => {
         const name = row.worker || "미지정";
         if (!byWorker.has(name)) byWorker.set(name, row);
       });
@@ -7087,8 +7088,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return workerRows;
     }
 
-    function pledgeWeekStats() {
-      return Array.from({ length: 7 }, (_, index) => addDays(today(), index - 6)).map((date) => {
+    function pledgeWeekStats(anchorDate = today()) {
+      return Array.from({ length: 7 }, (_, index) => addDays(anchorDate, index - 6)).map((date) => {
         const rows = state.inspections.filter((row) => row.date === date && !hiddenPledgeAnalyticsWorkerName(row.worker));
         const total = Math.max(visiblePledgeAnalyticsWorkers().length, rows.length);
         const done = rows.filter((row) => String(row.safetyPledge || "").trim()).length;
@@ -7110,22 +7111,50 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return Array.isArray(rules) && rules.length ? rules : DEFAULT_PLEDGE_RULES;
     }
 
+    function pledgeViewDate() {
+      const todayValue = today();
+      const value = dateOnly(state.pledgeViewDate);
+      if (!value || value > todayValue) return todayValue;
+      return value;
+    }
+
+    function setPledgeViewDate(mode, value = "") {
+      const todayValue = today();
+      const selected = pledgeViewDate();
+      let nextDate = selected;
+      if (mode === "today") nextDate = todayValue;
+      if (mode === "prev") nextDate = addDays(selected, -1);
+      if (mode === "next") nextDate = addDays(selected, 1) <= todayValue ? addDays(selected, 1) : selected;
+      if (mode === "pick") {
+        const picked = dateOnly(value);
+        if (picked && picked > todayValue) toast("오늘 이후 날짜는 조회할 수 없습니다.");
+        nextDate = picked && picked <= todayValue ? picked : selected;
+      }
+      state.pledgeViewDate = nextDate === todayValue ? "" : nextDate;
+      render();
+    }
+
     function renderPledgeManager() {
-      const rows = pledgeDashboardRows();
+      const viewDate = pledgeViewDate();
+      const isToday = viewDate === today();
+      const rows = pledgeDashboardRows(viewDate);
       const completed = rows.filter((row) => pledgeRowStatus(row) === "완료").length;
       const pending = Math.max(rows.length - completed, 0);
       const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
-      const week = pledgeWeekStats();
+      const week = pledgeWeekStats(viewDate);
       const weekTotal = week.reduce((sum, row) => sum + row.done, 0);
       const kpiHtml = [
-        pledgeKpi("오늘 서약 완료", completed, "명", `전체 ${rows.length}명 중`, "done"),
-        pledgeKpi("미완료", pending, "명", "알림 발송 가능", "warn"),
-        pledgeKpi("완료율", rate, "%", "어제 대비 추적", "rate"),
-        pledgeKpi("이번 주 누적", weekTotal, "건", "일 평균 " + (Math.round(weekTotal / 7 * 10) / 10) + "건", "total"),
+        pledgeKpi(isToday ? "오늘 서약 완료" : "서약 완료", completed, "명", `전체 ${rows.length}명 중`, "done"),
+        pledgeKpi("미완료", pending, "명", isToday ? "알림 발송 가능" : "지난 날짜 조회", "warn"),
+        pledgeKpi("완료율", rate, "%", isToday ? "어제 대비 추적" : viewDate.replace(/-/g, ".") + " 기준", "rate"),
+        pledgeKpi(isToday ? "이번 주 누적" : "주간 누적", weekTotal, "건", "일 평균 " + (Math.round(weekTotal / 7 * 10) / 10) + "건", "total"),
       ].join("");
       return SCREEN_VIEWS.renderPledgeManagerView({
-        dateLabel: today().replace(/-/g, "."),
+        dateLabel: viewDate.replace(/-/g, "."),
         todayIso: today(),
+        viewDate,
+        isToday,
+        maxDate: today(),
         rows: rows.map((row) => ({
           name: row.name,
           team: row.team,
@@ -7136,7 +7165,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         totalCount: rows.length,
         pendingCount: pending,
         kpiHtml,
-        canNotifyPledge: canSendPledgeNotifications(),
+        canNotifyPledge: canSendPledgeNotifications() && isToday,
         adminMode: state.adminMode,
         editing: Boolean(state.pledgeTemplateEditing),
         rules: pledgeRules(),
@@ -8616,6 +8645,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }, action, event);
     }
 
+    function dispatchPledgeManagerAction(action, event) {
+      return runActionMap({
+        "pledge-prev-day": () => setPledgeViewDate("prev"),
+        "pledge-next-day": () => setPledgeViewDate("next"),
+        "pledge-view-today": () => setPledgeViewDate("today"),
+      }, action, event);
+    }
+
     function dispatchHistoryAdminAction(action, event) {
       return runActionMap({
         "clear-history-ship-filter": clearHistoryShipFilter,
@@ -8637,6 +8674,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         dispatchWorkPrepAction(action, event) ||
         dispatchShipDataAction(action, event) ||
         dispatchInspectionAction(action, event) ||
+        dispatchPledgeManagerAction(action, event) ||
         dispatchHistoryAdminAction(action, event)
       );
     }
@@ -9494,6 +9532,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-pledge-view-date]")) {
+        setPledgeViewDate("pick", event.target.value);
+        return;
+      }
       if (event.target.matches("[data-admin-push-field]")) {
         updateAdminPushDraftField(event.target.dataset.adminPushField, event.target.value);
         renderPreservingScroll();
