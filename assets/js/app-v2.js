@@ -926,6 +926,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return Array.from(byId.values());
     }
 
+    function mergeWorkPrepHistory(localRow, remoteRow) {
+      if (!localRow) return remoteRow;
+      if (!remoteRow) return localRow;
+      const base = recordTimestamp(remoteRow) >= recordTimestamp(localRow) ? remoteRow : localRow;
+      return {
+        ...base,
+        statusHistory: WorkPrepTimelineRules.uniqueEntries([
+          ...(Array.isArray(localRow.statusHistory) ? localRow.statusHistory : []),
+          ...(Array.isArray(remoteRow.statusHistory) ? remoteRow.statusHistory : []),
+        ]),
+      };
+    }
+
+    function authoritativeWorkPrepRows(remoteRows) {
+      const localById = new Map();
+      filterDeletedWorkPrepRecords(state.workPrepRecords).forEach((row) => {
+        if (row && row.id) localById.set(row.id, row);
+      });
+      const byId = new Map();
+      (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
+        if (row && row.id) byId.set(row.id, mergeWorkPrepHistory(localById.get(row.id), row));
+      });
+      // 아직 서버에 반영되지 않은 로컬 변경(미push)은 statusHistory를 합쳐 보존
+      pendingSyncRowsForKey("workPrepRecords").forEach((row) => {
+        if (row && row.id) byId.set(row.id, mergeWorkPrepHistory(byId.get(row.id), row));
+      });
+      return Array.from(byId.values());
+    }
+
     function applyRemoteTableRows(key, rows) {
       const config = remoteConfigByKey(key);
       const nextRows = key === "workPrepRecords" ? filterDeletedWorkPrepRecords(rows) : rows;
@@ -934,7 +963,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
       if (REMOTE_AUTHORITATIVE_KEYS.has(key)) {
-        state[key] = authoritativeRemoteRows(key, nextRows);
+        state[key] = key === "workPrepRecords"
+          ? authoritativeWorkPrepRows(nextRows)
+          : authoritativeRemoteRows(key, nextRows);
         return;
       }
       if (nextRows.length) state[key] = mergeRecordArrays(state[key], nextRows);

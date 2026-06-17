@@ -54,4 +54,18 @@ assert.deepStrictEqual(reg.actors.sort(), ["a", "b"]);
 assert.strictEqual(reg.changedAt, "t0");
 assert.strictEqual(merged.filter((x) => x.status === "확정").length, 1);
 
+// --- 멀티 기기 수렴(union) + 멱등성 ---
+// 각자 폰에서 시작 → 서버/로컬 합치면 시작자 명단이 합집합으로 모임
+const devA = T.upsertMilestone([{ status: "작업지시서 등록", changedAt: "t0", actors: ["lead"] }], { kind: "start", changedAt: "t1", actorIds: ["A"] });
+const devB = T.upsertMilestone([{ status: "작업지시서 등록", changedAt: "t0", actors: ["lead"] }], { kind: "start", changedAt: "t2", actorIds: ["B"] });
+let conv = T.uniqueEntries([...devA, ...devB]);
+let cs = conv.find((x) => x.kind === "start");
+assert.deepStrictEqual([...cs.actors].sort(), ["A", "B"]); // 합집합
+assert.strictEqual(cs.changedAt, "t1");                    // 첫 시작 시각 유지
+assert.strictEqual(conv.filter((x) => x.kind === "register").length, 1); // 등록 1줄 유지
+// 멱등: 같은 데이터를 또 합쳐도 변하지 않음
+const conv2 = T.uniqueEntries([...conv, ...devA, ...devB]);
+assert.deepStrictEqual([...conv2.find((x) => x.kind === "start").actors].sort(), ["A", "B"]);
+assert.strictEqual(conv2.length, conv.length);
+
 console.log("work-prep-timeline-rules tests passed");
