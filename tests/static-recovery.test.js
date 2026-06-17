@@ -164,7 +164,8 @@ assert.match(app, /<span>호선 정보 카드<\/span>/);
 assert.match(app, /const PENDING_PHOTO_RETRY_MAX_BYTES = 240 \* 1024/);
 assert.match(app, /function pendingPhotoDataUrlForStorage\(value\)/);
 assert.match(app, /function compactStoragePayloadsIfNeeded\(\)/);
-assert.match(app, /dataUrl: pendingPhotoDataUrlForStorage\(row\.dataUrl\)/);
+assert.match(app, /photoDataUrlForStorage: pendingPhotoDataUrlForStorage/);
+assert.match(read("assets/js/normalization-rules.js"), /dataUrl: photoDataUrlForStorage\(row\.dataUrl\)/);
 assert.match(app, /file\.size <= PENDING_PHOTO_RETRY_MAX_BYTES/);
 [
   "categories",

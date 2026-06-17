@@ -941,18 +941,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizePendingSyncQueue(value) {
-      return (Array.isArray(value) ? value : [])
-        .filter((job) => job && typeof job === "object" && ["rows", "full"].includes(job.type))
-        .map((job) => ({
-          id: job.id || uid("sync"),
-          type: job.type,
-          keys: Array.isArray(job.keys) ? [...new Set(job.keys.map(String))] : [],
-          rowIdsByKey: job.rowIdsByKey && typeof job.rowIdsByKey === "object" ? job.rowIdsByKey : {},
-          attempts: Math.max(0, Number(job.attempts) || 0),
-          createdAt: job.createdAt || new Date().toISOString(),
-          nextRetryAt: job.nextRetryAt || "",
-        }))
-        .filter((job) => job.type === "full" || job.keys.length);
+      return NormalizationRules.normalizePendingSyncQueue(value, {
+        uid,
+        now: () => new Date().toISOString(),
+      });
     }
 
     const loadAdminMode = () => {
@@ -2859,41 +2851,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeStatusRecords(records, statuses) {
-      return (Array.isArray(records) ? records : []).map((record) => {
-        const row = record && typeof record === "object" ? record : {};
-        const status = statuses.includes(row.status) ? row.status : statuses[0];
-        const createdAt = row.createdAt || row.updatedAt || serverNow().toISOString();
-        const updatedAt = row.updatedAt || createdAt;
-        const normalized = {
-          ...row,
-          status,
-          adminMemo: String(row.adminMemo || "").trim(),
-          createdAt,
-          updatedAt,
-          completedAt: row.completedAt || "",
-        };
-        return {
-          ...normalized,
-          statusHistory: ISSUE_MATERIAL_RULES.buildRecordTimeline(normalized, { initialStatus: statuses[0] }),
-        };
+      return NormalizationRules.normalizeStatusRecords(records, statuses, {
+        now: () => serverNow().toISOString(),
+        buildRecordTimeline: ISSUE_MATERIAL_RULES.buildRecordTimeline,
       });
     }
 
     function normalizePendingPhotoUploads(records) {
-      return (Array.isArray(records) ? records : [])
-        .filter((row) => row && row.issueId)
-        .map((row, index) => ({
-          id: row.id || uid("pendingPhoto"),
-          issueId: String(row.issueId || ""),
-          fileName: String(row.fileName || `photo-${index + 1}.jpg`),
-          fileType: String(row.fileType || "image/jpeg"),
-          fileSize: Number(row.fileSize || 0),
-          dataUrl: pendingPhotoDataUrlForStorage(row.dataUrl),
-          status: row.status === "uploading" ? "failed" : String(row.status || "failed"),
-          errorMessage: String(row.errorMessage || ""),
-          createdAt: row.createdAt || serverNow().toISOString(),
-          updatedAt: row.updatedAt || row.createdAt || serverNow().toISOString(),
-        }));
+      return NormalizationRules.normalizePendingPhotoUploads(records, {
+        uid,
+        now: () => serverNow().toISOString(),
+        photoDataUrlForStorage: pendingPhotoDataUrlForStorage,
+      });
     }
 
     function storedPictograms() {
