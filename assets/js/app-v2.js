@@ -892,7 +892,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function mergeRemoteRecord(local, remote) {
       if (!local) return remote;
       if (!remote) return local;
-      return recordTimestamp(remote) > recordTimestamp(local) ? remote : local;
+      // 동률 timestamp일 때 기기마다 자기 로컬을 유지해 값이 갈리지 않도록, 서버(remote)를
+      // 결정적으로 채택해 모든 기기가 같은 값으로 수렴하게 한다. (authoritative 테이블의
+      // 미push 로컬 변경은 pendingSyncRowsForKey가 별도로 보존한다.)
+      return recordTimestamp(remote) >= recordTimestamp(local) ? remote : local;
     }
 
     function mergeRecordArrays(localRows, remoteRows) {
