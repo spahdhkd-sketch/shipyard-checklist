@@ -9678,16 +9678,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const cat = categoryById(state.selectedCategoryId);
       if (!cat) return toast("점검 작업 유형을 다시 선택하세요.");
       const items = filteredChecklistItems(cat.id);
-      const highMissing = items.filter((row) => row.risk === "high" && !state.draft.checks[row.id]);
       const pledgeRulesCount = pledgeRules().length;
       const pledgeChecked = pledgeRules().filter((_, index) => state.draft.pledgeChecks[index]).length;
       const signatureText = signatureLabel();
-      if (!state.draft.worker.trim()) return toast("담당자명을 입력하세요.");
-      if (!state.draft.shipNo) return toast("호선을 선택하세요.");
-      if (pledgeChecked !== pledgeRulesCount) return toast("안전 서약 항목을 모두 확인하세요.");
-      if (!signatureText) return toast("서명을 입력하거나 손가락으로 서명하세요.");
-      if (highMissing.length) return toast("위험 항목을 모두 확인해야 제출할 수 있습니다.");
-      if (!items.length) return toast("등록된 점검 항목이 없습니다.");
+      const validationError = InspectionRules.validateInspectionDraft({
+        worker: state.draft.worker,
+        shipNo: state.draft.shipNo,
+        items,
+        checks: state.draft.checks,
+        pledgeRulesCount,
+        pledgeCheckedCount: pledgeChecked,
+        signatureText,
+      });
+      if (validationError) return toast(validationError);
       state.inspectionSubmitting = true;
       const submitButton = document.querySelector("[data-action='submit-inspection']");
       if (submitButton) {
@@ -9697,10 +9700,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
       try {
         const now = serverNow();
-        const checkedCount = items.filter((row) => state.draft.checks[row.id]).length;
+        const summary = InspectionRules.summarizeInspectionChecks(items, state.draft.checks);
         const inspectionId = uid("inspection");
-        const completion = Math.round(checkedCount / items.length * 100);
-        const warnings = items.filter((row) => !state.draft.checks[row.id] && row.risk !== "low").length;
+        const completion = summary.completion;
+        const warnings = summary.warnings;
         const selectedTools = sanitizeToolIds(state.draft.selectedToolIds)
           .map((id) => toolById(id))
           .filter((tool) => tool && tool.deleted !== true)
@@ -9723,7 +9726,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           signatureText: signatureImage ? "" : signatureText,
           date: localDate(now),
           time: recordTime(now),
-          status: checkedCount === items.length ? "완료" : "미완료",
+          status: summary.status,
           warnings,
           completion,
           tools: selectedTools,
