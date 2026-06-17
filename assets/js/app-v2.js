@@ -3614,8 +3614,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return `앱 ${APP_VERSION} · 서비스워커 ${workerVersion} · 캐시 ${cacheVersion}`;
     }
 
+    let swAutoReloadReady = false;
+    function setupServiceWorkerAutoReload() {
+      if (swAutoReloadReady || !("serviceWorker" in navigator)) return;
+      // 첫 설치(제어 중인 SW가 아직 없음)면 새로고침 불필요. 이미 SW 제어 하에 있는
+      // 세션에서 새 SW로 제어가 넘어갈 때(=새 배포 활성화)만 1회 자동 새로고침해
+      // 모든 기기가 강제 새로고침 없이 최신 코드로 맞춰지도록 한다.
+      if (!navigator.serviceWorker.controller) return;
+      swAutoReloadReady = true;
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) return;
+        reloading = true;
+        window.location.reload();
+      });
+    }
+
     function requestServiceWorkerVersion() {
       if (!("serviceWorker" in navigator)) return;
+      setupServiceWorkerAutoReload();
       let finished = false;
       const receiveVersion = (event) => {
         const data = event.data || {};
