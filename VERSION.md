@@ -1,18 +1,18 @@
 # Version
 
-Current version: `1.2-20260611`
+Current version: `1.3-20260618`
 
-Recorded at: `2026-06-11 (view-split release)`
+Recorded at: `2026-06-18 (stats/pledge/range-fetch release)`
 
-Baseline commit: `8acd67e`
+Baseline commit: `70fdcdd`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- This version removes the dedicated 권한 tab and keeps worker permission edits inside 관리 > 작업자.
-- Timeline history entries now use the logged-in worker or manager name instead of the generic 관리자 label.
-- Work-prep start actions are locked until the work date 07:00, with the disabled-button guidance "작업당일 07:00부터 점검 시작 가능합니다".
-- It issues a fresh asset token and service-worker version so browsers pick up the 2026-06-10 release.
+- Monthly worker inspection stats now count only days with an assigned work-prep (work-free days and weekends are excluded).
+- Pledge manager screen can browse past pledge data by date (read-only for past dates; no missing-pledge alert).
+- Statistics and pledge screens range-fetch inspection history from Supabase into a read-only cache, independent of the 20-row history limit and without conflicting with pullRemote's authoritative replacement.
+- Issues a fresh asset token (`20260618-stats-pledge-1`) and service-worker version (`1.3-20260618-stats-pledge`) so browsers pick up the release.
 
 Release version rule:
 - When the user says "배포 하자" or makes an equivalent deployment request, increment the minor version by `0.1`.
