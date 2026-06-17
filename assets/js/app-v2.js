@@ -1281,33 +1281,45 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function normalizeWorkPrepTimelineEntry(entry) {
-      if (!entry || typeof entry !== "object") return null;
-      const status = String(entry.status || "").trim();
-      const changedAt = String(entry.changedAt || "").trim();
-      if (!status || !changedAt) return null;
-      const actor = String(entry.actor || "").trim() || "관리자";
-      const memo = String(entry.memo || "").trim();
-      return {
-        id: String(entry.id || "").trim() || `${changedAt}:${status}:${actor}`,
-        status,
-        memo,
-        changedAt,
-        actor,
-      };
+      return WorkPrepTimelineRules.normalizeEntry(entry);
     }
 
     function uniqueWorkPrepTimelineEntries(entries) {
-      const seen = new Set();
-      return (Array.isArray(entries) ? entries : [])
-        .map(normalizeWorkPrepTimelineEntry)
-        .filter(Boolean)
-        .filter((entry) => {
-          const key = `${entry.changedAt}\u0000${entry.status}\u0000${entry.memo}\u0000${entry.actor}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-        .sort((a, b) => String(a.changedAt).localeCompare(String(b.changedAt)));
+      return WorkPrepTimelineRules.uniqueEntries(entries);
+    }
+
+    function workPrepTimelineActorText(entry) {
+      const ids = Array.isArray(entry && entry.actors) ? entry.actors : [];
+      const names = ids
+        .map((id) => state.workers.find((worker) => worker.id === id))
+        .map((worker) => String((worker && worker.name) || "").trim())
+        .filter(Boolean);
+      if (names.length === 1) return names[0];
+      if (names.length === 2) return `${names[0]}, ${names[1]}`;
+      if (names.length > 2) return `${names[0]} 외 ${names.length - 1}명`;
+      return String((entry && (entry.actorLabel || entry.actor)) || "").trim() || "관리자";
+    }
+
+    function applyWorkPrepMilestone(recordId, statusForRecord, milestone) {
+      let updated = null;
+      state.workPrepRecords = state.workPrepRecords.map((row) => {
+        if (row.id !== recordId) return row;
+        updated = {
+          ...row,
+          status: normalizeWorkPrepStatus(statusForRecord),
+          statusHistory: WorkPrepTimelineRules.upsertMilestone(row.statusHistory || [], milestone),
+          updatedAt: milestone.changedAt,
+        };
+        return updated;
+      });
+      if (updated) {
+        saveWorkPrepRecords();
+        if (isSyncConfigured()) {
+          enqueueSyncRows("workPrepRecords", [updated]);
+          flushPendingSyncQueue();
+        }
+      }
+      return updated;
     }
 
     function workPrepRegistrationActor(record) {
@@ -1318,13 +1330,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function buildWorkPrepTimeline(record) {
       const row = record && typeof record === "object" ? record : {};
       const entries = Array.isArray(row.statusHistory) ? [...row.statusHistory] : [];
+      const hasRegister = entries.some((entry) => {
+        const normalized = WorkPrepTimelineRules.normalizeEntry(entry);
+        return normalized && normalized.kind === "register";
+      });
       const createdAt = String(row.createdAt || "").trim();
-      if (createdAt) {
+      if (!hasRegister && createdAt) {
+        // 구버전 호환: 저장된 등록 줄이 없으면 등록 시점으로 보강(상태 문구 왜곡 없이 고정)
         entries.push({
-          status: "등록",
-          memo: `${WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(row.status || "preparing")] || "작업지시서"} 상태로 등록`,
+          kind: "register",
+          status: WorkPrepTimelineRules.MILESTONE.register,
           changedAt: createdAt,
-          actor: workPrepRegistrationActor(row),
+          actors: row.leaderWorkerId ? [String(row.leaderWorkerId)] : [],
+          actorLabel: workPrepRegistrationActor(row),
         });
       }
       return uniqueWorkPrepTimelineEntries(entries);
@@ -1421,7 +1439,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         otherTeamWorkerIds: normalizeOtherTeamWorkPrepWorkerIds(cleanDraft),
         toolIds: normalizeWorkPrepToolIds(cleanDraft),
         status: normalizeWorkPrepStatus(cleanDraft.status || "preparing"),
-        statusHistory: uniqueWorkPrepTimelineEntries(cleanDraft.statusHistory || []),
+        statusHistory: WorkPrepTimelineRules.upsertMilestone(cleanDraft.statusHistory || [], {
+          kind: "register",
+          changedAt: cleanDraft.createdAt || now,
+          actorIds: cleanDraft.leaderWorkerId ? [cleanDraft.leaderWorkerId] : [],
+          actorLabel: workPrepRegistrationActor(cleanDraft),
+        }),
         createdAt: cleanDraft.createdAt || now,
         updatedAt: now,
       };
@@ -1572,7 +1595,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const record = workPrepRecordById(recordId);
       if (!record) return null;
       const progress = workPrepSubmissionProgress(record);
-      if (progress.complete) return updateWorkPrepRecordStatus(record.id, "used");
+      if (progress.complete) {
+        return applyWorkPrepMilestone(record.id, "used", {
+          kind: "complete",
+          changedAt: serverNow().toISOString(),
+          actorIds: progress.submittedIds,
+          replaceActors: true,
+        });
+      }
       if (normalizeWorkPrepStatus(record.status) === "used") return updateWorkPrepRecordStatus(record.id, "confirmed");
       return record;
     }
@@ -4560,7 +4590,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const leader = state.workers.find((worker) => worker.id === record.leaderWorkerId);
       const workerName = currentWorker?.name || leader?.name || state.draft.worker || "";
       const workPrepWorkerId = currentWorker?.id || leader?.id || "";
-      const confirmedRecord = updateWorkPrepRecordStatus(record.id, "confirmed") || { ...record, status: "confirmed" };
+      const confirmedRecord = applyWorkPrepMilestone(record.id, "confirmed", {
+        kind: "start",
+        changedAt: serverNow().toISOString(),
+        actorIds: workPrepWorkerId ? [workPrepWorkerId] : [],
+        actorLabel: workerName,
+      }) || { ...record, status: "confirmed" };
       state.workPrepDraft = createWorkPrepDraft(confirmedRecord);
       saveWorkPrepDraft();
       state.workPrepRegisterOpen = false;
@@ -6423,7 +6458,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           changedAt: entry.changedAt,
           changedAtLabel: formatDateTime(entry.changedAt),
           statusBadgeHtml: statusBadge(entry.status),
-          actor: entry.actor,
+          actor: workPrepTimelineActorText(entry),
           memo: entry.memo,
         })),
       });

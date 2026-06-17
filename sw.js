@@ -20,6 +20,7 @@ const SHELL = [
   `/assets/dist/js/inspection-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/normalization-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/state-shape-rules.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/work-prep-timeline-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/push-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/issue-material-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`,
