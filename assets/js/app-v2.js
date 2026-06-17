@@ -2872,30 +2872,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function dedupeChecklistItems() {
-      const seen = new Set();
-      state.items = state.items.map((row) => {
-        if (row.active === false) return row;
-        const key = `${row.categoryId}::${String(row.text || "").trim().replace(/\s+/g, " ")}`;
-        if (!String(row.text || "").trim() || seen.has(key)) return { ...row, active: false };
-        seen.add(key);
-        return row;
-      });
+      state.items = StateShapeRules.dedupeChecklistItems(state.items);
     }
 
     function dedupeTools() {
-      const keepers = new Map();
-      const ranked = state.tools
-        .map((tool, index) => ({ tool, index, key: normalizeToolName(tool.name) }))
-        .filter(({ tool, key }) => key && tool.deleted !== true)
-        .sort((a, b) => compareToolWrittenOrder(a.tool, b.tool) || a.index - b.index);
-      ranked.forEach(({ tool, key }) => {
-        if (!keepers.has(key)) keepers.set(key, tool.id);
-      });
-      state.tools = state.tools.map((tool) => {
-        const key = normalizeToolName(tool.name);
-        if (!key || tool.deleted === true) return tool;
-        return keepers.get(key) === tool.id ? tool : { ...tool, deleted: true };
-      });
+      state.tools = StateShapeRules.dedupeTools(state.tools, { normalizeToolName, compareToolWrittenOrder });
     }
 
     function readOldJson(key, fallback) {
@@ -2908,60 +2889,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function migrateOldChecklists(oldChecklists) {
-      state.categories = [];
-      state.sections = [];
-      state.items = [];
-      Object.entries(oldChecklists).forEach(([id, data], index) => {
-        const categoryId = id || uid("cat");
-        const sectionId = `${categoryId}_default`;
-        state.categories.push({
-          id: categoryId,
-          label: data.label || "작업 유형",
-          icon: data.icon || String(index + 1),
-          color: data.color || COLORS[index % COLORS.length],
-          requireToolCheck: true,
-          toolNature: "선행",
-          order: index + 1,
-        });
-        state.sections.push({
-          id: sectionId,
-          categoryId,
-          title: "기본 점검",
-          order: 1,
-        });
-        (data.items || []).forEach((sourceItem, itemIndex) => {
-          state.items.push({
-            id: sourceItem.id || uid("item"),
-            categoryId,
-            sectionId,
-            text: sourceItem.text || "",
-            risk: sourceItem.risk || "medium",
-            required: (sourceItem.risk || "medium") === "high",
-            active: true,
-            toolIds: [],
-            visibilityCondition: "항상 표시",
-            order: itemIndex + 1,
-          });
-        });
-      });
+      const migrated = StateShapeRules.migrateOldChecklists(oldChecklists, { uid, colors: COLORS });
+      state.categories = migrated.categories;
+      state.sections = migrated.sections;
+      state.items = migrated.items;
     }
 
     function dedupeShips() {
-      const seen = new Set();
-      state.ships = state.ships.filter((ship) => {
-        const no = normalizeShipNo(ship.no);
-        if (!no || seen.has(no)) return false;
-        seen.add(no);
-        ship.no = no;
-        ship.processStage = SHIP_WORKFLOW_STAGES.includes(ship.processStage) ? ship.processStage : "mounting";
-        ship.deliveryType = ship.deliveryType || "";
-        ship.deliveryDate = ship.deliveryDate || "";
-        ship.lcDate = ship.lcDate || "";
-        ship.stDate = ship.stDate || "";
-        ship.clDate = ship.clDate || (ship.deliveryType === "C/L" ? ship.deliveryDate : "");
-        ship.dlDate = ship.dlDate || (ship.deliveryType === "D/L" ? ship.deliveryDate : "");
-        return true;
-      });
+      state.ships = StateShapeRules.dedupeShips(state.ships, { normalizeShipNo, workflowStages: SHIP_WORKFLOW_STAGES });
     }
 
     function persist() {
