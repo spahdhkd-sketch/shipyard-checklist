@@ -1,8 +1,8 @@
 # Version
 
-Current version: `1.4-20260618`
+Current version: `1.4-20260624-material-push`
 
-Recorded at: `2026-06-18 (timeline redesign + auto-update release)`
+Recorded at: `2026-06-24 (missing material push notification release)`
 
 Baseline commit: `7e5140a`
 
@@ -17,8 +17,8 @@ Notes:
 - Remote merge adopts the server record on timestamp ties for deterministic convergence.
 - Earlier in this cycle: extracted inspection-rules / normalization-rules /
   state-shape-rules / work-prep-timeline-rules modules from app-v2; hardened deploy-prod.bat.
-- Issues a fresh asset token (`20260618-timeline-sync-1`) and service-worker version
-  (`1.4-20260618-timeline-sync`) so browsers pick up the release.
+- Issues a fresh asset token (`20260624-material-push-1`) and service-worker version
+  (`1.4-20260624-material-push`) so browsers pick up the release.
 
 Release version rule:
 - When the user says "배포 하자" or makes an equivalent deployment request, increment the minor version by `0.1`.

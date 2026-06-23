@@ -1,5 +1,5 @@
-const APP_VERSION = "1.4-20260618-timeline-sync";
-const ASSET_TOKEN = "20260618-timeline-sync-1";
+const APP_VERSION = "1.4-20260624-material-push";
+const ASSET_TOKEN = "20260624-material-push-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

@@ -10,8 +10,9 @@ import { build } from "esbuild";
 import { mkdir, readdir, stat, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC_DIRS = [
   { dir: "assets/js", ext: ".js", loader: "js", out: "assets/dist/js" },
   { dir: "assets/css", ext: ".css", loader: "css", out: "assets/dist/css" },

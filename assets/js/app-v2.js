@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.4-20260618-timeline-sync";
+    const APP_VERSION = "1.4-20260624-material-push";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -54,6 +54,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       },
     };
     const GENERIC_WORKER_LABELS = new Set(["작업자", "로그인 전"]);
+    const MISSING_MATERIAL_PUSH_TARGET_NAMES = ["허지원", "김준혁", "김경제"];
     const PICTOGRAM_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
     const PICTOGRAM_HELPERS = typeof window !== "undefined" && window.ShipyardPictogramHelpers
       ? window.ShipyardPictogramHelpers
@@ -2365,6 +2366,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return state.workers.filter((w) => w.unsafePushTarget).map((w) => w.id).filter(Boolean);
     }
 
+    function missingMaterialPushTargetWorkerIds() {
+      return workerIdsForNames(MISSING_MATERIAL_PUSH_TARGET_NAMES);
+    }
+
     function normalizePushTemplateKind(kind) {
       return PUSH_RULES.normalizePushTemplateKind(kind);
     }
@@ -2483,6 +2488,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         tag: `unsafe-${row.id || Date.now()}`,
         url: "/unsafe.html",
       }, { silent: true, kind: "unsafeIssue" });
+    }
+
+    async function notifyMissingMaterialRegistered(row) {
+      if (!row) return;
+      const notification = pushNotificationFromTemplate("missingMaterial", {
+        호선: row.shipNo ? `호선 ${row.shipNo}` : "호선 미지정",
+        등록자: row.workerNameSnapshot || "작업자",
+        자재: row.materialName || "자재명 미지정",
+        수량: materialQuantity(row),
+      });
+      await sendWorkerPushNotification(missingMaterialPushTargetWorkerIds(), {
+        ...notification,
+        tag: `material-${row.id || Date.now()}`,
+        url: "/materials.html",
+      }, { silent: true, kind: "missingMaterial" });
     }
 
     function createUnsafeDraft(overrides = {}) {
@@ -9843,6 +9863,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       scrollScreenTop();
       replaceRouteState();
       toast("호선자재 누락이 접수되었습니다.");
+      notifyMissingMaterialRegistered(row);
       syncMissingMaterial(row);
     }
 
