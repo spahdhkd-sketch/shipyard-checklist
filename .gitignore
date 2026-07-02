@@ -14,3 +14,9 @@ docs/quality/claude-cowork-review-2026-05-24.md
 
 # Build artifacts: committed so the GitHub deploy path serves them.
 # Regenerate with `npm run build:assets` before committing a release.
+
+# 세션 작업 문서 (레포 제외)
+CLAUDE.md
+ChatGPT Image*.png
+backup_checklist_content_*.json
+*.xlsx

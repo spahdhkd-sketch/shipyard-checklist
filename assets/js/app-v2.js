@@ -300,9 +300,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_sections",
         key: "sections",
-        selectColumns: "id,category_id,title,sort_order",
-        toDb: (row) => ({ id: row.id, category_id: row.categoryId, title: row.title, sort_order: row.order || 0 }),
-        fromDb: (row) => ({ id: row.id, categoryId: row.category_id, title: row.title, order: row.sort_order || 0 }),
+        selectColumns: "id,category_id,title,sort_order,sign_code,frequency,severity,total_score",
+        toDb: (row) => ({ id: row.id, category_id: row.categoryId, title: row.title, sort_order: row.order || 0, sign_code: row.signCode || null, frequency: Number.isFinite(row.frequency) ? row.frequency : null, severity: Number.isFinite(row.severity) ? row.severity : null, total_score: Number.isFinite(row.totalScore) ? row.totalScore : null }),
+        fromDb: (row) => ({ id: row.id, categoryId: row.category_id, title: row.title, order: row.sort_order || 0, signCode: row.sign_code || "", frequency: Number.isFinite(row.frequency) ? row.frequency : null, severity: Number.isFinite(row.severity) ? row.severity : null, totalScore: Number.isFinite(row.total_score) ? row.total_score : (Number.isFinite(row.frequency) && Number.isFinite(row.severity) ? row.frequency * row.severity : null) }),
       },
       {
         table: "safety_items",
@@ -4529,6 +4529,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         document.querySelectorAll(`[data-check-section-count="${cssEscape(sectionId)}"]`).forEach((node) => {
           node.textContent = `${sectionChecked}/${sectionItems.length}`;
         });
+        const allChecked = sectionItems.length > 0 && sectionItems.every((entry) => state.draft.checks[entry.id]);
+        const someChecked = sectionItems.some((entry) => state.draft.checks[entry.id]);
+        document.querySelectorAll(`[data-check-section-master="${cssEscape(sectionId)}"]`).forEach((node) => {
+          node.checked = allChecked;
+          node.indeterminate = !allChecked && someChecked;
+        });
       }
 
       const riskHtml = badge(model.highMissing.length ? "high" : "low", model.highMissing.length ? `위험 ${model.highMissing.length}건 남음` : "위험 확인 완료");
@@ -5207,23 +5213,48 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>`;
     }
 
+    function sectionSignImg(signCode) {
+      if (!/^[PMSW]-\d{2}$/.test(signCode)) return "";
+      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" onerror="this.style.display='none'" loading="lazy">`;
+    }
+
+    function sectionRiskBadge(section) {
+      const total = section.totalScore;
+      if (!(Number.isFinite(total) && total >= 1)) return "";
+      const tone = total >= 6 ? "risk-sign-high" : total >= 3 ? "risk-sign-mid" : "risk-sign-low";
+      return `<span class="check-section-risk ${tone}">위험도 ${esc(String(total))}</span>`;
+    }
+
+    function sectionGradeBadge(section) {
+      const total = section.totalScore;
+      if (!(Number.isFinite(total) && total >= 3)) return "";
+      return badge(total >= 6 ? "high" : "medium");
+    }
+
     function renderChecklistSections(categoryId) {
       const sections = sectionsFor(categoryId);
       const visibleItems = filteredChecklistItems(categoryId);
       if (!sections.length) return `<div class="empty empty-section-note">등록된 섹션이 없습니다.</div>`;
       return sections.map((section) => {
         const items = visibleItems.filter((row) => row.sectionId === section.id);
+        const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
         return `<section class="check-section ${items.length ? "" : "check-section-empty"}" data-check-section="${esc(section.id)}">
-          <div class="check-section-head">
-            <span>${esc(section.title)}</span>
+          <div class="check-section-hero">
+            ${items.length ? `<input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.length && items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />` : ""}
+            ${sectionSignImg(section.signCode)}
+            <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
+          </div>
+          <div class="check-section-titlebar" data-risk-tone="${tone}">
+            <span class="check-section-title">${esc(section.title)}</span>
             <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
           </div>
-          ${items.length ? items.map((row) => `
-            <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
-              <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
-              <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
-              ${badge(row.risk)}
-            </label>`).join("") : `<div class="notice empty-section-note">이 섹션에는 항목이 없습니다.</div>`}
+          <div class="check-section-items">
+            ${items.length ? items.map((row) => `
+              <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
+                <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
+                <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
+              </label>`).join("") : `<div class="notice empty-section-note">이 섹션에는 항목이 없습니다.</div>`}
+          </div>
         </section>`;
       }).join("");
     }
@@ -7678,6 +7709,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return SCREEN_VIEWS.renderSectionManagerView({
         sectionId: section.id,
         sectionTitle: section.title,
+        signCode: section.signCode || "",
+        frequency: section.frequency,
+        severity: section.severity,
         editing: state.editSectionId === section.id,
         addOpen,
         adminMode: state.adminMode,
@@ -9532,6 +9566,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         saveJson("draft", state.draft);
         if (!updateCheckItemDom(itemId, event.target.checked)) render();
       }
+      if (event.target.matches("[data-check-section-master]")) {
+        const sectionId = event.target.dataset.checkSectionMaster;
+        const checked = event.target.checked;
+        const model = currentCheckRenderState();
+        if (!model) return;
+        const sectionItems = model.items.filter((row) => row.sectionId === sectionId);
+        sectionItems.forEach((row) => {
+          state.draft.checks[row.id] = checked;
+        });
+        saveJson("draft", state.draft);
+        let ok = sectionItems.length > 0;
+        sectionItems.forEach((row) => {
+          if (!updateCheckItemDom(row.id, checked)) ok = false;
+        });
+        if (!ok) render();
+      }
     });
 
     document.addEventListener("change", (event) => {
@@ -11107,7 +11157,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!title) return toast("섹션명을 입력하세요.");
       const duplicate = sectionsFor(section.categoryId).some((row) => row.id !== id && row.title === title);
       if (duplicate) return toast("같은 이름의 섹션이 이미 있습니다.");
-      state.sections = state.sections.map((row) => row.id === id ? { ...row, title } : row);
+      const signRaw = String($(`editSectionSign_${id}`)?.value || "").trim();
+      const signCode = /^[PMSW]-\d{2}$/.test(signRaw) ? signRaw : "";
+      const freqRaw = parseInt($(`editSectionFrequency_${id}`)?.value, 10);
+      const sevRaw = parseInt($(`editSectionSeverity_${id}`)?.value, 10);
+      const frequency = Number.isInteger(freqRaw) && freqRaw >= 1 && freqRaw <= 5 ? freqRaw : null;
+      const severity = Number.isInteger(sevRaw) && sevRaw >= 1 && sevRaw <= 5 ? sevRaw : null;
+      const totalScore = frequency != null && severity != null ? frequency * severity : null;
+      state.sections = state.sections.map((row) => row.id === id ? { ...row, title, signCode, frequency, severity, totalScore } : row);
       state.editSectionId = null;
       if (!(await persistAndSync("sections"))) return;
       render();

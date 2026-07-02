@@ -72,6 +72,10 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "category_id",
       "title",
       "sort_order",
+      "sign_code",
+      "frequency",
+      "severity",
+      "total_score",
     ]),
   }],
   ["items", {

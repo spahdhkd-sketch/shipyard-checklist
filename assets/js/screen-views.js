@@ -864,6 +864,68 @@
       </div>`;
   }
 
+  // 섹션(위험요인) 표지/빈도/강도 편집 UI
+  function renderSectionRiskEditor(model = {}) {
+    const sid = model.sectionId;
+    const signCode = String(model.signCode || "");
+    const validSign = /^[PMSW]-\d{2}$/.test(signCode);
+    const signGroups = [
+      { label: "금지", prefix: "P" },
+      { label: "지시", prefix: "M" },
+      { label: "안내", prefix: "S" },
+      { label: "경고", prefix: "W" },
+    ];
+    const signOptions = signGroups.map((group) => {
+      const opts = [];
+      for (let i = 1; i <= 12; i++) {
+        const code = `${group.prefix}-${String(i).padStart(2, "0")}`;
+        opts.push(`<option value="${code}" ${signCode === code ? "selected" : ""}>${code}</option>`);
+      }
+      return `<optgroup label="${group.label}">${opts.join("")}</optgroup>`;
+    }).join("");
+    const scoreOptions = (selected) => {
+      let html = `<option value="" ${selected == null ? "selected" : ""}>선택</option>`;
+      for (let n = 1; n <= 5; n++) {
+        html += `<option value="${n}" ${String(selected) === String(n) ? "selected" : ""}>${n}</option>`;
+      }
+      return html;
+    };
+    const freq = Number(model.frequency);
+    const sev = Number(model.severity);
+    const totalInit = (Number.isInteger(freq) && freq >= 1 && freq <= 5 && Number.isInteger(sev) && sev >= 1 && sev <= 5) ? freq * sev : "-";
+    const signPreviewStyle = validSign ? "height:44px" : "height:44px;display:none";
+    const signPreviewSrc = validSign ? `assets/pictograms/signs/${signCode}.png` : "";
+    const signOnchange = `var v=this.value,p=document.getElementById('editSectionSignPreview_${sid}');if(/^[PMSW]-\\d{2}$/.test(v)){p.src='assets/pictograms/signs/'+v+'.png';p.style.display='';}else{p.style.display='none';}`;
+    const scoreOnchange = `var f=parseInt(document.getElementById('editSectionFrequency_${sid}').value,10),s=parseInt(document.getElementById('editSectionSeverity_${sid}').value,10),o=document.getElementById('editSectionTotal_${sid}');if(f>=1&&f<=5&&s>=1&&s<=5){o.textContent=f*s;}else{o.textContent='-';}`;
+    return `
+      <div class="field" style="margin-top:8px">
+        <label for="editSectionSign_${sid}">위험 표지</label>
+        <select class="select" id="editSectionSign_${sid}" onchange="${signOnchange}">
+          <option value="" ${!validSign ? "selected" : ""}>없음</option>
+          ${signOptions}
+        </select>
+        <img id="editSectionSignPreview_${sid}" alt="표지 미리보기" src="${signPreviewSrc}" style="${signPreviewStyle};margin-top:6px" onerror="this.style.display='none'" />
+      </div>
+      <div class="grid-2" style="margin-top:8px">
+        <div class="field">
+          <label for="editSectionFrequency_${sid}">빈도</label>
+          <select class="select" id="editSectionFrequency_${sid}" onchange="${scoreOnchange}">
+            ${scoreOptions(model.frequency)}
+          </select>
+        </div>
+        <div class="field">
+          <label for="editSectionSeverity_${sid}">강도</label>
+          <select class="select" id="editSectionSeverity_${sid}" onchange="${scoreOnchange}">
+            ${scoreOptions(model.severity)}
+          </select>
+        </div>
+        <div class="field">
+          <label>종합 점수</label>
+          <output class="small muted" id="editSectionTotal_${sid}">${totalInit}</output>
+        </div>
+      </div>`;
+  }
+
   // 항목 관리: 섹션 카드 (읽기 전용 마크업)
   // model: { sectionId, sectionTitle, editing, addOpen, adminMode, moreToggleHtml, visibilityOptionsHtml, toolPickerHtml, rows: [{ html, text, requiredLabel, visibilityLabel, badgeHtml }] }
   function renderSectionManagerView(model = {}) {
@@ -874,6 +936,7 @@
             <div class="field section-card-info">
               <label for="editSectionTitle_${model.sectionId}">섹션명 수정</label>
               <input class="input" id="editSectionTitle_${model.sectionId}" value="${esc(model.sectionTitle)}" />
+              ${renderSectionRiskEditor(model)}
             </div>
             <div class="item-actions manage-actions">
               <button class="btn" data-save-section="${model.sectionId}" type="button">저장</button>
