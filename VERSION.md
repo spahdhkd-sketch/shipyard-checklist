@@ -1,28 +1,19 @@
 # Version
 
-Current version: `1.4-20260618`
+Current version: `1.5-20260703`
 
-Recorded at: `2026-06-18 (timeline redesign + auto-update release)`
+Recorded at: `2026-07-03 (risk assessment checklist + safety signs release)`
 
-Baseline commit: `7e5140a`
+Baseline commit: `dc3376c`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- Work-prep timeline redesigned around register / start / complete milestones with
-  per-actor lists (worker ids); legacy entries normalize losslessly. Start-actor
-  lists union-merge across devices on remote pull (multi-device safe).
-- New app version auto-reloads controlled clients (service worker controllerchange)
-  so phones pick up releases without a manual hard refresh.
-- Remote merge adopts the server record on timestamp ties for deterministic convergence.
-- Earlier in this cycle: extracted inspection-rules / normalization-rules /
-  state-shape-rules / work-prep-timeline-rules modules from app-v2; hardened deploy-prod.bat.
-- Issues a fresh asset token (`20260618-timeline-sync-1`) and service-worker version
-  (`1.4-20260618-timeline-sync`) so browsers pick up the release.
-
-Release version rule:
-- When the user says "배포 하자" or makes an equivalent deployment request, increment the minor version by `0.1`.
-- Use the real current date at release time in `YYYYMMDD` format.
-- Record the version as `<minor-version>-<YYYYMMDD>`.
-- Update this file, commit the version change, create a matching git tag prefixed with `v`, and push both `main` and the tag.
-- After deployment, verify the production alias: `https://gs-safety-checklist.vercel.app/`.
+- Checklist content replaced with 7 risk-assessment work standards (108 hazards / 145 items)
+  seeded into safety_categories/sections/items; legacy content backed up locally.
+- Check screen section cards redesigned: master checkbox, centered safety sign (48 sign assets),
+  risk score + grade badges, accent-bar title, boxed items.
+- Admin section editor now edits sign code (with preview), frequency, severity; total auto-computed.
+- admin-mutations Edge Function v10 whitelists sign_code/frequency/severity/total_score.
+- Issues a fresh asset token (`20260703-risk-signs-1`) and service-worker version
+  (`1.5-20260703-risk-signs`) so installed clients auto-update.
