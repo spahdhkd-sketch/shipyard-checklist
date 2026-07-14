@@ -10,6 +10,10 @@ const corsHeaders = {
 
 const LEADER_WORKER_POSITION = "조장";
 const FOREMAN_WORKER_POSITION = "반장";
+const MISSING_MATERIAL_PUSH_TARGET_NAMES = new Set(["허지원", "김준혁", "김경제"].map(normalizedWorkerName));
+const WORKER_PUSH_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const WORKER_PUSH_ATTEMPT_LOCK_MS = 15 * 60 * 1000;
+const WORKER_PUSH_MAX_FAILED_ATTEMPTS = 5;
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") || "",
@@ -82,6 +86,54 @@ function canSendPledgeNotifications(worker: Record<string, unknown>) {
   return [LEADER_WORKER_POSITION, FOREMAN_WORKER_POSITION, "관리", "총무"].includes(position) || team === "관리" || team === "총무";
 }
 
+async function beginWorkerPushAttempt(bucketKey: string, workerId: string) {
+  const { data, error } = await supabase.rpc("begin_worker_push_attempt", {
+    p_bucket_key: bucketKey,
+    p_worker_id: workerId,
+    p_max_attempts: WORKER_PUSH_MAX_FAILED_ATTEMPTS,
+    p_window_seconds: Math.floor(WORKER_PUSH_ATTEMPT_WINDOW_MS / 1000),
+    p_lock_seconds: Math.floor(WORKER_PUSH_ATTEMPT_LOCK_MS / 1000),
+  });
+  if (error) {
+    console.error("worker push attempt reservation failed", error);
+    return { error: jsonResponse({ error: "worker_push_attempt_reservation_failed" }, 500) };
+  }
+  const attempt = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  return attempt?.allowed
+    ? {}
+    : { error: jsonResponse({ error: "worker_push_rate_limited" }, 429) };
+}
+
+async function clearWorkerPushAttempts(bucketKey: string) {
+  const { error } = await supabase
+    .from("worker_push_attempts")
+    .delete()
+    .eq("bucket_key", bucketKey);
+  if (error) console.error("worker push attempt cleanup failed", error);
+}
+
+async function verifyWorkerPushCredential(workerId: string, employeeNo: string, failureCode = "worker_login_failed") {
+  const bucketKey = `worker:${workerId}`;
+  const attempt = await beginWorkerPushAttempt(bucketKey, workerId);
+  if ("error" in attempt) return { error: attempt.error };
+
+  const { data, error } = await supabase
+    .from("workers")
+    .select("id,name,team,position,active,employee_no")
+    .eq("id", workerId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) return { error: jsonResponse({ error: error.message }, 500) };
+  const worker = data as Record<string, unknown> | null;
+  if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
+    return { error: jsonResponse({ error: failureCode }, 403) };
+  }
+
+  await clearWorkerPushAttempts(bucketKey);
+  return { worker };
+}
+
 function validSubscription(value: unknown) {
   const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const keys = row.keys && typeof row.keys === "object" ? row.keys as Record<string, unknown> : {};
@@ -107,40 +159,22 @@ async function verifyWorkerLogin(payload: Record<string, unknown>) {
   const employeeNo = normalizeEmployeeNo(payload.employeeNo);
   if (!workerId || !employeeNo) return jsonResponse({ error: "invalid_request" }, 400);
 
-  const { data: worker, error } = await supabase
-    .from("workers")
-    .select("id,name,team,position,active,employee_no")
-    .eq("id", workerId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (error) return jsonResponse({ error: error.message }, 500);
-  if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
-    return jsonResponse({ error: "worker_login_failed" }, 403);
-  }
-
+  const { worker, error } = await verifyWorkerPushCredential(workerId, employeeNo);
+  if (error) return error;
+  if (!worker) return jsonResponse({ error: "worker_login_failed" }, 403);
   return jsonResponse({ ok: true, worker: serializeLoginWorker(worker as Record<string, unknown>) });
 }
 
 async function registerSubscription(payload: Record<string, unknown>) {
   const workerId = cleanText(payload.workerId, 80);
-  const employeeNo = cleanText(payload.employeeNo, 80);
+  const employeeNo = normalizeEmployeeNo(payload.employeeNo);
   const subscription = payload.subscription;
   if (!workerId || !employeeNo || !validSubscription(subscription)) {
     return jsonResponse({ error: "invalid_request" }, 400);
   }
 
-  const { data: worker, error: workerError } = await supabase
-    .from("workers")
-    .select("id,name,active,employee_no")
-    .eq("id", workerId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (workerError) return jsonResponse({ error: workerError.message }, 500);
-  if (!worker || String(worker.employee_no || "").trim() !== employeeNo) {
-    return jsonResponse({ error: "worker_login_failed" }, 403);
-  }
+  const { worker, error: workerError } = await verifyWorkerPushCredential(workerId, employeeNo);
+  if (workerError) return workerError;
 
   const sub = subscription as Record<string, unknown>;
   const { error } = await supabase
@@ -159,7 +193,7 @@ async function registerSubscription(payload: Record<string, unknown>) {
     }, { onConflict: "endpoint" });
 
   if (error) return jsonResponse({ error: error.message }, 500);
-  return jsonResponse({ ok: true, workerId, workerName: worker.name });
+  return jsonResponse({ ok: true, workerId, workerName: cleanText(worker?.name, 120) });
 }
 
 async function markSubscriptionError(id: string, message: string, disabled = false) {
@@ -182,18 +216,7 @@ async function verifiedSender(payload: Record<string, unknown>) {
     return { error: jsonResponse({ error: "sender_required" }, 403) };
   }
 
-  const { data: worker, error } = await supabase
-    .from("workers")
-    .select("id,name,team,position,active,employee_no")
-    .eq("id", senderWorkerId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (error) return { error: jsonResponse({ error: error.message }, 500) };
-  if (!worker || normalizeEmployeeNo(worker.employee_no) !== senderEmployeeNo) {
-    return { error: jsonResponse({ error: "sender_verification_failed" }, 403) };
-  }
-  return { worker: worker as Record<string, unknown> };
+  return verifyWorkerPushCredential(senderWorkerId, senderEmployeeNo, "sender_verification_failed");
 }
 
 async function unsafeTargetWorkerIds() {
@@ -205,6 +228,19 @@ async function unsafeTargetWorkerIds() {
 
   if (error) throw error;
   return new Set((data || [])
+    .map((worker) => cleanText(worker.id, 80))
+    .filter(Boolean));
+}
+
+async function missingMaterialTargetWorkerIds() {
+  const { data, error } = await supabase
+    .from("workers")
+    .select("id,name,active")
+    .eq("active", true);
+
+  if (error) throw error;
+  return new Set((data || [])
+    .filter((worker) => MISSING_MATERIAL_PUSH_TARGET_NAMES.has(normalizedWorkerName(worker.name)))
     .map((worker) => cleanText(worker.id, 80))
     .filter(Boolean));
 }
@@ -224,6 +260,17 @@ async function authorizeSendRequest(payload: Record<string, unknown>, workerIds:
   if (sendKind === "unsafeIssue") {
     try {
       const allowedIds = await unsafeTargetWorkerIds();
+      return workerIds.every((id) => allowedIds.has(id))
+        ? null
+        : jsonResponse({ error: "forbidden_target" }, 403);
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  }
+
+  if (sendKind === "missingMaterial") {
+    try {
+      const allowedIds = await missingMaterialTargetWorkerIds();
       return workerIds.every((id) => allowedIds.has(id))
         ? null
         : jsonResponse({ error: "forbidden_target" }, 403);
@@ -373,13 +420,20 @@ async function deleteSubscriptionDevice(payload: Record<string, unknown>) {
 }
 
 async function sendNotification(payload: Record<string, unknown>) {
-  const workerIds = Array.isArray(payload.workerIds)
+  let workerIds = Array.isArray(payload.workerIds)
     ? [...new Set(payload.workerIds.map((id) => cleanText(id, 80)).filter(Boolean))]
     : [];
-  if (!workerIds.length) return jsonResponse({ ok: true, sent: 0, failed: 0, reason: "no_targets" });
+  if (cleanText(payload.sendKind, 40) === "missingMaterial") {
+    try {
+      workerIds = [...await missingMaterialTargetWorkerIds()];
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  }
 
   const authorizationError = await authorizeSendRequest(payload, workerIds);
   if (authorizationError) return authorizationError;
+  if (!workerIds.length) return jsonResponse({ ok: true, sent: 0, failed: 0, targetWorkers: 0, subscribedWorkers: 0, reason: "no_targets" });
 
   const config = await vapidConfig();
   if (!config.publicKey || !config.privateKey) return jsonResponse({ error: "vapid_not_configured" }, 500);
@@ -410,6 +464,7 @@ async function sendNotification(payload: Record<string, unknown>) {
 
   if (error) return jsonResponse({ error: error.message }, 500);
 
+  const subscribedWorkers = new Set((subscriptions || []).map((row) => cleanText(row.worker_id, 80)).filter(Boolean)).size;
   let sent = 0;
   let failed = 0;
   await Promise.all((subscriptions || []).map(async (row) => {
@@ -432,7 +487,7 @@ async function sendNotification(payload: Record<string, unknown>) {
     }
   }));
 
-  return jsonResponse({ ok: true, sent, failed, targetWorkers: workerIds.length });
+  return jsonResponse({ ok: true, sent, failed, targetWorkers: workerIds.length, subscribedWorkers });
 }
 
 Deno.serve(async (req) => {

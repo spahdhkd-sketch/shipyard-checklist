@@ -22,6 +22,7 @@ const {
 // 푸시 문구 종류 정규화
 assert.strictEqual(normalizePushTemplateKind("pledgePending"), "pledgePending");
 assert.strictEqual(normalizePushTemplateKind("unsafeIssue"), "unsafeIssue");
+assert.strictEqual(normalizePushTemplateKind("missingMaterial"), "missingMaterial");
 assert.strictEqual(normalizePushTemplateKind("adminManual"), "adminManual");
 assert.strictEqual(normalizePushTemplateKind("bogus"), "", "정의되지 않은 종류는 빈 문자열을 반환한다");
 assert.strictEqual(normalizePushTemplateKind(undefined), "");
@@ -58,6 +59,7 @@ assert.strictEqual(replacePushTemplateTokens(null, {}), "");
 const templates = {
   pledgePending: { title: "서약 {날짜}", body: "미완료 {인원}명" },
   unsafeIssue: { ...DEFAULT_PUSH_NOTIFICATION_TEMPLATES.unsafeIssue },
+  missingMaterial: { ...DEFAULT_PUSH_NOTIFICATION_TEMPLATES.missingMaterial },
   adminManual: { ...DEFAULT_PUSH_NOTIFICATION_TEMPLATES.adminManual },
 };
 assert.deepStrictEqual(
@@ -78,6 +80,18 @@ assert.deepStrictEqual(pledgeMeta.previewContext, { 날짜: "2026.06.11", 인원
 const adminMeta = pushTemplateMeta("adminManual", { todayLabel: "2026.06.11", senderName: "김준혁" });
 assert.deepStrictEqual(adminMeta.previewContext, { 날짜: "2026.06.11", 발신자: "김준혁", 대상수: 1 });
 assert.strictEqual(pushTemplateMeta("unsafeIssue").previewContext.호선, "호선 101");
+const materialMeta = pushTemplateMeta("missingMaterial");
+assert.deepStrictEqual(materialMeta.tokens, ["{호선}", "{등록자}", "{자재}", "{수량}"]);
+assert.deepStrictEqual(materialMeta.previewContext, {
+  호선: "호선 101",
+  등록자: "김준혁",
+  자재: "밸브",
+  수량: "2 EA",
+});
+assert.deepStrictEqual(
+  pushNotificationFromTemplate("missingMaterial", materialMeta.previewContext, templates),
+  { title: "누락자재 등록", body: "호선 101 · 김준혁 · 밸브 2 EA" },
+);
 assert.strictEqual(pushTemplateMeta("bogus"), null);
 
 // 구독 상태 정규화 (checkedAt 주입)

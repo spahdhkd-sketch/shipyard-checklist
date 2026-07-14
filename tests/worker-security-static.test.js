@@ -17,6 +17,9 @@ const migration = read("supabase/migrations/20260527064035_worker_public_read_pa
 const deleteMigration = read("supabase/migrations/20260527071140_revoke_workers_delete.sql");
 const rpcBoundaryMigration = read("supabase/migrations/20260527145253_security_definer_rpc_boundary.sql");
 const manualScreenshots = read("tools/capture-manual-screenshots.mjs");
+const workerPush = read("supabase/functions/worker-push/index.ts");
+const workerPushAttempts = read("supabase/migrations/20260623163944_worker_push_attempt_rate_limit.sql");
+const workerPushAttemptAtomic = read("supabase/migrations/20260715110500_atomic_worker_push_attempt.sql");
 
 expectMatch(app, /table: "workers",\s*readTable: "workers_public",\s*key: "workers"/, "workers should read through workers_public");
 expectMatch(app, /const source = config\.readTable \|\| config\.table/, "selectTable should support readTable");
@@ -28,7 +31,7 @@ expectNoMatch(app, /data-worker-edit-field="employeeNo"/, "worker edit panel sho
 expectNoMatch(app, /data-delete-worker=/, "worker delete UI should not expose direct browser deletion in Phase 1");
 expectNoMatch(app, /deleteRemoteRows\("workers"/, "browser runtime must not directly delete workers through anon REST");
 expectMatch(app, /employeeNo,\s*loggedInAt: serverNow\(\)\.toISOString\(\)/, "worker session may still keep the typed employee number for push compatibility");
-expectMatch(app, /client\.functions\.invoke\("worker-push"[\s\S]*?action:\s*"verifyWorker"[\s\S]*?employeeNo/, "worker login should send the typed employee number to the worker-push Edge Function");
+expectMatch(app, /createAdminSession\(workerId, employeeNo, "worker"\)/, "worker login should create a server mutation session");
 expectNoMatch(app, /verify_worker_login/, "browser runtime must not directly execute the login SECURITY DEFINER RPC");
 expectNoMatch(app, /worker_push_subscription_status/, "browser runtime must not directly execute the push status SECURITY DEFINER RPC");
 
@@ -55,5 +58,18 @@ expectMatch(manualScreenshots, /MANUAL_CAPTURE_EMPLOYEE_NO/, "manual screenshot 
 expectMatch(manualScreenshots, /\/rest\/v1\/workers_public\?select=id,name,team,position&order=name\.asc/, "manual screenshot capture should read workers through workers_public");
 expectNoMatch(manualScreenshots, /\/rest\/v1\/workers\?select=[^"`']*employee_no/, "manual screenshot capture must not read employee_no from workers through anon REST");
 expectNoMatch(manualScreenshots, /sender\.employee_no/, "manual screenshot capture must not reuse employee_no from fetched worker rows");
+
+expectMatch(workerPush, /MAX_FAILED_ATTEMPTS\s*=\s*5/, "worker push credential attempts should remain rate limited");
+expectMatch(workerPush, /verifyWorkerPushCredential/, "worker push credential checks should share the rate limiter");
+expectMatch(workerPushAttempts, /create table if not exists public\.worker_push_attempts/i, "worker push attempt table migration should be tracked");
+expectMatch(workerPush, /begin_worker_push_attempt/, "worker push attempts should use the atomic database reservation");
+expectNoMatch(workerPush, /async function readWorkerPushAttempt\(/, "worker push limiter must not use a read then write race");
+expectMatch(workerPushAttemptAtomic, /create or replace function public\.begin_worker_push_attempt/i, "worker push attempt reservation function should be tracked");
+expectMatch(workerPush, /MISSING_MATERIAL_PUSH_TARGET_NAMES/, "missing material recipients should be server controlled");
+expectMatch(workerPush, /sendKind[\s\S]*?=== "missingMaterial"[\s\S]*?workerIds = \[\.\.\.await missingMaterialTargetWorkerIds\(\)\]/, "missing material sends should resolve all recipients on the server");
+expectMatch(app, /toast\("호선자재 누락이 접수되었습니다\."\);\s*await syncMissingMaterial\(row\);/, "missing material submission should enter the durable save-then-notify flow");
+expectMatch(app, /pendingMissingMaterialNotifications/, "missing material notification retries should be persisted");
+expectMatch(app, /missing_material_push_incomplete/, "incomplete missing material sends should remain queued");
+expectMatch(workerPush, /subscribedWorkers/, "push results should report recipient subscription coverage");
 
 console.log("worker security static tests passed");

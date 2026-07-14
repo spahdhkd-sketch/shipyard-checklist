@@ -17,11 +17,29 @@
         type: job.type,
         keys: Array.isArray(job.keys) ? [...new Set(job.keys.map(String))] : [],
         rowIdsByKey: job.rowIdsByKey && typeof job.rowIdsByKey === "object" ? job.rowIdsByKey : {},
+        ownerWorkerId: String(job.ownerWorkerId || ""),
         attempts: Math.max(0, Number(job.attempts) || 0),
         createdAt: job.createdAt || now(),
         nextRetryAt: job.nextRetryAt || "",
       }))
       .filter((job) => job.type === "full" || job.keys.length);
+  }
+
+  function pendingRowsForVersionRefresh(key, rows, queue) {
+    const sourceRows = Array.isArray(rows) ? rows : [];
+    const jobs = Array.isArray(queue) ? queue.filter((job) => job && typeof job === "object") : [];
+    if (jobs.some((job) => job.type === "full")) return sourceRows;
+
+    const pendingIds = new Set();
+    jobs.forEach((job) => {
+      if (job.type !== "rows") return;
+      const ids = job.rowIdsByKey && typeof job.rowIdsByKey === "object"
+        ? job.rowIdsByKey[key]
+        : [];
+      (Array.isArray(ids) ? ids : []).forEach((id) => pendingIds.add(String(id)));
+    });
+    if (!pendingIds.size) return [];
+    return sourceRows.filter((row) => row && pendingIds.has(String(row.id)));
   }
 
   function normalizeStatusRecords(records, statuses, deps) {
@@ -59,6 +77,7 @@
       .map((row, index) => ({
         id: row.id || uid("pendingPhoto"),
         issueId: String(row.issueId || ""),
+        ownerWorkerId: String(row.ownerWorkerId || ""),
         fileName: String(row.fileName || `photo-${index + 1}.jpg`),
         fileType: String(row.fileType || "image/jpeg"),
         fileSize: Number(row.fileSize || 0),
@@ -72,6 +91,7 @@
 
   return {
     normalizePendingSyncQueue,
+    pendingRowsForVersionRefresh,
     normalizeStatusRecords,
     normalizePendingPhotoUploads,
   };

@@ -31,7 +31,7 @@ const pictogramMetadataGrantMigration = read("supabase/migrations/20260528002000
 const pkg = JSON.parse(read("package.json"));
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");
-expectMatch(edge, /function verifyAdminSession/i, "admin-mutations must verify short-lived admin sessions server-side");
+expectMatch(edge, /function verifyMutationSession/i, "admin-mutations must verify short-lived mutation sessions server-side");
 expectMatch(edge, /action === "createSession"/, "admin-mutations must issue server-side admin sessions");
 expectMatch(edge, /SUPABASE_SERVICE_ROLE_KEY/, "admin-mutations must use service role only inside the Edge Function");
 expectMatch(edge, /action === "upsertRows"/, "admin-mutations must support whitelisted upserts");
@@ -42,22 +42,26 @@ expectMatch(edge, /action === "uploadPictogramImage"/, "admin-mutations must upl
 expectMatch(edge, /const PICTOGRAM_IMAGE_BUCKET = "safety-pictograms"/, "admin-mutations should use the safety pictogram bucket");
 expectMatch(edge, /const PRIVILEGED_POSITIONS = new Set\(\["\\uBC18\\uC7A5", "\\uB300\\uD45C", "\\uAD00\\uB9AC", "\\uCD1D\\uBB34"\]\)/, "admin-mutations must allow foreman workers to create admin sessions");
 expectMatch(edge, /const WORK_PREP_POSITIONS = new Set\(\["\\uC870\\uC7A5", "\\uBC18\\uC7A5", "\\uB300\\uD45C", "\\uAD00\\uB9AC", "\\uCD1D\\uBB34"\]\)/, "admin-mutations must allow scoped work-prep sessions for leaders");
-expectMatch(edge, /scope\?: "admin" \| "workPrep"/, "admin session tokens should carry a mutation scope");
-expectMatch(edge, /verifyAdminSession\(payload, cleanText\(payload\.key, 80\) === "workPrepRecords" \? "workPrep" : "admin"\)/, "work prep records should allow scoped work-prep mutation sessions");
+expectMatch(edge, /type MutationScope = "worker" \| "workPrep" \| "admin";[\s\S]*type TokenPayload = \{[\s\S]*scope\?: MutationScope;/, "mutation session tokens should carry a least-privilege scope");
+expectMatch(edge, /verifyMutationSession\(payload, key === "workPrepRecords" \? "workPrep" : "admin"\)/, "work prep records should allow scoped work-prep mutation sessions");
 expectMatch(edge, /supabase\.storage\.from\(PICTOGRAM_IMAGE_BUCKET\)\.upload/, "admin-mutations should write pictogram bytes to Storage");
 expectMatch(edge, /\["inspections",\s*\{[\s\S]*table:\s*"safety_inspections"/, "admin-mutations must whitelist inspection history for admin deletion");
 expectMatch(edge, /\["inspectionItems",\s*\{[\s\S]*table:\s*"safety_inspection_items"/, "admin-mutations must whitelist inspection item history for admin deletion");
 expectMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*table:\s*"work_prep_records"/, "admin-mutations must whitelist work prep records for admin deletion");
 expectMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*"status_history"/, "work prep admin upserts should allow status history");
-expectNoMatch(edge, /\["workPrepRecords",\s*\{[\s\S]*columns:\s*new Set\(\[[\s\S]*"deleted_at"[\s\S]*\]\)/, "work prep upserts must not be able to clear deletion tombstones");
+const workPrepConfigStart = edge.indexOf('["workPrepRecords", {');
+const workPrepConfigEnd = edge.indexOf("  }],", workPrepConfigStart);
+expectNoMatch(edge.slice(workPrepConfigStart, workPrepConfigEnd), /"deleted_at"/, "work prep upserts must not be able to clear deletion tombstones");
 expectMatch(edge, /\.update\(\{ deleted_at: now, updated_at: now \}\)[\s\S]*\.in\("id", ids\)/, "work prep deletes should soft-delete records instead of physically deleting them");
 expectNoMatch(edge, /from\(table\)/, "admin-mutations must not use arbitrary table names");
 expectNoMatch(edge, /adminAuth/, "admin mutations must not accept replayable worker id plus employee number credentials");
 
 expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(/, "frontend must classify admin-managed remote keys");
 expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(\[[\s\S]*"workPrepRecords"/, "work prep records should delete through admin-mutations");
-expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(/, "frontend must keep worker-submitted records insert-only through public REST");
-expectMatch(app, /const PUBLIC_INSERT_ONLY_REMOTE_KEYS = new Set\(\[[\s\S]*"inspections"[\s\S]*"inspectionItems"/, "inspection history should be public insert-only");
+expectMatch(app, /const WORKER_INSERT_REMOTE_KEYS = new Set\(/, "frontend must classify worker-submitted records for authenticated Edge writes");
+expectMatch(app, /const WORKER_INSERT_REMOTE_KEYS = new Set\(\[[\s\S]*"inspections"[\s\S]*"inspectionItems"[\s\S]*"unsafeIssues"[\s\S]*"missingMaterials"[\s\S]*\]\)/, "worker submission keys should be limited to authenticated field records");
+expectMatch(app, /if \(WORKER_INSERT_REMOTE_KEYS\.has\(config\.key\)\) \{[\s\S]*ensureWorkerMutationSession\(\)[\s\S]*invokeWorkerMutation\("submitRows", \{ key: config\.key, rows: payload \}\)/, "worker-submitted records must acquire a worker session before crossing the authenticated Edge boundary");
+expectNoMatch(app, /PUBLIC_INSERT_ONLY_REMOTE_KEYS/, "worker-submitted records must not retain the anonymous REST write path");
 expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes must invoke the Edge Function");
 expectMatch(app, /invokeAdminMutation\("uploadPictogramImage"/, "frontend custom pictogram images should upload through admin-mutations");
 expectMatch(app, /function remoteSelectColumns\(config, fallback = false\)/, "remote pulls should centralize optional-column fallback selects");

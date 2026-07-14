@@ -27,7 +27,8 @@ expectMatch(app, /pullOnStartup:\s*false,[\s\S]*key:\s*"issuePhotos"/, "issue ph
 expectNoMatch(app, /startRemoteSync\(\)\s*\{[\s\S]*startRemoteRealtime\(\)/, "automatic startup sync should not open realtime subscriptions");
 expectNoMatch(app, /startRemoteSync\(\)\s*\{[\s\S]*startRemotePolling\(\)/, "automatic startup sync should not start interval polling");
 expectMatch(app, /function compressUnsafePhotoFile\(/, "unsafe photo uploads should be compressed client-side");
-expectMatch(app, /cacheControl:\s*"604800"/, "Storage uploads should use a cacheControl value");
+expectMatch(app, /const ISSUE_PHOTO_PRIVATE_CACHE_SECONDS = 10 \* 60;/, "private photo cache must not outlive signed URLs");
+expectMatch(app, /cacheControl:\s*String\(ISSUE_PHOTO_PRIVATE_CACHE_SECONDS\)/, "Storage uploads should use the private cache boundary");
 expectNoMatch(app, /<img class="record-thumb"/, "admin issue lists should not auto-load Storage thumbnails");
 
 expectNoMatch(edge, /"src",/, "admin pictogram writes should not whitelist legacy src bytes");

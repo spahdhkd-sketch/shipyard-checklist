@@ -21,7 +21,30 @@ const PICTOGRAM_IMAGE_MIME_EXTENSIONS = new Map<string, string>([
   ["image/jpeg", "jpg"],
   ["image/webp", "webp"],
 ]);
+const ISSUE_PHOTO_BUCKET = "issue-photos";
+const ISSUE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+const ISSUE_PHOTO_MAX_COUNT = 2;
+const ISSUE_PHOTO_SIGNED_URL_TTL_SECONDS = 10 * 60;
+const ISSUE_PHOTO_UPLOAD_RESERVATION_TTL_MS = (2 * 60 * 60 + 5 * 60) * 1000;
+const WORK_PREP_STATUSES = new Set(["confirmed", "preparing", "ordered", "unregistered", "used"]);
+const WORK_PREP_STATUS_LABELS = new Map([
+  ["confirmed", "확정"],
+  ["preparing", "점검 대기"],
+  ["ordered", "작업지시"],
+  ["unregistered", "미등록"],
+  ["used", "점검 완료"],
+]);
+const WORK_PREP_LEADER_POSITIONS = new Set(["조장", "반장"]);
+const ISSUE_PHOTO_MIME_EXTENSIONS = new Map<string, string>([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/heic", "heic"],
+  ["image/heif", "heif"],
+]);
 const encoder = new TextEncoder();
+
+type MutationScope = "worker" | "workPrep" | "admin";
 
 type TableConfig = {
   table: string;
@@ -32,10 +55,16 @@ type TokenPayload = {
   v: 1;
   sid: string;
   workerId: string;
-  scope?: "admin" | "workPrep";
+  scope?: MutationScope;
   nonce: string;
   iat: number;
   exp: number;
+};
+
+type AuthorizedMutationSession = {
+  worker: Record<string, unknown>;
+  sessionId: string;
+  scope: MutationScope;
 };
 
 const ADMIN_TABLES = new Map<string, TableConfig>([
@@ -137,6 +166,7 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
     columns: new Set([
       "id",
       "category_id",
+      "worker_id",
       "worker",
       "ship_no",
       "date",
@@ -187,6 +217,12 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "ship_no",
       "material_name",
       "content",
+      "material_type",
+      "material_type_label",
+      "spec",
+      "quantity",
+      "unit",
+      "detail",
       "worker_id",
       "worker_name_snapshot",
       "worker_team_snapshot",
@@ -196,18 +232,6 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "updated_at",
       "completed_at",
       "status_history",
-    ]),
-  }],
-  ["issuePhotos", {
-    table: "issue_photos",
-    columns: new Set([
-      "id",
-      "target_type",
-      "target_id",
-      "storage_bucket",
-      "storage_path",
-      "sort_order",
-      "created_at",
     ]),
   }],
   ["workPrepRecords", {
@@ -229,6 +253,11 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "updated_at",
     ]),
   }],
+]);
+
+const WORKER_SUBMIT_KEYS = new Set([
+  "unsafeIssues",
+  "missingMaterials",
 ]);
 
 const supabase = createClient(
@@ -315,6 +344,11 @@ function canMutateWorkPrep(worker: Record<string, unknown>) {
   return WORK_PREP_POSITIONS.has(position) || PRIVILEGED_TEAMS.has(team);
 }
 
+function mutationScope(value: unknown): MutationScope {
+  if (value === "worker" || value === "workPrep") return value;
+  return "admin";
+}
+
 function base64UrlEncode(bytes: Uint8Array) {
   let binary = "";
   bytes.forEach((byte) => {
@@ -390,7 +424,7 @@ async function readToken(token: string) {
   }
 }
 
-async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: string, scope: "admin" | "workPrep" = "admin") {
+async function verifyWorkerCredential(workerId: string, employeeNo: string, scope: MutationScope = "admin") {
   if (!workerId || !employeeNo) return { error: jsonResponse({ error: "admin_worker_required" }, 403) };
 
   const { data: worker, error } = await supabase
@@ -407,56 +441,34 @@ async function verifyPrivilegedWorkerCredential(workerId: string, employeeNo: st
   if (!worker || normalizeEmployeeNo(worker.employee_no) !== employeeNo) {
     return { error: jsonResponse({ error: "admin_verification_failed" }, 403) };
   }
-  const allowed = scope === "workPrep"
-    ? canMutateWorkPrep(worker as Record<string, unknown>)
-    : isPrivilegedWorker(worker as Record<string, unknown>);
+  const workerRecord = worker as Record<string, unknown>;
+  const allowed = scope === "worker"
+    || (scope === "workPrep" && canMutateWorkPrep(workerRecord))
+    || (scope === "admin" && isPrivilegedWorker(workerRecord));
   if (!allowed) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
 
-  return { worker: worker as Record<string, unknown> };
+  return { worker: workerRecord };
 }
 
-async function readAttempt(bucketKey: string) {
-  const { data, error } = await supabase
-    .from("admin_mutation_attempts")
-    .select("bucket_key,worker_id,fail_count,window_started_at,locked_until")
-    .eq("bucket_key", bucketKey)
-    .maybeSingle();
+async function beginMutationAttempt(bucketKey: string, workerId: string) {
+  const { data, error } = await supabase.rpc("begin_admin_mutation_attempt", {
+    p_bucket_key: bucketKey,
+    p_worker_id: workerId,
+    p_max_attempts: MAX_FAILED_ATTEMPTS,
+    p_window_seconds: Math.floor(ATTEMPT_WINDOW_MS / 1000),
+    p_lock_seconds: Math.floor(ATTEMPT_LOCK_MS / 1000),
+  });
   if (error) {
-    console.error("admin attempt lookup failed", error);
-    return { error: jsonResponse({ error: "admin_attempt_lookup_failed" }, 500) };
+    console.error("admin attempt reservation failed", error);
+    return { error: jsonResponse({ error: "admin_attempt_reservation_failed" }, 500) };
   }
-  return { attempt: data as Record<string, unknown> | null };
-}
-
-async function assertAttemptAllowed(bucketKey: string) {
-  const result = await readAttempt(bucketKey);
-  if (result.error) return result;
-  const lockedUntil = parseTime(result.attempt?.locked_until);
-  if (lockedUntil && lockedUntil > Date.now()) {
-    return { error: jsonResponse({ error: "admin_session_rate_limited" }, 429), attempt: result.attempt };
+  const attempt = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  if (!attempt?.allowed) {
+    return { error: jsonResponse({ error: "admin_session_rate_limited" }, 429) };
   }
-  return result;
-}
-
-async function recordFailedAttempt(bucketKey: string, workerId: string, previous?: Record<string, unknown> | null) {
-  const now = Date.now();
-  const nowIso = new Date(now).toISOString();
-  const previousWindowStarted = parseTime(previous?.window_started_at);
-  const inWindow = previousWindowStarted && now - previousWindowStarted < ATTEMPT_WINDOW_MS;
-  const failCount = (inWindow ? Number(previous?.fail_count || 0) : 0) + 1;
-  const { error } = await supabase
-    .from("admin_mutation_attempts")
-    .upsert({
-      bucket_key: bucketKey,
-      worker_id: workerId,
-      fail_count: failCount,
-      window_started_at: inWindow ? previous?.window_started_at : nowIso,
-      locked_until: failCount >= MAX_FAILED_ATTEMPTS ? new Date(now + ATTEMPT_LOCK_MS).toISOString() : null,
-      updated_at: nowIso,
-    }, { onConflict: "bucket_key" });
-  if (error) console.error("admin failed attempt write failed", error);
+  return {};
 }
 
 async function clearAttempts(bucketKey: string) {
@@ -470,16 +482,13 @@ async function clearAttempts(bucketKey: string) {
 async function createSession(payload: Record<string, unknown>) {
   const workerId = cleanText(payload.workerId, 120);
   const employeeNo = normalizeEmployeeNo(payload.employeeNo);
-  const scope = cleanText(payload.scope, 20) === "workPrep" ? "workPrep" : "admin";
+  const scope = mutationScope(cleanText(payload.scope, 20));
   const bucketKey = `worker:${workerId}`;
-  const attempt = await assertAttemptAllowed(bucketKey);
-  if (attempt.error) return attempt.error;
+  const attempt = await beginMutationAttempt(bucketKey, workerId);
+  if ("error" in attempt) return attempt.error;
 
-  const verification = await verifyPrivilegedWorkerCredential(workerId, employeeNo, scope);
-  if (verification.error) {
-    if (workerId) await recordFailedAttempt(bucketKey, workerId, attempt.attempt);
-    return verification.error;
-  }
+  const verification = await verifyWorkerCredential(workerId, employeeNo, scope);
+  if (verification.error) return verification.error;
 
   await clearAttempts(bucketKey);
   const now = Date.now();
@@ -516,12 +525,13 @@ async function createSession(payload: Record<string, unknown>) {
       token,
       workerId,
       expiresAt,
+      scope,
     },
   });
 }
 
-async function verifyAdminSession(payload: Record<string, unknown>, requiredScope: "admin" | "workPrep" = "admin") {
-  const session = rowObject(payload.adminSession) || {};
+async function verifyMutationSession(payload: Record<string, unknown>, requiredScope: MutationScope = "admin") {
+  const session = rowObject(payload.mutationSession) || rowObject(payload.adminSession) || {};
   const token = cleanText(session.token, 4096);
   if (!token) return { error: jsonResponse({ error: "admin_session_required" }, 403) };
 
@@ -568,11 +578,13 @@ async function verifyAdminSession(payload: Record<string, unknown>, requiredScop
   if (!worker) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
-  const tokenScope = tokenPayload.scope || "admin";
+  const tokenScope = mutationScope(tokenPayload.scope);
   const workerRecord = worker as Record<string, unknown>;
-  const allowed = requiredScope === "workPrep"
-    ? (tokenScope === "admin" || tokenScope === "workPrep") && canMutateWorkPrep(workerRecord)
-    : tokenScope === "admin" && isPrivilegedWorker(workerRecord);
+  const allowed = requiredScope === "worker"
+    || (requiredScope === "workPrep"
+      && (tokenScope === "admin" || tokenScope === "workPrep")
+      && canMutateWorkPrep(workerRecord))
+    || (requiredScope === "admin" && tokenScope === "admin" && isPrivilegedWorker(workerRecord));
   if (!allowed) {
     return { error: jsonResponse({ error: "admin_forbidden" }, 403) };
   }
@@ -583,11 +595,11 @@ async function verifyAdminSession(payload: Record<string, unknown>, requiredScop
     .eq("id", tokenPayload.sid);
   if (updateError) console.error("admin session touch failed", updateError);
 
-  return { worker: workerRecord, sessionId: tokenPayload.sid };
+  return { worker: workerRecord, sessionId: tokenPayload.sid, scope: tokenScope };
 }
 
 async function revokeSession(payload: Record<string, unknown>) {
-  const authorization = await verifyAdminSession(payload, cleanText(payload.key, 80) === "workPrepRecords" ? "workPrep" : "admin");
+  const authorization = await verifyMutationSession(payload, "worker");
   if (authorization.error) return authorization.error;
   const { error } = await supabase
     .from("admin_mutation_sessions")
@@ -600,23 +612,616 @@ async function revokeSession(payload: Record<string, unknown>) {
   return jsonResponse({ ok: true });
 }
 
+function normalizeWorkPrepStatus(value: unknown) {
+  const status = cleanText(value, 40);
+  return WORK_PREP_STATUSES.has(status) ? status : "";
+}
+
+function workPrepCounterpartTeam(value: unknown) {
+  const team = cleanText(value, 80);
+  if (team === "선행") return "후행";
+  if (team === "후행") return "선행";
+  return "";
+}
+
+function normalizedToolNature(value: unknown) {
+  const nature = cleanText(value, 40).replace("선/후행", "선행/후행");
+  return nature === "선행" || nature === "후행" || nature === "선행/후행" ? nature : "선행";
+}
+
+function toolMatchesWorkPrepCategory(tool: Record<string, unknown>, category: Record<string, unknown>) {
+  const toolNature = normalizedToolNature(tool.nature);
+  const categoryNature = normalizedToolNature(category.tool_nature);
+  if (categoryNature === "선행") return toolNature === "선행" || toolNature === "선행/후행";
+  if (categoryNature === "후행") return toolNature === "후행" || toolNature === "선행/후행";
+  return true;
+}
+
+function workPrepStatusHistory(
+  existing: Record<string, unknown> | undefined,
+  status: string,
+  now: string,
+  actorName: string,
+  leaderId: string,
+  leaderName: string,
+) {
+  const history = Array.isArray(existing?.status_history) ? existing.status_history.slice(-199) : [];
+  if (!existing) {
+    return [{
+      kind: "register",
+      status: WORK_PREP_STATUS_LABELS.get(status) || status,
+      changedAt: now,
+      actorIds: leaderId ? [leaderId] : [],
+      actorLabel: leaderName || actorName,
+    }];
+  }
+  const previous = normalizeWorkPrepStatus(existing.status) || "ordered";
+  if (previous === status) return history;
+  return [...history, {
+    status: WORK_PREP_STATUS_LABELS.get(status) || status,
+    memo: `${WORK_PREP_STATUS_LABELS.get(previous) || previous} → ${WORK_PREP_STATUS_LABELS.get(status) || status}`,
+    changedAt: now,
+    actor: actorName,
+  }];
+}
+
+async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization: AuthorizedMutationSession) {
+  const ids = rows.map((row) => cleanText(row.id, 120));
+  const { data: existingData, error: existingError } = await supabase
+    .from("work_prep_records")
+    .select("id,leader_worker_id,status,status_history,created_at,deleted_at")
+    .in("id", ids);
+  if (existingError) {
+    console.error("work prep existing lookup failed", existingError);
+    return { error: jsonResponse({ error: "work_prep_lookup_failed" }, 500) };
+  }
+  const existingById = new Map<string, Record<string, unknown>>();
+  (existingData || []).forEach((row) => existingById.set(cleanText(row.id, 120), row as Record<string, unknown>));
+
+  const requestedWorkerIds = [...new Set(rows.flatMap((row) => [
+    cleanText(row.leader_worker_id, 120),
+    ...cleanIds(row.worker_ids),
+    ...cleanIds(row.other_team_worker_ids),
+  ]).filter(Boolean))];
+  const { data: workerData, error: workerError } = requestedWorkerIds.length
+    ? await supabase.from("workers").select("id,name,team,position,active").in("id", requestedWorkerIds).eq("active", true)
+    : { data: [], error: null };
+  if (workerError) {
+    console.error("work prep worker lookup failed", workerError);
+    return { error: jsonResponse({ error: "work_prep_worker_lookup_failed" }, 500) };
+  }
+  const workersById = new Map<string, Record<string, unknown>>();
+  (workerData || []).forEach((row) => workersById.set(cleanText(row.id, 120), row as Record<string, unknown>));
+
+  const categoryIds = [...new Set(rows.map((row) => cleanText(row.category_id, 120)).filter(Boolean))];
+  const { data: categoryData, error: categoryError } = categoryIds.length
+    ? await supabase.from("safety_categories").select("id,tool_nature,tool_ids").in("id", categoryIds)
+    : { data: [], error: null };
+  if (categoryError) {
+    console.error("work prep category lookup failed", categoryError);
+    return { error: jsonResponse({ error: "work_prep_category_lookup_failed" }, 500) };
+  }
+  const categoriesById = new Map<string, Record<string, unknown>>();
+  (categoryData || []).forEach((row) => categoriesById.set(cleanText(row.id, 120), row as Record<string, unknown>));
+
+  const requestedToolIds = [...new Set(rows.flatMap((row) => cleanIds(row.tool_ids)))];
+  const { data: toolData, error: toolError } = requestedToolIds.length
+    ? await supabase.from("safety_tools").select("id,name,nature,deleted").in("id", requestedToolIds).eq("deleted", false)
+    : { data: [], error: null };
+  if (toolError) {
+    console.error("work prep tool lookup failed", toolError);
+    return { error: jsonResponse({ error: "work_prep_tool_lookup_failed" }, 500) };
+  }
+  const toolsById = new Map<string, Record<string, unknown>>();
+  (toolData || []).forEach((row) => toolsById.set(cleanText(row.id, 120), row as Record<string, unknown>));
+
+  const actorId = cleanText(authorization.worker.id, 120);
+  const actorName = cleanText(authorization.worker.name, 180);
+  const privileged = isPrivilegedWorker(authorization.worker);
+  const now = new Date().toISOString();
+  const securedRows: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    const id = cleanText(row.id, 120);
+    const existing = existingById.get(id);
+    if (existing?.deleted_at) return { error: jsonResponse({ error: "work_prep_deleted" }, 409) };
+
+    const workDate = cleanText(row.work_date, 10);
+    const appearanceTime = cleanText(row.appearance_time, 5) || "15:00";
+    const team = cleanText(row.team, 80);
+    const shipNo = cleanText(row.ship_no, 120);
+    const categoryId = cleanText(row.category_id, 120);
+    const leaderId = cleanText(row.leader_worker_id, 120);
+    const status = normalizeWorkPrepStatus(row.status);
+    const workerIds = cleanIds(row.worker_ids).filter((workerId) => workerId !== leaderId);
+    const otherTeamWorkerIds = cleanIds(row.other_team_worker_ids).filter((workerId) => workerId !== leaderId);
+    const toolIds = cleanIds(row.tool_ids);
+    const leader = workersById.get(leaderId);
+    const category = categoriesById.get(categoryId);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)
+      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(appearanceTime)
+      || !team || !shipNo || !category || !leader || !status) {
+      return { error: jsonResponse({ error: "work_prep_invalid" }, 400) };
+    }
+    if (!WORK_PREP_LEADER_POSITIONS.has(cleanText(leader.position, 80)) || cleanText(leader.team, 80) !== team) {
+      return { error: jsonResponse({ error: "work_prep_leader_invalid" }, 400) };
+    }
+    if (!privileged) {
+      const existingLeaderId = cleanText(existing?.leader_worker_id, 120);
+      if ((existing && existingLeaderId !== actorId) || leaderId !== actorId) {
+        return { error: jsonResponse({ error: "work_prep_forbidden" }, 403) };
+      }
+    }
+
+    const counterpartTeam = workPrepCounterpartTeam(team);
+    if (workerIds.some((workerId) => cleanText(workersById.get(workerId)?.team, 80) !== team)
+      || otherTeamWorkerIds.some((workerId) => !counterpartTeam || cleanText(workersById.get(workerId)?.team, 80) !== counterpartTeam)) {
+      return { error: jsonResponse({ error: "work_prep_workers_invalid" }, 400) };
+    }
+
+    const categoryToolIds = cleanIds(category.tool_ids);
+    const allowedToolIds = new Set([...toolsById.values()]
+      .filter((tool) => toolMatchesWorkPrepCategory(tool, category))
+      .filter((tool) => !categoryToolIds.length || categoryToolIds.includes(cleanText(tool.id, 120)))
+      .map((tool) => cleanText(tool.id, 120)));
+    if (toolIds.some((toolId) => !allowedToolIds.has(toolId))) {
+      return { error: jsonResponse({ error: "work_prep_tools_invalid" }, 400) };
+    }
+
+    securedRows.push({
+      id,
+      work_date: workDate,
+      appearance_time: appearanceTime,
+      team,
+      ship_no: shipNo,
+      category_id: categoryId,
+      leader_worker_id: leaderId,
+      worker_ids: workerIds,
+      other_team_worker_ids: otherTeamWorkerIds,
+      tool_ids: toolIds,
+      status: existing ? status : "preparing",
+      status_history: workPrepStatusHistory(
+        existing,
+        existing ? status : "preparing",
+        now,
+        actorName,
+        leaderId,
+        cleanText(leader.name, 180),
+      ),
+      created_at: existing?.created_at || now,
+      updated_at: now,
+    });
+  }
+  return { rows: securedRows };
+}
+
 async function upsertRows(payload: Record<string, unknown>) {
-  const config = ADMIN_TABLES.get(cleanText(payload.key, 80));
+  const key = cleanText(payload.key, 80);
+  const config = ADMIN_TABLES.get(key);
   if (!config) return jsonResponse({ error: "unknown_key" }, 400);
   const rows = Array.isArray(payload.rows)
     ? payload.rows.map((row) => cleanRow(config, row)).filter(Boolean) as Record<string, unknown>[]
     : [];
   if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const authorization = await verifyAdminSession(payload, cleanText(payload.key, 80) === "workPrepRecords" ? "workPrep" : "admin");
+  const authorization = await verifyMutationSession(payload, key === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
 
-  const { error } = await supabase.from(config.table).upsert(rows, { onConflict: "id" });
+  let securedRows = rows;
+  if (key === "workPrepRecords") {
+    const secured = await secureWorkPrepRows(rows, authorization as AuthorizedMutationSession);
+    if ("error" in secured) return secured.error;
+    securedRows = secured.rows;
+  }
+
+  const { error } = await supabase.from(config.table).upsert(securedRows, { onConflict: "id" });
   if (error) {
     console.error("admin upsert failed", error);
     return jsonResponse({ error: "admin_upsert_failed" }, 500);
   }
-  return jsonResponse({ ok: true, mutated: rows.length });
+  return jsonResponse({ ok: true, mutated: securedRows.length });
+}
+
+function safeCreatedAt(value: unknown, fallback: string) {
+  const timestamp = parseTime(value);
+  if (!timestamp || timestamp > Date.now() + 5 * 60 * 1000) return fallback;
+  return new Date(timestamp).toISOString();
+}
+
+function initialStatusHistory(status: string, createdAt: string, workerName: string) {
+  return [{ status, memo: "", changedAt: createdAt, actor: workerName }];
+}
+
+function cleanInspectionTools(value: unknown) {
+  return (Array.isArray(value) ? value : []).slice(0, 100).map((item) => {
+    const row = rowObject(item) || {};
+    return { id: cleanText(row.id, 120) };
+  }).filter((item) => item.id);
+}
+
+async function submitInspection(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "worker");
+  if (authorization.error) return authorization.error;
+  const workerId = cleanText(authorization.worker?.id, 120);
+  const workerName = cleanText(authorization.worker?.name, 180);
+  const inspectionConfig = ADMIN_TABLES.get("inspections");
+  const itemConfig = ADMIN_TABLES.get("inspectionItems");
+  if (!inspectionConfig || !itemConfig) return jsonResponse({ error: "inspection_config_missing" }, 500);
+
+  const inspection = cleanRow(inspectionConfig, payload.inspection) as Record<string, unknown> | null;
+  const rawItems = (Array.isArray(payload.items) ? payload.items : []).slice(0, 500).map(rowObject);
+  if (rawItems.some((item) => !item || typeof item.checked !== "boolean")) {
+    return jsonResponse({ error: "inspection_item_checked_invalid" }, 400);
+  }
+  const items = rawItems.map((row) => cleanRow(itemConfig, row)).filter(Boolean) as Record<string, unknown>[];
+  const inspectionId = cleanText(inspection?.id, 120);
+  if (!inspection || !inspectionId || !items.length) {
+    return jsonResponse({ error: "inspection_payload_required" }, 400);
+  }
+  if (items.some((item) => cleanText(item.inspection_id, 120) !== inspectionId)) {
+    return jsonResponse({ error: "inspection_item_mismatch" }, 400);
+  }
+
+  const workPrepRecordId = cleanText(inspection.work_prep_record_id, 120);
+  const securedInspection = {
+    id: inspectionId,
+    category_id: cleanText(inspection.category_id, 120),
+    worker_id: workerId,
+    worker: workerName,
+    ship_no: cleanText(inspection.ship_no, 120),
+    tools: cleanInspectionTools(inspection.tools),
+    safety_pledge: cleanText(inspection.safety_pledge, 12000),
+    work_prep_record_id: workPrepRecordId,
+    work_prep_worker_id: workerId,
+  };
+  const securedItems = items.map((item) => ({
+    id: cleanText(item.id, 120),
+    inspection_id: inspectionId,
+    item_id: cleanText(item.item_id, 120),
+    checked: item.checked,
+  }));
+  if (securedItems.some((item) => !item.id || !item.item_id)) {
+    return jsonResponse({ error: "inspection_item_identity_required" }, 400);
+  }
+
+  const { data, error } = await supabase.rpc("submit_worker_inspection", {
+    p_inspection: securedInspection,
+    p_items: securedItems,
+  });
+  if (error) {
+    console.error("worker inspection submit failed", error);
+    const message = cleanText(error.message, 500).toLowerCase();
+    if (message.includes("inspection master changed") || message.includes("master section invalid")) {
+      return jsonResponse({ error: "inspection_master_changed" }, 409);
+    }
+    if (message.includes("inspection conflict")) {
+      return jsonResponse({ error: "inspection_conflict" }, 409);
+    }
+    if (message.includes("already submitted")) {
+      return jsonResponse({ error: "inspection_already_submitted" }, 409);
+    }
+    if (message.includes("not started")) {
+      return jsonResponse({ error: "inspection_not_started" }, 409);
+    }
+    if (message.includes("participant") || message.includes("owner mismatch") || message.includes("forbidden")) {
+      return jsonResponse({ error: "worker_inspection_forbidden" }, 403);
+    }
+    if (/required|invalid|mismatch|unique|category|ship|tool|section|high-risk/.test(message)) {
+      return jsonResponse({ error: "worker_inspection_rejected" }, 400);
+    }
+    return jsonResponse({ error: "worker_inspection_submit_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, result: data || null, mutated: 1 + securedItems.length });
+}
+
+async function submitRows(payload: Record<string, unknown>) {
+  const key = cleanText(payload.key, 80);
+  if (!WORKER_SUBMIT_KEYS.has(key)) return jsonResponse({ error: "unknown_worker_submit_key" }, 400);
+  const config = ADMIN_TABLES.get(key);
+  if (!config) return jsonResponse({ error: "unknown_key" }, 400);
+
+  const authorization = await verifyMutationSession(payload, "worker");
+  if (authorization.error) return authorization.error;
+  const workerId = cleanText(authorization.worker?.id, 120);
+  const workerName = cleanText(authorization.worker?.name, 180);
+  const workerTeam = cleanText(authorization.worker?.team, 180);
+  const rows = Array.isArray(payload.rows)
+    ? payload.rows.slice(0, 500).map((row) => cleanRow(config, row)).filter(Boolean) as Record<string, unknown>[]
+    : [];
+  if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
+
+  const now = new Date().toISOString();
+  const securedRows = rows.map((row) => {
+    const createdAt = safeCreatedAt(row.created_at, now);
+    const status = "접수";
+    const base = {
+      ...row,
+      ship_no: cleanText(row.ship_no, 120),
+      worker_id: workerId,
+      worker_name_snapshot: workerName,
+      worker_team_snapshot: workerTeam,
+      status,
+      admin_memo: "",
+      created_at: createdAt,
+      updated_at: createdAt,
+      completed_at: null,
+      status_history: initialStatusHistory(status, createdAt, workerName),
+    };
+    if (key === "unsafeIssues") {
+      return { ...base, content: cleanText(row.content, 4000) };
+    }
+    return {
+      ...base,
+      material_name: cleanText(row.material_name, 240),
+      content: cleanText(row.content, 4000),
+      material_type: cleanText(row.material_type, 80),
+      material_type_label: cleanText(row.material_type_label, 120),
+      spec: cleanText(row.spec, 240),
+      quantity: cleanText(row.quantity, 80),
+      unit: cleanText(row.unit, 40) || "EA",
+      detail: cleanText(row.detail, 2000),
+    };
+  });
+  if (securedRows.some((row) => !cleanText(row.ship_no, 120) || !cleanText(row.content, 4000))) {
+    return jsonResponse({ error: "worker_submit_required_fields" }, 400);
+  }
+  if (key === "missingMaterials" && securedRows.some((row) => !cleanText(row.material_name, 240))) {
+    return jsonResponse({ error: "worker_submit_material_required" }, 400);
+  }
+
+  const { error } = await supabase
+    .from(config.table)
+    .upsert(securedRows, { onConflict: "id", ignoreDuplicates: true });
+  if (error) {
+    console.error("worker submit failed", error);
+    return jsonResponse({ error: "worker_submit_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, mutated: securedRows.length });
+}
+
+async function issuePhotoAuthorization(targetId: string, payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "worker");
+  if (authorization.error) return authorization;
+  const { data: issue, error } = await supabase
+    .from("unsafe_issues")
+    .select("id,worker_id")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (error) {
+    console.error("unsafe issue ownership lookup failed", error);
+    return { error: jsonResponse({ error: "unsafe_issue_lookup_failed" }, 500) };
+  }
+  if (!issue) return { error: jsonResponse({ error: "unsafe_issue_not_found" }, 404) };
+  const ownsIssue = cleanText(issue.worker_id, 120) === cleanText(authorization.worker?.id, 120);
+  if (!ownsIssue && authorization.scope !== "admin") {
+    return { error: jsonResponse({ error: "unsafe_issue_forbidden" }, 403) };
+  }
+  return authorization;
+}
+
+async function releaseIssuePhotoReservation(photo: Record<string, unknown>) {
+  const photoId = cleanText(photo.id, 120);
+  if (!photoId) return false;
+  const { data: claimed, error: claimError } = await supabase
+    .from("issue_photos")
+    .delete()
+    .eq("id", photoId)
+    .eq("storage_bucket", ISSUE_PHOTO_BUCKET)
+    .eq("upload_status", "pending")
+    .select("id,storage_bucket,storage_path")
+    .maybeSingle();
+  if (claimError) {
+    console.error("issue photo reservation release failed", claimError);
+    return false;
+  }
+  if (!claimed) return false;
+  const storagePath = cleanText(claimed.storage_path, 500);
+  if (!storagePath.startsWith("unsafe/")) return true;
+  const { error } = await supabase.storage.from(ISSUE_PHOTO_BUCKET).remove([storagePath]);
+  if (error) console.error("issue photo reserved object cleanup failed", error);
+  return !error;
+}
+
+async function cleanupExpiredIssuePhotoReservations(targetId: string) {
+  const now = new Date().toISOString();
+  const { data: expired, error } = await supabase
+    .from("issue_photos")
+    .select("id,storage_bucket,storage_path")
+    .eq("target_type", "unsafe_issue")
+    .eq("target_id", targetId)
+    .eq("upload_status", "pending")
+    .lt("upload_expires_at", now);
+  if (error) {
+    console.error("issue photo expired reservation lookup failed", error);
+    return;
+  }
+  for (const photo of expired || []) await releaseIssuePhotoReservation(photo);
+}
+
+async function reserveIssuePhotoSlot(targetId: string, workerId: string, extension: string) {
+  await cleanupExpiredIssuePhotoReservations(targetId);
+  const createdAt = new Date().toISOString();
+  const uploadExpiresAt = new Date(Date.now() + ISSUE_PHOTO_UPLOAD_RESERVATION_TTL_MS).toISOString();
+  for (let sortOrder = 1; sortOrder <= ISSUE_PHOTO_MAX_COUNT; sortOrder += 1) {
+    const photoId = randomId("photo");
+    const storagePath = ["unsafe", workerId, targetId, randomId("upload") + "." + extension].join("/");
+    const reservation = {
+      id: photoId,
+      target_type: "unsafe_issue",
+      target_id: targetId,
+      storage_bucket: ISSUE_PHOTO_BUCKET,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+      upload_status: "pending",
+      upload_expires_at: uploadExpiresAt,
+      created_at: createdAt,
+    };
+    const { data, error } = await supabase
+      .from("issue_photos")
+      .insert(reservation)
+      .select("id,target_type,target_id,storage_bucket,storage_path,sort_order,upload_status,upload_expires_at,created_at")
+      .maybeSingle();
+    if (!error && data) return { photo: data as Record<string, unknown> };
+    if (error?.code !== "23505") {
+      console.error("issue photo slot reservation failed", error);
+      return { error: jsonResponse({ error: "issue_photo_reservation_failed" }, 500) };
+    }
+  }
+  return { error: jsonResponse({ error: "issue_photo_limit" }, 409) };
+}
+
+async function createIssuePhotoUpload(payload: Record<string, unknown>) {
+  const targetId = cleanText(payload.targetId, 120);
+  const mimeType = cleanText(payload.mimeType, 120).toLowerCase();
+  const fileSize = Number(payload.fileSize) || 0;
+  const extension = ISSUE_PHOTO_MIME_EXTENSIONS.get(mimeType);
+  if (!targetId || !extension || fileSize <= 0 || fileSize > ISSUE_PHOTO_MAX_BYTES) {
+    return jsonResponse({ error: "issue_photo_invalid" }, 400);
+  }
+  const authorization = await issuePhotoAuthorization(targetId, payload);
+  if (authorization.error) return authorization.error;
+
+  const workerId = cleanText(authorization.worker?.id, 120);
+  const reservation = await reserveIssuePhotoSlot(targetId, workerId, extension);
+  if ("error" in reservation) return reservation.error;
+  const photo = reservation.photo;
+  const storagePath = cleanText(photo.storage_path, 500);
+  const { data, error } = await supabase.storage
+    .from(ISSUE_PHOTO_BUCKET)
+    .createSignedUploadUrl(storagePath, { upsert: false });
+  if (error || !data?.token) {
+    console.error("issue photo signed upload create failed", error);
+    await releaseIssuePhotoReservation(photo);
+    return jsonResponse({ error: "issue_photo_upload_url_failed" }, 500);
+  }
+  return jsonResponse({
+    ok: true,
+    upload: {
+      photoId: cleanText(photo.id, 120),
+      bucket: ISSUE_PHOTO_BUCKET,
+      path: storagePath,
+      token: data.token,
+    },
+  });
+}
+
+async function issuePhotoCompletionResponse(photo: Record<string, unknown>) {
+  const storagePath = cleanText(photo.storage_path, 500);
+  const { data: signed, error: signedError } = await supabase.storage
+    .from(ISSUE_PHOTO_BUCKET)
+    .createSignedUrl(storagePath, ISSUE_PHOTO_SIGNED_URL_TTL_SECONDS);
+  if (signedError) console.error("issue photo signed URL create failed after completion", signedError);
+  return jsonResponse({
+    ok: true,
+    photo: {
+      ...photo,
+      signed_url: signed?.signedUrl || "",
+      signed_url_expires_at: signed?.signedUrl
+        ? new Date(Date.now() + ISSUE_PHOTO_SIGNED_URL_TTL_SECONDS * 1000).toISOString()
+        : "",
+    },
+  });
+}
+
+async function completeIssuePhotoUpload(payload: Record<string, unknown>) {
+  const targetId = cleanText(payload.targetId, 120);
+  const photoId = cleanText(payload.photoId, 120);
+  const storagePath = cleanText(payload.storagePath, 500);
+  if (!targetId || !photoId || !storagePath) return jsonResponse({ error: "issue_photo_required" }, 400);
+  const authorization = await issuePhotoAuthorization(targetId, payload);
+  if (authorization.error) return authorization.error;
+  const workerId = cleanText(authorization.worker?.id, 120);
+  if (!storagePath.startsWith(`unsafe/${workerId}/${targetId}/`) && authorization.scope !== "admin") {
+    return jsonResponse({ error: "issue_photo_path_forbidden" }, 403);
+  }
+
+  const { data: reservation, error: reservationError } = await supabase
+    .from("issue_photos")
+    .select("id,target_type,target_id,storage_bucket,storage_path,sort_order,upload_status,upload_expires_at,created_at")
+    .eq("id", photoId)
+    .eq("target_type", "unsafe_issue")
+    .eq("target_id", targetId)
+    .eq("storage_bucket", ISSUE_PHOTO_BUCKET)
+    .eq("storage_path", storagePath)
+    .eq("upload_status", "pending")
+    .maybeSingle();
+  if (reservationError) return jsonResponse({ error: "issue_photo_reservation_lookup_failed" }, 500);
+  if (!reservation) {
+    const { data: completed, error: completedError } = await supabase
+      .from("issue_photos")
+      .select("id,target_type,target_id,storage_bucket,storage_path,sort_order,created_at")
+      .eq("id", photoId)
+      .eq("target_type", "unsafe_issue")
+      .eq("target_id", targetId)
+      .eq("storage_bucket", ISSUE_PHOTO_BUCKET)
+      .eq("storage_path", storagePath)
+      .eq("upload_status", "ready")
+      .maybeSingle();
+    if (completedError) return jsonResponse({ error: "issue_photo_reservation_lookup_failed" }, 500);
+    return completed
+      ? issuePhotoCompletionResponse(completed)
+      : jsonResponse({ error: "issue_photo_reservation_missing" }, 409);
+  }
+  if (parseTime(reservation.upload_expires_at) <= Date.now()) {
+    await releaseIssuePhotoReservation(reservation);
+    return jsonResponse({ error: "issue_photo_reservation_expired" }, 410);
+  }
+
+  const pathSeparator = storagePath.lastIndexOf("/");
+  if (pathSeparator <= 0 || pathSeparator >= storagePath.length - 1) {
+    return jsonResponse({ error: "issue_photo_path_invalid" }, 400);
+  }
+  const storageFolder = storagePath.slice(0, pathSeparator);
+  const objectName = storagePath.slice(pathSeparator + 1);
+  const { data: objects, error: objectError } = await supabase.storage
+    .from(ISSUE_PHOTO_BUCKET)
+    .list(storageFolder, { limit: 10, search: objectName });
+  const object = (objects || []).find((candidate) => candidate.name === objectName);
+  if (objectError || !object) return jsonResponse({ error: "issue_photo_object_missing" }, 400);
+
+  const { data: photo, error: completeError } = await supabase
+    .from("issue_photos")
+    .update({ upload_status: "ready", upload_expires_at: null })
+    .eq("id", photoId)
+    .eq("upload_status", "pending")
+    .select("id,target_type,target_id,storage_bucket,storage_path,sort_order,created_at")
+    .maybeSingle();
+  if (completeError || !photo) {
+    console.error("issue photo reservation completion failed", completeError);
+    return jsonResponse({ error: "issue_photo_complete_failed" }, 500);
+  }
+  return issuePhotoCompletionResponse(photo);
+}
+
+async function listIssuePhotos(payload: Record<string, unknown>) {
+  const targetId = cleanText(payload.targetId, 120);
+  if (!targetId) return jsonResponse({ error: "issue_photo_target_required" }, 400);
+  const authorization = await verifyMutationSession(payload, "worker");
+  if (authorization.error) return authorization.error;
+  const { data: photos, error } = await supabase
+    .from("issue_photos")
+    .select("id,target_type,target_id,storage_bucket,storage_path,sort_order,created_at")
+    .eq("target_type", "unsafe_issue")
+    .eq("target_id", targetId)
+    .eq("storage_bucket", ISSUE_PHOTO_BUCKET)
+    .eq("upload_status", "ready")
+    .order("sort_order", { ascending: true })
+    .limit(ISSUE_PHOTO_MAX_COUNT);
+  if (error) return jsonResponse({ error: "issue_photo_list_failed" }, 500);
+
+  const expiresAt = new Date(Date.now() + ISSUE_PHOTO_SIGNED_URL_TTL_SECONDS * 1000).toISOString();
+  const signedPhotos = [];
+  for (const photo of photos || []) {
+    const { data, error: signedError } = await supabase.storage
+      .from(cleanText(photo.storage_bucket, 120) || ISSUE_PHOTO_BUCKET)
+      .createSignedUrl(cleanText(photo.storage_path, 500), ISSUE_PHOTO_SIGNED_URL_TTL_SECONDS);
+    if (signedError || !data?.signedUrl) {
+      console.error("issue photo signed URL create failed", signedError);
+      return jsonResponse({ error: "issue_photo_sign_failed" }, 500);
+    }
+    signedPhotos.push({ ...photo, signed_url: data.signedUrl, signed_url_expires_at: expiresAt });
+  }
+  return jsonResponse({ ok: true, photos: signedPhotos });
 }
 
 async function deleteRows(payload: Record<string, unknown>) {
@@ -626,20 +1231,36 @@ async function deleteRows(payload: Record<string, unknown>) {
   if (!ids.length) return jsonResponse({ ok: true, mutated: 0 });
 
   const key = cleanText(payload.key, 80);
-  const authorization = await verifyAdminSession(payload, key === "workPrepRecords" ? "workPrep" : "admin");
+  const authorization = await verifyMutationSession(payload, key === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
 
   if (key === "workPrepRecords") {
+    const { data: records, error: lookupError } = await supabase
+      .from(config.table)
+      .select("id,leader_worker_id,deleted_at")
+      .in("id", ids);
+    if (lookupError) {
+      console.error("work prep delete lookup failed", lookupError);
+      return jsonResponse({ error: "work_prep_lookup_failed" }, 500);
+    }
+    const worker = authorization.worker as Record<string, unknown>;
+    const workerId = cleanText(worker.id, 120);
+    if (!isPrivilegedWorker(worker)
+      && (records || []).some((record) => cleanText(record.leader_worker_id, 120) !== workerId)) {
+      return jsonResponse({ error: "work_prep_forbidden" }, 403);
+    }
     const now = new Date().toISOString();
-    const { error } = await supabase
+    const { data: deleted, error } = await supabase
       .from(config.table)
       .update({ deleted_at: now, updated_at: now })
-      .in("id", ids);
+      .in("id", ids)
+      .is("deleted_at", null)
+      .select("id");
     if (error) {
       console.error("admin work prep soft delete failed", error);
       return jsonResponse({ error: "admin_delete_failed" }, 500);
     }
-    return jsonResponse({ ok: true, mutated: ids.length });
+    return jsonResponse({ ok: true, mutated: (deleted || []).length });
   }
 
   const { error } = await supabase.from(config.table).delete().in("id", ids);
@@ -653,7 +1274,7 @@ async function deleteRows(payload: Record<string, unknown>) {
 async function deleteCategoryCascade(payload: Record<string, unknown>) {
   const categoryId = cleanText(payload.categoryId, 120);
   if (!categoryId) return jsonResponse({ error: "category_required" }, 400);
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyMutationSession(payload);
   if (authorization.error) return authorization.error;
 
   const { data, error } = await supabase.rpc("admin_delete_category_cascade", {
@@ -669,7 +1290,7 @@ async function deleteCategoryCascade(payload: Record<string, unknown>) {
 async function deleteSectionCascade(payload: Record<string, unknown>) {
   const sectionId = cleanText(payload.sectionId, 120);
   if (!sectionId) return jsonResponse({ error: "section_required" }, 400);
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyMutationSession(payload);
   if (authorization.error) return authorization.error;
 
   const { data, error } = await supabase.rpc("admin_delete_section_cascade", {
@@ -683,7 +1304,7 @@ async function deleteSectionCascade(payload: Record<string, unknown>) {
 }
 
 async function deleteIssuePhotos(payload: Record<string, unknown>) {
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyMutationSession(payload);
   if (authorization.error) return authorization.error;
 
   const ids = cleanIds(payload.ids);
@@ -693,7 +1314,9 @@ async function deleteIssuePhotos(payload: Record<string, unknown>) {
 
   let query = supabase
     .from("issue_photos")
-    .select("id,target_type,target_id,storage_bucket,storage_path");
+    .select("id,target_type,target_id,storage_bucket,storage_path")
+    .eq("storage_bucket", ISSUE_PHOTO_BUCKET)
+    .like("storage_path", "unsafe/%");
   if (ids.length) query = query.in("id", ids);
   if (targetIds.length) query = query.eq("target_type", targetType).in("target_id", targetIds);
 
@@ -705,16 +1328,13 @@ async function deleteIssuePhotos(payload: Record<string, unknown>) {
   const rows = (photos || []) as Record<string, unknown>[];
   if (!rows.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const pathsByBucket = new Map<string, string[]>();
-  rows.forEach((row) => {
-    const bucket = cleanText(row.storage_bucket || "issue-photos", 120);
+  const paths = rows.flatMap((row) => {
     const path = cleanText(row.storage_path, 500);
-    if (!path) return;
-    pathsByBucket.set(bucket, [...(pathsByBucket.get(bucket) || []), path]);
+    return path.startsWith("unsafe/") ? [path] : [];
   });
 
-  for (const [bucket, paths] of pathsByBucket.entries()) {
-    const { error } = await supabase.storage.from(bucket).remove(paths);
+  if (paths.length) {
+    const { error } = await supabase.storage.from(ISSUE_PHOTO_BUCKET).remove(paths);
     if (error) {
       console.error("admin photo storage delete failed", error);
       return jsonResponse({ error: "admin_photo_storage_delete_failed" }, 500);
@@ -738,7 +1358,7 @@ async function uploadPictogramImage(payload: Record<string, unknown>) {
   const pictogramId = cleanText(payload.pictogramId, 120);
   if (!/^[a-zA-Z0-9_-]+$/.test(pictogramId)) return jsonResponse({ error: "invalid_pictogram_id" }, 400);
 
-  const authorization = await verifyAdminSession(payload);
+  const authorization = await verifyMutationSession(payload);
   if (authorization.error) return authorization.error;
 
   const rawLength = String(payload.dataUrl || "").length;
@@ -788,6 +1408,11 @@ Deno.serve(async (req) => {
   if (action === "createSession") return createSession(payload);
   if (action === "revokeSession") return revokeSession(payload);
   if (action === "upsertRows") return upsertRows(payload);
+  if (action === "submitInspection") return submitInspection(payload);
+  if (action === "submitRows") return submitRows(payload);
+  if (action === "createIssuePhotoUpload") return createIssuePhotoUpload(payload);
+  if (action === "completeIssuePhotoUpload") return completeIssuePhotoUpload(payload);
+  if (action === "listIssuePhotos") return listIssuePhotos(payload);
   if (action === "deleteRows") return deleteRows(payload);
   if (action === "deleteCategoryCascade") return deleteCategoryCascade(payload);
   if (action === "deleteSectionCascade") return deleteSectionCascade(payload);

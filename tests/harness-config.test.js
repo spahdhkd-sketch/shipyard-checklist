@@ -22,6 +22,7 @@ assert.ok(exists("tools/claude-quality-harness.mjs"), "legacy harness entrypoint
 
 const harness = read("tools/quality-harness.mjs");
 const legacyHarness = read("tools/claude-quality-harness.mjs");
+const assetBuilder = read("tools/build-assets.mjs");
 const vercelConfig = JSON.parse(read("vercel.json"));
 const duplicateAliases = [
   "shipyard-checklist.vercel.app",
@@ -32,11 +33,11 @@ const duplicateAliases = [
 assert.match(harness, /GS Safety Quality Harness/);
 assert.match(harness, /https:\/\/gs-safety-checklist\.vercel\.app/);
 assert.match(harness, /yuuroocvxvzgmsdeeiws/);
-assert.match(harness, /1\.5-20260703-risk-signs/);
+assert.match(harness, /1\.6-20260715-security-sync/);
 assert.match(harness, /VERSION_LOADING_COPY/);
 assert.doesNotMatch(harness, /version 0\.8/);
-assert.match(harness, /20260703-risk-signs-1/);
-assert.match(harness, /gs-safety-20260703-risk-signs-1/);
+assert.match(harness, /20260715-security-sync-1/);
+assert.match(harness, /gs-safety-20260715-security-sync-1/);
 assert.match(harness, /ADMIN_PREENTRY_WORKER_POSITIONS/);
 assert.match(harness, /canWorkerPreEnterAdminMode/);
 assert.match(harness, /ship-date-field \\.input/);
@@ -76,3 +77,6 @@ for (const alias of duplicateAliases) {
 }
 
 assert.match(legacyHarness, /quality-harness\.mjs/);
+assert.match(assetBuilder, /import \{ fileURLToPath \} from "node:url"/);
+assert.match(assetBuilder, /fileURLToPath\(import\.meta\.url\)/);
+assert.doesNotMatch(assetBuilder, /new URL\(import\.meta\.url\)\.pathname/);
