@@ -1,14 +1,17 @@
 # Version
 
-Current version: `1.9-20260721`
+Current version: `1.10-20260721`
 
-Recorded at: `2026-07-21 (working icon controls and targeted pictogram saves)`
+Recorded at: `2026-07-21 (explicit work-type icon application flow)`
 
-Baseline commit: `fb65c38`
+Baseline commit: `9269a5b`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Adds a prominent `선택한 아이콘 적용` action directly below the work-type icon picker.
+- Separates custom pictogram `이름 저장` from work-type icon application and reports distinct completion messages.
+- Browser coverage verifies select, apply, persisted category icon, and completion feedback in one flow.
 - Saves only the selected active custom pictogram so deleted rows cannot make icon management fail with 404.
 - Excludes deleted pictograms from every generic synchronization path.
 - Applies the active DCP pictogram to the DRY POWDER category and canonicalizes legacy icon aliases.
@@ -24,5 +27,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260721-icon-controls-1` and service-worker version
-  `1.9-20260721-icon-controls` so installed clients refresh safely.
+- Issues asset token `20260721-icon-apply-1` and service-worker version
+  `1.10-20260721-icon-apply` so installed clients refresh safely.

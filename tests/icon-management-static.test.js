@@ -25,6 +25,9 @@ assert.match(app, /invokeAdminMutation\("deletePictogram"/, "custom icon deletio
 assert.match(app, /invokeAdminMutation\("uploadPictogramImage"[\s\S]*label[\s\S]*sortOrder/, "custom icon upload must create metadata on the server");
 assert.match(app, /rows: \(rows\) => rows\.filter\(\(row\) => row\.source === "custom" && row\.deleted !== true\)/, "deleted pictograms must not re-enter generic synchronization");
 assert.match(app, /async function savePictogram[\s\S]*upsertAdminRows\("pictograms", updatedPictogram\)/, "pictogram rename must save only the selected active row");
+assert.match(app, /data-apply-category-icon=.*선택한 아이콘 적용/, "category editor must expose an icon-specific apply action beside the picker");
+assert.match(app, /아이콘을 선택했습니다\.[\s\S]*선택한 아이콘 적용/, "icon selection must explain the save action");
+assert.match(app, /픽토그램 이름만 수정했습니다/, "pictogram rename feedback must not imply category icon application");
 
 assert.match(edge, /const BUILT_IN_PICTOGRAM_IDS = new Set/, "server must own the built-in icon allowlist");
 assert.match(edge, /async function validateCategoryIcons/, "server must reject dangling category icon identifiers");

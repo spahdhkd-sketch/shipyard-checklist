@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.9-20260721-icon-controls";
+    const APP_VERSION = "1.10-20260721-icon-apply";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -7984,9 +7984,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
         </button>
         ${renderPictogramPicker(cat.icon || "", `editCategoryIcon_${cat.id}`)}
+        <div class="item-actions manage-actions">
+          <button class="btn" data-apply-category-icon="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">선택한 아이콘 적용</button>
+          <span class="section-help">아이콘을 선택한 뒤 이 버튼을 누르면 해당 작업 유형에 저장됩니다.</span>
+        </div>
         <div class="tool-admin-stack category-edit-library">
           <div>
             <div class="section-title">픽토그램 라이브러리 관리</div>
+            <p class="section-help">아래의 이름 저장은 사용자 지정 픽토그램의 표시 이름만 변경합니다.</p>
             ${renderPictogramLibraryManager()}
           </div>
         </div>
@@ -8116,7 +8121,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               <input class="input" id="pictogramLabel_${icon.id}" value="${esc(icon.label)}" ${state.adminMode ? "" : "disabled"} />
             </div>
             <div class="item-actions manage-actions">
-              <button class="btn-light" data-save-pictogram="${icon.id}" ${state.adminMode ? "" : "disabled"} type="button">저장</button>
+              <button class="btn-light" data-save-pictogram="${icon.id}" ${state.adminMode ? "" : "disabled"} type="button">이름 저장</button>
               <button class="btn-danger" data-delete-pictogram="${icon.id}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>
             </div>
           </div>`).join("") : `<div class="empty">추가된 사용자 지정 픽토그램이 없습니다.</div>`}
@@ -9247,7 +9252,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         document.querySelectorAll(`[data-pick-icon-target="${targetId}"]`).forEach((node) => node.classList.toggle("active", node === button));
         const target = $(targetId);
         if (target) target.value = button.dataset.pickIcon;
+        if (targetId.startsWith("editCategoryIcon_")) toast("아이콘을 선택했습니다. 아래의 '선택한 아이콘 적용'을 눌러 저장하세요.");
       }
+      if (button.dataset.applyCategoryIcon) saveCategory(button.dataset.applyCategoryIcon);
       if (button.dataset.action === "save-category-icon") saveCategoryIcon();
       if (button.dataset.action === "toggle-category-add") {
         if (!requireAdminWrite()) return true;
@@ -11297,6 +11304,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!label) return toast("작업 유형명을 입력하세요.");
       const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
       if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
+      const iconChanged = normalizeIconKey(cat.icon) !== icon;
       const previousCategories = state.categories;
       const previousEditCategoryId = state.editCategoryId;
       state.categories = state.categories.map((row) => row.id === id ? {
@@ -11315,7 +11323,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
       render();
-      toast("작업 유형 설정을 수정했습니다.");
+      toast(iconChanged ? "작업 유형 아이콘을 변경했습니다." : "작업 유형 설정을 수정했습니다.");
     }
 
     function toggleCategoryTools(id) {
@@ -11655,7 +11663,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       persist();
       render();
-      toast("픽토그램 이름을 수정했습니다.");
+      toast("픽토그램 이름만 수정했습니다.");
     }
 
     async function deletePictogram(id) {

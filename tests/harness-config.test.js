@@ -33,11 +33,11 @@ const duplicateAliases = [
 assert.match(harness, /GS Safety Quality Harness/);
 assert.match(harness, /https:\/\/gs-safety-checklist\.vercel\.app/);
 assert.match(harness, /yuuroocvxvzgmsdeeiws/);
-assert.match(harness, /1\.9-20260721-icon-controls/);
+assert.match(harness, /1\.10-20260721-icon-apply/);
 assert.match(harness, /VERSION_LOADING_COPY/);
 assert.doesNotMatch(harness, /version 0\.8/);
-assert.match(harness, /20260721-icon-controls-1/);
-assert.match(harness, /gs-safety-20260721-icon-controls-1/);
+assert.match(harness, /20260721-icon-apply-1/);
+assert.match(harness, /gs-safety-20260721-icon-apply-1/);
 assert.match(harness, /ADMIN_PREENTRY_WORKER_POSITIONS/);
 assert.match(harness, /canWorkerPreEnterAdminMode/);
 assert.match(harness, /ship-date-field \\.input/);

@@ -143,13 +143,26 @@ async function main() {
   // 차단(abort)은 샌드박스 프록시 차단과 동일하게 동작하며, 앱은 로컬 데이터로 정상 폴백한다(pullRemote catch).
   let blockedBackendRequests = 0;
   const LOCAL_ORIGINS = [`http://localhost:${PORT}/`, `http://127.0.0.1:${PORT}/`];
-  const makePage = async () => {
+  const makePage = async (options = {}) => {
     const newPage = await browser.newPage();
     await newPage.emulateTimezone(tz);
     newPage.on("dialog", (d) => d.accept());
     await newPage.setRequestInterception(true);
     newPage.on("request", (req) => {
       const url = req.url();
+      if (options.mockAdminMutations && url.includes("/functions/v1/admin-mutations")) {
+        req.respond({
+          status: 200,
+          contentType: "application/json",
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+          },
+          body: req.method() === "OPTIONS" ? "ok" : JSON.stringify({ ok: true, mutated: 1 }),
+        }).catch(() => {});
+        return;
+      }
       if (LOCAL_ORIGINS.some((o) => url.startsWith(o)) || url.startsWith("data:") || url.startsWith("blob:")) {
         req.continue().catch(() => {});
         return;
@@ -192,7 +205,7 @@ async function main() {
   };
 
   const runIconPickerFlow = async () => {
-    const iconPage = await makePage();
+    const iconPage = await makePage({ mockAdminMutations: true });
     await iconPage.evaluateOnNewDocument((storagePrefix) => {
       sessionStorage.setItem(storagePrefix + "adminMode", "true");
       sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
@@ -212,18 +225,26 @@ async function main() {
         .find((button) => button.dataset.pickIconTarget === input?.id && button.dataset.pickIcon !== current);
       choice?.click();
       return {
+        categoryId: editButton?.dataset.editCategory || "",
         before: current,
         after: input?.value || "",
         active: Boolean(choice?.classList.contains("active")),
       };
     });
+    await iconPage.click("[data-apply-category-icon]");
+    await iconPage.waitForFunction(() => !document.querySelector("[data-apply-category-icon]"), { timeout: 5000 });
+    const applied = await iconPage.evaluate((storagePrefix, categoryId, expectedIcon) => {
+      const categories = JSON.parse(localStorage.getItem(storagePrefix + "categories") || "[]");
+      return categories.find((row) => row.id === categoryId)?.icon === expectedIcon
+        && document.body.innerText.includes("작업 유형 아이콘을 변경했습니다.");
+    }, PRE, result.categoryId, result.after);
     await iconPage.close();
-    return Boolean(result.before && result.after && result.before !== result.after && result.active);
+    return Boolean(result.before && result.after && result.before !== result.after && result.active && applied);
   };
 
   console.log(`E2E 스모크 시작 (tz=${tz}, today=${todayStr}, app=${appVersion})`);
   if (process.argv.includes("--icon-picker-only")) {
-    check("아이콘 관리: 선택 시 편집값과 활성 표시 변경", await runIconPickerFlow());
+    check("아이콘 관리: 선택·적용 후 저장값과 완료 안내 변경", await runIconPickerFlow());
     try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
     srv.close();
     if (failures) throw new Error(`아이콘 E2E 실패: ${failures}건`);
@@ -323,7 +344,7 @@ async function main() {
   }
   check("자재: 등록 플로우 완료", materialsOk);
 
-  check("아이콘 관리: 선택 시 편집값과 활성 표시 변경", await runIconPickerFlow());
+  check("아이콘 관리: 선택·적용 후 저장값과 완료 안내 변경", await runIconPickerFlow());
 
   try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
   srv.close();
