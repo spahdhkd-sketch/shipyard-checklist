@@ -191,7 +191,45 @@ async function main() {
     }
   };
 
+  const runIconPickerFlow = async () => {
+    const iconPage = await makePage();
+    await iconPage.evaluateOnNewDocument((storagePrefix) => {
+      sessionStorage.setItem(storagePrefix + "adminMode", "true");
+      sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+      sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+        token: "e2e-admin-session",
+        workerId: "w-hong",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }));
+    }, PRE);
+    await iconPage.goto(`http://localhost:${PORT}/items.html`, { waitUntil: "networkidle2", timeout: 25000 });
+    const result = await iconPage.evaluate(() => {
+      const editButton = document.querySelector("[data-edit-category]");
+      editButton?.click();
+      const input = document.querySelector('[id^="editCategoryIcon_"]');
+      const current = input?.value || "";
+      const choice = [...document.querySelectorAll("[data-pick-icon]")]
+        .find((button) => button.dataset.pickIconTarget === input?.id && button.dataset.pickIcon !== current);
+      choice?.click();
+      return {
+        before: current,
+        after: input?.value || "",
+        active: Boolean(choice?.classList.contains("active")),
+      };
+    });
+    await iconPage.close();
+    return Boolean(result.before && result.after && result.before !== result.after && result.active);
+  };
+
   console.log(`E2E 스모크 시작 (tz=${tz}, today=${todayStr}, app=${appVersion})`);
+  if (process.argv.includes("--icon-picker-only")) {
+    check("아이콘 관리: 선택 시 편집값과 활성 표시 변경", await runIconPickerFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`아이콘 E2E 실패: ${failures}건`);
+    console.log("아이콘 E2E 통과");
+    return;
+  }
 
   // 1. 홈 — 오늘 내 점검 카드
   await goto("index.html");
@@ -284,6 +322,8 @@ async function main() {
     try { materialsOk = await withTimeout(runMaterialsFlow(), 120000); } catch { materialsOk = false; }
   }
   check("자재: 등록 플로우 완료", materialsOk);
+
+  check("아이콘 관리: 선택 시 편집값과 활성 표시 변경", await runIconPickerFlow());
 
   try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
   srv.close();

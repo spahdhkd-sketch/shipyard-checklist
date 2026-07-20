@@ -23,6 +23,8 @@ assert.match(app, /const previousCategories = state\.categories;/, "category sav
 assert.match(app, /state\.categories = previousCategories;[\s\S]*state\.editCategoryId = previousEditCategoryId;/, "failed category saves must restore icon state");
 assert.match(app, /invokeAdminMutation\("deletePictogram"/, "custom icon deletion must use one server operation");
 assert.match(app, /invokeAdminMutation\("uploadPictogramImage"[\s\S]*label[\s\S]*sortOrder/, "custom icon upload must create metadata on the server");
+assert.match(app, /rows: \(rows\) => rows\.filter\(\(row\) => row\.source === "custom" && row\.deleted !== true\)/, "deleted pictograms must not re-enter generic synchronization");
+assert.match(app, /async function savePictogram[\s\S]*upsertAdminRows\("pictograms", updatedPictogram\)/, "pictogram rename must save only the selected active row");
 
 assert.match(edge, /const BUILT_IN_PICTOGRAM_IDS = new Set/, "server must own the built-in icon allowlist");
 assert.match(edge, /async function validateCategoryIcons/, "server must reject dangling category icon identifiers");

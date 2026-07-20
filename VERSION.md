@@ -1,14 +1,16 @@
 # Version
 
-Current version: `1.8-20260721`
+Current version: `1.9-20260721`
 
-Recorded at: `2026-07-21 (secure icon management and DCP application)`
+Recorded at: `2026-07-21 (working icon controls and targeted pictogram saves)`
 
-Baseline commit: `dcfaacf`
+Baseline commit: `fb65c38`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Saves only the selected active custom pictogram so deleted rows cannot make icon management fail with 404.
+- Excludes deleted pictograms from every generic synchronization path.
 - Applies the active DCP pictogram to the DRY POWDER category and canonicalizes legacy icon aliases.
 - Rejects unknown category icon identifiers at the server boundary.
 - Makes custom pictogram upload metadata-safe and custom pictogram deletion transactional with category fallback.
@@ -22,5 +24,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260721-secure-icons-1` and service-worker version
-  `1.8-20260721-secure-icons` so installed clients refresh safely.
+- Issues asset token `20260721-icon-controls-1` and service-worker version
+  `1.9-20260721-icon-controls` so installed clients refresh safely.

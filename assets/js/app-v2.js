@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.8-20260721-secure-icons";
+    const APP_VERSION = "1.9-20260721-icon-controls";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -360,7 +360,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         table: "safety_pictograms",
         key: "pictograms",
         selectColumns: "id,label,source,deleted,sort_order,storage_bucket,storage_path,mime_type,file_size",
-        rows: (rows) => rows.filter((row) => row.source === "custom"),
+        rows: (rows) => rows.filter((row) => row.source === "custom" && row.deleted !== true),
         toDb: (row) => ({
           id: row.id,
           label: row.label,
@@ -11643,13 +11643,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const label = $(`pictogramLabel_${id}`)?.value.trim() || "";
       if (!label) return toast("픽토그램 이름을 입력하세요.");
       const previousPictograms = state.pictograms;
-      state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, label } : row);
-      if (!(await persistAndSync("pictograms"))) {
+      const nextPictogram = state.pictograms.find((row) => row.id === id && row.source === "custom" && row.deleted !== true);
+      if (!nextPictogram) return toast("수정할 픽토그램을 찾을 수 없습니다.");
+      const updatedPictogram = { ...nextPictogram, label };
+      state.pictograms = state.pictograms.map((row) => row.id === id ? updatedPictogram : row);
+      if (!(await upsertAdminRows("pictograms", updatedPictogram))) {
         state.pictograms = previousPictograms;
         persist();
         render();
         return;
       }
+      persist();
       render();
       toast("픽토그램 이름을 수정했습니다.");
     }
