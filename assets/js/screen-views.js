@@ -835,7 +835,7 @@
             </div>
             <div class="field">
               <label for="catIcon">아이콘/픽토그램</label>
-              <input class="input" id="catIcon" placeholder="예) erection 또는 P" />
+              <input class="input" id="catIcon" value="blockAssembly" placeholder="픽토그램을 선택하세요" />
             </div>
             <div class="field">
               <span class="field-label">색상</span>

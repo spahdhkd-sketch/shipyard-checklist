@@ -23,6 +23,61 @@ const PICTOGRAM_IMAGE_MIME_EXTENSIONS = new Map<string, string>([
   ["image/jpeg", "jpg"],
   ["image/webp", "webp"],
 ]);
+const BUILT_IN_PICTOGRAM_IDS = new Set([
+  "blockAssembly", "weldingWork", "hullPainting", "qualityInspection", "materialStorage",
+  "shipDesign", "ncCutting", "curvedBlockProcessing", "steelPlateCutting", "scaffolding",
+  "engineInstallation", "craneOperation", "cabinAssembly", "propellerInstallation", "electricalWork",
+  "upperModuleInstallation", "materialTransport", "boardingWork", "cutInspection", "curvedBlockInspection",
+  "yardTransfer", "namingCeremony", "gasCutting", "anchorInstallation", "hullGrinding",
+  "insulationWork", "wasteDisposal", "safetyTraining", "remoteInspection", "ecoPainting",
+  "launchPrep", "launchInspection", "seaTrial", "controlRoom", "sonarInstallation",
+  "blockTransport", "weldingRobot", "smartLogistics", "environmentalProtection", "safetyGear",
+  "pressureTest", "dpInstallation", "dpInspection", "classSurvey", "demoCheck",
+  "lcWork", "stInspection", "dlWork",
+]);
+const LEGACY_PICTOGRAM_ALIASES = new Map([
+  ["load", "upperModuleInstallation"],
+  ["painting", "hullPainting"],
+  ["launching", "launchPrep"],
+  ["outfitting", "electricalWork"],
+  ["cutting", "steelPlateCutting"],
+  ["welding", "weldingWork"],
+  ["goliathCrane", "craneOperation"],
+  ["weldingMachine", "weldingWork"],
+  ["grinder", "hullGrinding"],
+  ["airHose", "pressureTest"],
+  ["liftingJack", "yardTransfer"],
+  ["spanner", "qualityInspection"],
+  ["hammer", "steelPlateCutting"],
+  ["measuringTool", "cutInspection"],
+  ["drill", "ncCutting"],
+  ["paintGun", "hullPainting"],
+  ["pressureWasher", "pressureTest"],
+  ["height", "scaffolding"],
+  ["workAtHeights", "scaffolding"],
+  ["mounting", "blockAssembly"],
+  ["erection", "blockAssembly"],
+  ["confined", "safetyGear"],
+  ["confinedSpace", "safetyGear"],
+  ["inspect", "qualityInspection"],
+  ["pressure", "pressureTest"],
+  ["fire", "safetyTraining"],
+  ["crushingHazard", "safetyTraining"],
+  ["fallingObjects", "safetyTraining"],
+  ["firePrevention", "safetyTraining"],
+  ["chemicalHandling", "wasteDisposal"],
+  ["heavyLifting", "upperModuleInstallation"],
+  ["hardHat", "safetyGear"],
+  ["safetyGlasses", "safetyGear"],
+  ["safetyGloves", "safetyGear"],
+  ["hearingProtection", "safetyGear"],
+  ["fallArrest", "safetyTraining"],
+  ["fireAlarm", "safetyTraining"],
+  ["W", "weldingWork"],
+  ["H", "scaffolding"],
+  ["M", "blockAssembly"],
+  ["C", "safetyGear"],
+]);
 const ISSUE_PHOTO_BUCKET = "issue-photos";
 const ISSUE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 const ISSUE_PHOTO_MAX_COUNT = 2;
@@ -141,12 +196,7 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "id",
       "label",
       "source",
-      "deleted",
       "sort_order",
-      "storage_bucket",
-      "storage_path",
-      "mime_type",
-      "file_size",
     ]),
   }],
   ["ships", {
@@ -816,12 +866,81 @@ async function upsertRows(payload: Record<string, unknown>) {
     securedRows = secured.rows;
   }
 
+  if (key === "categories") {
+    const validated = await validateCategoryIcons(rows);
+    if ("error" in validated) return validated.error;
+    const actorWorkerId = cleanText((authorization as AuthorizedMutationSession).worker.id, 120);
+    const { data, error } = await supabase.rpc("upsert_safety_categories_with_history", {
+      p_rows: validated.rows,
+      p_actor_worker_id: actorWorkerId,
+    });
+    if (error) {
+      console.error("category upsert with history failed", error);
+      return jsonResponse({ error: "admin_upsert_failed" }, 500);
+    }
+    return jsonResponse({ ok: true, mutated: Number(data || validated.rows.length) });
+  }
+
+  if (key === "pictograms") {
+    let mutated = 0;
+    for (const row of rows) {
+      const id = cleanText(row.id, 120);
+      const label = cleanText(row.label, 180);
+      const sortOrder = Math.max(0, Math.min(100000, Number(row.sort_order) || 0));
+      if (!/^[a-zA-Z0-9_-]+$/.test(id) || !label) {
+        return jsonResponse({ error: "invalid_pictogram_metadata" }, 400);
+      }
+      const { data, error } = await supabase
+        .from("safety_pictograms")
+        .update({ label, sort_order: sortOrder, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("source", "custom")
+        .eq("deleted", false)
+        .select("id");
+      if (error || !data?.length) {
+        console.error("admin pictogram metadata update failed", error);
+        return jsonResponse({ error: "admin_upsert_failed" }, error ? 500 : 404);
+      }
+      mutated += data.length;
+    }
+    return jsonResponse({ ok: true, mutated });
+  }
+
   const { error } = await supabase.from(config.table).upsert(securedRows, { onConflict: "id" });
   if (error) {
     console.error("admin upsert failed", error);
     return jsonResponse({ error: "admin_upsert_failed" }, 500);
   }
   return jsonResponse({ ok: true, mutated: securedRows.length });
+}
+
+function canonicalPictogramId(value: unknown) {
+  const id = cleanText(value, 120);
+  return LEGACY_PICTOGRAM_ALIASES.get(id) || id;
+}
+
+async function validateCategoryIcons(rows: Record<string, unknown>[]) {
+  const normalizedRows = rows.map((row) => ({ ...row, icon: canonicalPictogramId(row.icon) }));
+  const customIds = [...new Set(normalizedRows
+    .map((row) => cleanText(row.icon, 120))
+    .filter((id) => id && !BUILT_IN_PICTOGRAM_IDS.has(id)))];
+  if (!customIds.length) return { rows: normalizedRows };
+
+  const { data, error } = await supabase
+    .from("safety_pictograms")
+    .select("id")
+    .in("id", customIds)
+    .eq("source", "custom")
+    .eq("deleted", false);
+  if (error) {
+    console.error("category pictogram validation failed", error);
+    return { error: jsonResponse({ error: "category_icon_validation_failed" }, 500) };
+  }
+  const validIds = new Set((data || []).map((row) => cleanText(row.id, 120)));
+  if (customIds.some((id) => !validIds.has(id))) {
+    return { error: jsonResponse({ error: "category_icon_invalid" }, 400) };
+  }
+  return { rows: normalizedRows };
 }
 
 async function createWorker(payload: Record<string, unknown>) {
@@ -1441,6 +1560,10 @@ async function uploadPictogramImage(payload: Record<string, unknown>) {
   const pictogramId = cleanText(payload.pictogramId, 120);
   if (!/^[a-zA-Z0-9_-]+$/.test(pictogramId)) return jsonResponse({ error: "invalid_pictogram_id" }, 400);
 
+  const label = cleanText(payload.label, 180);
+  const sortOrder = Math.max(0, Math.min(100000, Number(payload.sortOrder) || 0));
+  if (!label) return jsonResponse({ error: "invalid_pictogram_label" }, 400);
+
   const authorization = await verifyMutationSession(payload);
   if (authorization.error) return authorization.error;
 
@@ -1465,15 +1588,80 @@ async function uploadPictogramImage(payload: Record<string, unknown>) {
     return jsonResponse({ error: "admin_pictogram_upload_failed" }, 500);
   }
 
+  const pictogram = {
+    id: pictogramId,
+    label,
+    source: "custom",
+    src: "",
+    deleted: false,
+    sort_order: sortOrder,
+    storage_bucket: PICTOGRAM_IMAGE_BUCKET,
+    storage_path: storagePath,
+    mime_type: parsed.mimeType,
+    file_size: parsed.bytes.byteLength,
+    updated_at: new Date().toISOString(),
+  };
+  const { error: metadataError } = await supabase
+    .from("safety_pictograms")
+    .upsert(pictogram, { onConflict: "id" });
+  if (metadataError) {
+    console.error("admin pictogram metadata write failed", metadataError);
+    const { error: cleanupError } = await supabase.storage
+      .from(PICTOGRAM_IMAGE_BUCKET)
+      .remove([storagePath]);
+    if (cleanupError) console.error("admin pictogram upload cleanup failed", cleanupError);
+    return jsonResponse({ error: "admin_pictogram_metadata_failed" }, 500);
+  }
+
   return jsonResponse({
     ok: true,
-    image: {
-      storageBucket: PICTOGRAM_IMAGE_BUCKET,
-      storagePath,
-      mimeType: parsed.mimeType,
-      fileSize: parsed.bytes.byteLength,
+    pictogram: {
+      id: pictogram.id,
+      label: pictogram.label,
+      source: pictogram.source,
+      deleted: pictogram.deleted,
+      order: pictogram.sort_order,
+      storageBucket: pictogram.storage_bucket,
+      storagePath: pictogram.storage_path,
+      mimeType: pictogram.mime_type,
+      fileSize: pictogram.file_size,
     },
   });
+}
+
+async function deletePictogram(payload: Record<string, unknown>) {
+  const pictogramId = cleanText(payload.pictogramId, 120);
+  const fallbackIcon = canonicalPictogramId(payload.fallbackIcon || "blockAssembly");
+  if (!/^[a-zA-Z0-9_-]+$/.test(pictogramId) || !BUILT_IN_PICTOGRAM_IDS.has(fallbackIcon)) {
+    return jsonResponse({ error: "invalid_pictogram_delete" }, 400);
+  }
+
+  const authorization = await verifyMutationSession(payload);
+  if (authorization.error) return authorization.error;
+  const actorWorkerId = cleanText((authorization as AuthorizedMutationSession).worker.id, 120);
+  const { data, error } = await supabase.rpc("delete_safety_pictogram", {
+    p_id: pictogramId,
+    p_fallback_icon: fallbackIcon,
+    p_actor_worker_id: actorWorkerId,
+  });
+  if (error) {
+    console.error("admin pictogram delete failed", error);
+    return jsonResponse({ error: "admin_pictogram_delete_failed" }, 500);
+  }
+
+  const deleted = rowObject(data) || {};
+  const storageBucket = cleanText(deleted.storageBucket, 120);
+  const storagePath = cleanText(deleted.storagePath, 500);
+  const expectedPath = new RegExp(`^custom/${pictogramId}\\.(png|jpe?g|webp)$`, "i");
+  let storageDeleted = true;
+  if (storagePath && storageBucket === PICTOGRAM_IMAGE_BUCKET && expectedPath.test(storagePath)) {
+    const { error: storageError } = await supabase.storage.from(PICTOGRAM_IMAGE_BUCKET).remove([storagePath]);
+    if (storageError) {
+      storageDeleted = false;
+      console.error("admin pictogram storage cleanup failed", storageError);
+    }
+  }
+  return jsonResponse({ ok: true, storageDeleted });
 }
 
 Deno.serve(async (req) => {
@@ -1502,6 +1690,7 @@ Deno.serve(async (req) => {
   if (action === "deleteSectionCascade") return deleteSectionCascade(payload);
   if (action === "deleteIssuePhotos") return deleteIssuePhotos(payload);
   if (action === "uploadPictogramImage") return uploadPictogramImage(payload);
+  if (action === "deletePictogram") return deletePictogram(payload);
   if (action === "ping") return jsonResponse({ ok: true });
   return jsonResponse({ error: "unknown_action" }, 400);
 });

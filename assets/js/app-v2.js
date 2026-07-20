@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.7-20260721-worker-onboarding";
+    const APP_VERSION = "1.8-20260721-secure-icons";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -5902,7 +5902,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           adminMode: state.adminMode,
           categoryAddOpen: state.categoryAddOpen,
           colors: COLORS,
-          pictogramPickerHtml: state.categoryAddOpen ? renderPictogramPicker("erection") : "",
+          pictogramPickerHtml: state.categoryAddOpen ? renderPictogramPicker("blockAssembly") : "",
           categoryToolAssignmentsHtml: renderCategoryToolAssignments(),
         });
       }
@@ -11239,18 +11239,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const label = $("catLabel").value.trim();
       if (!label) return toast("작업 유형명을 입력하세요.");
       const id = uid("cat");
-      state.categories.push({
+      const previousCategories = state.categories;
+      const previousSections = state.sections;
+      state.categories = [...state.categories, {
         id,
         label,
-        icon: $("catIcon").value.trim() || label.slice(0, 1).toUpperCase(),
+        icon: normalizeIconKey($("catIcon").value.trim() || "blockAssembly"),
         color: selectedColor(),
         requireToolCheck: true,
         toolNature: "선행",
         toolIds: [],
         order: state.categories.length + 1,
-      });
-      state.sections.push({ id: uid("section"), categoryId: id, title: "기본 점검", order: 1 });
-      if (!(await persistAndSync(["categories", "sections"]))) return;
+      }];
+      state.sections = [...state.sections, { id: uid("section"), categoryId: id, title: "기본 점검", order: 1 }];
+      if (!(await persistAndSync(["categories", "sections"]))) {
+        state.categories = previousCategories;
+        state.sections = previousSections;
+        persist();
+        render();
+        return;
+      }
       state.categoryAddOpen = false;
       state.manageCategoryId = id;
       render();
@@ -11283,12 +11291,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const cat = categoryById(id);
       if (!cat) return;
       const label = $(`editCategoryLabel_${id}`).value.trim();
-      const icon = $(`editCategoryIcon_${id}`)?.value.trim() || label.slice(0, 1).toUpperCase();
+      const icon = normalizeIconKey($(`editCategoryIcon_${id}`)?.value.trim() || cat.icon || "blockAssembly");
       const color = selectedEditCategoryColor(id, cat.color);
       const toolNature = normalizeToolNature($(`editCategoryNature_${id}`)?.value || cat.toolNature);
       if (!label) return toast("작업 유형명을 입력하세요.");
       const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
       if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
+      const previousCategories = state.categories;
+      const previousEditCategoryId = state.editCategoryId;
       state.categories = state.categories.map((row) => row.id === id ? {
         ...row,
         label,
@@ -11297,7 +11307,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         toolNature,
       } : row);
       state.editCategoryId = null;
-      if (!(await persistAndSync("categories"))) return;
+      if (!(await persistAndSync("categories"))) {
+        state.categories = previousCategories;
+        state.editCategoryId = previousEditCategoryId;
+        persist();
+        render();
+        return;
+      }
       render();
       toast("작업 유형 설정을 수정했습니다.");
     }
@@ -11581,7 +11597,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return "";
     }
 
-    async function uploadPictogramImage(id, file) {
+    async function uploadPictogramImage(id, file, label, sortOrder) {
       const dataUrl = await fileToDataUrl(file);
       if (!dataUrl) throw new Error("pictogram_file_read_failed");
       const result = await invokeAdminMutation("uploadPictogramImage", {
@@ -11589,9 +11605,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         fileName: file.name || `${id}.png`,
         mimeType: pictogramMimeType(file),
         fileSize: Number(file.size || 0),
+        label,
+        sortOrder,
         dataUrl,
       });
-      return result.image || {};
+      return result.pictogram || {};
     }
 
     async function addPictogram() {
@@ -11602,23 +11620,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const fileError = validatePictogramFile(file);
       if (fileError) return toast(fileError);
       const id = uid("pictogram");
+      const sortOrder = pictogramLibrary().length + 1;
       setSyncStatus("픽토그램 업로드 중", "pending");
       try {
-        const image = await uploadPictogramImage(id, file);
-        state.pictograms.push({
-          id,
-          label,
-          source: "custom",
-          order: pictogramLibrary().length + 1,
-          deleted: false,
-          storageBucket: image.storageBucket || PICTOGRAM_IMAGE_BUCKET,
-          storagePath: image.storagePath || "",
-          mimeType: image.mimeType || pictogramMimeType(file),
-          fileSize: Number(image.fileSize || file.size || 0),
-        });
+        const pictogram = await uploadPictogramImage(id, file, label, sortOrder);
+        state.pictograms.push({ ...pictogram, id, label, source: "custom", deleted: false, order: sortOrder });
         $("newPictogramLabel").value = "";
         $("newPictogramFile").value = "";
-        if (!(await persistAndSync("pictograms"))) return;
+        persist();
+        setSyncStatus("온라인", "online");
         render();
         toast("사용자 지정 픽토그램을 추가했습니다.");
       } catch (error) {
@@ -11632,8 +11642,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!requireAdminWrite()) return;
       const label = $(`pictogramLabel_${id}`)?.value.trim() || "";
       if (!label) return toast("픽토그램 이름을 입력하세요.");
+      const previousPictograms = state.pictograms;
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, label } : row);
-      if (!(await persistAndSync("pictograms"))) return;
+      if (!(await persistAndSync("pictograms"))) {
+        state.pictograms = previousPictograms;
+        persist();
+        render();
+        return;
+      }
       render();
       toast("픽토그램 이름을 수정했습니다.");
     }
@@ -11645,9 +11661,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!confirm(`${pictogram.label} 픽토그램을 삭제할까요?`)) return;
       const fallback = BUILT_IN_PICTOGRAMS[0]?.id || "blockAssembly";
       const affected = state.categories.some((row) => row.icon === id);
+      try {
+        await invokeAdminMutation("deletePictogram", { pictogramId: id, fallbackIcon: fallback });
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        return toast("픽토그램 삭제 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
+      }
       state.pictograms = state.pictograms.map((row) => row.id === id ? { ...row, deleted: true } : row);
       state.categories = state.categories.map((row) => row.icon === id ? { ...row, icon: fallback } : row);
-      if (!(await persistAndSync(["pictograms", "categories"]))) return;
+      persist();
+      setSyncStatus("온라인", "online");
       render();
       toast(affected ? "사용 중인 작업 유형은 기본 픽토그램으로 되돌렸습니다." : "픽토그램을 삭제했습니다.");
     }

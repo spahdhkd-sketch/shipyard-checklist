@@ -81,6 +81,8 @@ Deno.serve(async (req) => {
   const bucket = cleanText(row.storage_bucket || DEFAULT_BUCKET, 120);
   const storagePath = cleanText(row.storage_path, 500);
   if (storagePath) {
+    const expectedPath = new RegExp(`^custom/${id}\\.(png|jpe?g|webp)$`, "i");
+    if (bucket !== DEFAULT_BUCKET || !expectedPath.test(storagePath)) return notFound();
     const { data: blob, error: downloadError } = await supabase.storage.from(bucket).download(storagePath);
     if (downloadError || !blob) return notFound();
     return imageResponse(req.method === "HEAD" ? null : blob, cleanText(row.mime_type, 120) || blob.type);
