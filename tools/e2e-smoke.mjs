@@ -30,14 +30,7 @@ async function resolveChrome() {
   return found;
 }
 
-// 07:00 시작 게이트를 항상 통과하도록, 현지 시각이 오후가 되는 타임존을 고른다
-function pickTimezone() {
-  const utcH = new Date().getUTCHours();
-  let offset = 13 - utcH; // 현지 13시 부근
-  if (offset > 14) offset -= 24;
-  if (offset < -12) offset += 24;
-  return { tz: `Etc/GMT${offset <= 0 ? "+" : "-"}${Math.abs(offset)}`, offset };
-}
+const TEST_TIME_ZONE = "Asia/Seoul";
 
 function dateInTz(tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -122,8 +115,9 @@ const bodyText = (page) => page.evaluate(() => document.body.innerText.replace(/
 
 async function main() {
   const appVersion = (readFileSync(join(ROOT, "sw.js"), "utf8").match(/APP_VERSION = "([^"]+)"/) || [])[1] || "";
-  const { tz } = pickTimezone();
+  const tz = TEST_TIME_ZONE;
   const todayStr = dateInTz(tz);
+  const testNowMs = Date.parse(`${todayStr}T13:00:00+09:00`);
   const seed = JSON.parse(JSON.stringify(buildSeed(todayStr)).replace("__APP_VERSION__", appVersion));
 
   const puppeteer = (await import("puppeteer-core")).default;
@@ -146,11 +140,40 @@ async function main() {
   const makePage = async (options = {}) => {
     const newPage = await browser.newPage();
     await newPage.emulateTimezone(tz);
+    await newPage.evaluateOnNewDocument((nowMs) => {
+      const NativeDate = Date;
+      class TestDate extends NativeDate {
+        constructor(...args) {
+          super(...(args.length ? args : [nowMs]));
+        }
+
+        static now() {
+          return nowMs;
+        }
+      }
+      Object.setPrototypeOf(TestDate, NativeDate);
+      globalThis.Date = TestDate;
+    }, testNowMs);
     newPage.on("dialog", (d) => d.accept());
     await newPage.setRequestInterception(true);
     newPage.on("request", (req) => {
       const url = req.url();
-      if (options.mockAdminMutations && url.includes("/functions/v1/admin-mutations")) {
+      if (options.mockSupabaseWrites && url.includes(".supabase.co/rest/v1/") && req.method() !== "GET") {
+        const requestHeaders = req.headers();
+        req.respond({
+          status: req.method() === "OPTIONS" ? 200 : 201,
+          contentType: "application/json",
+          headers: {
+            "Access-Control-Allow-Origin": requestHeaders.origin || `http://localhost:${PORT}`,
+            "Access-Control-Allow-Headers": requestHeaders["access-control-request-headers"] || "authorization, x-client-info, apikey, content-type, prefer, x-retry-count, accept-profile, content-profile",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+            "Access-Control-Expose-Headers": "Content-Range",
+          },
+          body: req.method() === "OPTIONS" ? "" : "[]",
+        }).catch(() => {});
+        return;
+      }
+      if ((options.mockAdminMutations || options.mockSupabaseWrites) && url.includes("/functions/v1/admin-mutations")) {
         req.respond({
           status: 200,
           contentType: "application/json",
@@ -182,13 +205,20 @@ async function main() {
         },
       });
     });
-    await newPage.evaluateOnNewDocument((PRE, SEED) => {
+    await newPage.evaluateOnNewDocument((PRE, SEED, mockSupabaseWrites) => {
       for (const [k, v] of Object.entries(SEED)) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
-      sessionStorage.setItem(PRE + "workerSession", JSON.stringify({ workerId: "w-hong", workerName: "홍길동", employeeNo: "1234", loggedInAt: new Date().toISOString() }));
-    }, PRE, seed);
+      sessionStorage.setItem(PRE + "workerSession", JSON.stringify({
+        workerId: "w-hong",
+        workerName: "홍길동",
+        employeeNo: "1234",
+        loggedInAt: new Date().toISOString(),
+        mutationToken: mockSupabaseWrites ? "e2e-worker-mutation" : "",
+        mutationExpiresAt: mockSupabaseWrites ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : "",
+      }));
+    }, PRE, seed, Boolean(options.mockSupabaseWrites));
     return newPage;
   };
-  let page = await makePage();
+  let page = await makePage({ mockSupabaseWrites: true });
 
   const goto = async (path) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -286,7 +316,19 @@ async function main() {
   });
   await wait(700);
   check("점검: [제출하기] 클릭", await clickBtn(page, "제출하기")); await wait(2200);
-  check("점검: 제출 완료 화면", (await bodyText(page)).includes("점검이 제출되었습니다"));
+  const inspectionCompletionText = await bodyText(page);
+  check("점검: 제출 완료 화면", inspectionCompletionText.includes("점검이 제출되었습니다"));
+  check("점검: 제출 즉시 홈·이력 반영 안내", inspectionCompletionText.includes("홈과 점검 이력에 즉시 반영되었습니다"));
+  const inspectionServerState = await page.evaluate(() => {
+    const status = document.querySelector("[data-inspection-sync-state]");
+    return { state: status?.dataset.inspectionSyncState || "missing", text: status?.innerText.replace(/\s+/g, " ").trim() || "" };
+  });
+  check(`점검: 서버 반영 완료 안내 (${inspectionServerState.state}: ${inspectionServerState.text})`, inspectionServerState.state === "synced" && inspectionCompletionText.includes("서버 반영 완료"));
+  const completionBottomNavHidden = await page.evaluate(() => {
+    const nav = document.querySelector(".bottom-nav");
+    return !nav || getComputedStyle(nav).display === "none";
+  });
+  check("점검: 완료 화면 하단 메뉴 미노출", completionBottomNavHidden);
 
   // 3. 홈 카드가 '완료'로 바뀌는지
   await goto("index.html");

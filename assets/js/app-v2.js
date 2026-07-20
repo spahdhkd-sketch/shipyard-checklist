@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.10-20260721-icon-apply";
+    const APP_VERSION = "1.10-20260721-inspection-submit";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -7318,12 +7318,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return icons[name] || icons.check;
     }
 
-    function renderCompletionScreen({ type = "", icon = "check", title, message, messageHtml = "", stats = [], actions = [] }) {
+    function renderCompletionScreen({ type = "", icon = "check", title, message, messageHtml = "", statusHtml = "", stats = [], actions = [] }) {
       const renderedMessage = messageHtml || esc(message || "");
       return `<section class="mobile-complete-screen ${esc(type)}">
         <div class="mobile-complete-visual">${completionIcon(icon)}</div>
         <h1>${esc(title)}</h1>
         <p>${renderedMessage}</p>
+        ${statusHtml}
         <div class="mobile-complete-stats">
           ${stats.map((item) => `<div>
             <strong class="${esc(item.tone || "")}">${esc(item.value)}</strong>
@@ -7334,6 +7335,69 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ${actions.map((action) => `<button class="${action.primary ? "btn mobile-complete-primary" : "btn-light"}" ${action.view ? `data-view="${esc(action.view)}"` : ""} ${action.action ? `data-action="${esc(action.action)}"` : ""} type="button">${esc(action.label)}</button>`).join("")}
         </div>
       </section>`;
+    }
+
+    function inspectionPendingSyncJobs(row) {
+      if (!row?.id) return [];
+      const inspectionId = String(row.id);
+      const itemIds = new Set(state.inspectionItems
+        .filter((item) => String(item.inspectionId || "") === inspectionId)
+        .map((item) => String(item.id)));
+      return normalizePendingSyncQueue(state.pendingSyncQueue).filter((job) => {
+        if (job.type !== "rows") return false;
+        const inspectionIds = (job.rowIdsByKey?.inspections || []).map(String);
+        const inspectionItemIds = (job.rowIdsByKey?.inspectionItems || []).map(String);
+        return inspectionIds.includes(inspectionId) || inspectionItemIds.some((id) => itemIds.has(id));
+      });
+    }
+
+    function inspectionSyncPresentation(row) {
+      if (!isSyncConfigured() || !window.supabase) {
+        return {
+          state: "offline",
+          label: "기기에 저장됨",
+          detail: "연결되면 서버로 자동 전송됩니다.",
+        };
+      }
+      const jobs = inspectionPendingSyncJobs(row);
+      if (!jobs.length) {
+        return {
+          state: "synced",
+          label: "서버 반영 완료",
+          detail: "관리자 화면에서도 바로 확인할 수 있습니다.",
+        };
+      }
+      if (jobs.some((job) => Number(job.attempts || 0) > 0 || job.nextRetryAt)) {
+        return {
+          state: "retry",
+          label: "서버 재전송 대기",
+          detail: "기기에는 저장되었습니다. 연결이 회복되면 자동 재전송합니다.",
+        };
+      }
+      return {
+        state: "pending",
+        label: "서버 반영 중",
+        detail: "다른 화면으로 이동해도 자동으로 계속 전송합니다.",
+      };
+    }
+
+    function renderInspectionSubmissionStatus(row) {
+      const sync = inspectionSyncPresentation(row);
+      return `<div class="inspection-submit-status state-${esc(sync.state)}" role="status" aria-live="polite" data-inspection-sync-state="${esc(sync.state)}">
+        <div class="inspection-submit-status-row inspection-submit-status-local">
+          <span class="inspection-submit-status-check" aria-hidden="true">✓</span>
+          <span><strong>점검 완료</strong><small>홈과 점검 이력에 즉시 반영되었습니다.</small></span>
+        </div>
+        <div class="inspection-submit-status-row inspection-submit-status-server">
+          <span class="inspection-submit-status-dot" aria-hidden="true"></span>
+          <span><strong>${esc(sync.label)}</strong><small>${esc(sync.detail)}</small></span>
+        </div>
+      </div>`;
+    }
+
+    function refreshVisibleInspectionSyncStatus() {
+      if (state.view !== "pledgeComplete" || !state.lastInspectionId) return;
+      renderPreservingScroll();
     }
 
     function renderPledgeComplete() {
@@ -7350,6 +7414,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         title: "점검이 제출되었습니다",
         message: completionMessage,
         messageHtml: `${esc(completionMessage)}${renderInspectionWorkPrepMiniCard(row, { compact: true })}`,
+        statusHtml: renderInspectionSubmissionStatus(row),
         stats: [
           { value: checkedCount || 0, label: "완료", tone: "green" },
           { value: warnings, label: "NG", tone: warnings ? "pink" : "green" },
@@ -7357,7 +7422,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ],
         actions: [
           { label: "다른 점검", view: "check" },
-          { label: "홈으로", view: "dashboard", primary: true },
+          { label: "홈에서 완료 확인", view: "dashboard", primary: true },
         ],
       });
     }
@@ -9907,9 +9972,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.selectedCategoryId = null;
         persist();
         state.inspectionSubmitting = false;
+        const syncPromise = syncInspectionHistory(inspection, inspectionItems);
         changeView("pledgeComplete");
         toast("점검이 제출되었습니다.");
-        syncInspectionHistory(inspection, inspectionItems);
+        syncPromise.catch((error) => {
+          console.error(error);
+          setSyncStatus("재시도 대기", "pending");
+          refreshVisibleInspectionSyncStatus();
+        });
       } catch (error) {
         state.inspectionSubmitting = false;
         console.error(error);
@@ -12266,6 +12336,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       if (!client) {
         setSyncStatus("로컬 저장", "offline");
+        refreshVisibleInspectionSyncStatus();
         return false;
       }
       if (state.syncFlushInFlight) return false;
@@ -12284,6 +12355,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           setSyncStatus(legacyPhotoPending ? "이전 사진 확인 대기" : "해당 작업자 로그인 후 동기화", "pending");
           saveSyncQueue();
         }
+        refreshVisibleInspectionSyncStatus();
         return false;
       }
       state.syncFlushInFlight = true;
@@ -12308,7 +12380,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         saveSyncQueue();
         setSyncStatus(state.pendingSyncQueue.length ? "동기화 대기" : "온라인", state.pendingSyncQueue.length ? "pending" : "online");
         state.syncFlushInFlight = false;
-        if (state.pendingSyncQueue.length) flushPendingSyncQueue();
+        refreshVisibleInspectionSyncStatus();
+        if (state.pendingSyncQueue.length) await flushPendingSyncQueue();
         return true;
       } catch (error) {
         console.error(error);
@@ -12319,6 +12392,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         setSyncStatus("재시도 대기", "pending");
         state.syncFlushInFlight = false;
         scheduleSyncRetry();
+        refreshVisibleInspectionSyncStatus();
         return false;
       }
     }
@@ -12416,16 +12490,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       if (!client) {
         setSyncStatus("로컬 저장", "offline");
-        return true;
+        refreshVisibleInspectionSyncStatus();
+        return false;
       }
 
       const inspectionConfig = remoteConfigByKey("inspections");
       const itemConfig = remoteConfigByKey("inspectionItems");
-      if (!inspectionConfig || !itemConfig) return false;
+      if (!inspectionConfig || !itemConfig) {
+        setSyncStatus("동기화 설정 오류", "error");
+        refreshVisibleInspectionSyncStatus();
+        return false;
+      }
       enqueueSyncRows(inspectionConfig.key, [inspection]);
       enqueueSyncRows(itemConfig.key, inspectionItems);
-      flushPendingSyncQueue();
-      return true;
+      await flushPendingSyncQueue();
+      refreshVisibleInspectionSyncStatus();
+      return inspectionPendingSyncJobs(inspection).length === 0;
     }
 
     function shouldRefreshRemote() {
