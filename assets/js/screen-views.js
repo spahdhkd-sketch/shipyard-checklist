@@ -169,7 +169,8 @@
   function renderWorkerManagerView(model = {}) {
     const rows = Array.isArray(model.rows) ? model.rows : [];
     return `<section class="panel panel-pad">
-        <div class="section-title">작업자 목록 <span class="small muted">${Number(model.count) || 0}명</span></div>
+        <div class="section-title">신입사원 등록 <span class="small muted">현재 ${Number(model.count) || 0}명</span></div>
+        <p class="small muted">최초 사번은 로그인용으로 서버에만 저장되며 작업자 목록에는 표시되지 않습니다.</p>
         <div class="form-row worker-form">
           <div class="field">
             <label for="workerName">이름</label>
@@ -187,8 +188,13 @@
               ${model.positionOptionsHtml || ""}
             </select>
           </div>
-          <button class="btn" data-action="add-worker" type="button">추가</button>
+          <div class="field">
+            <label for="workerEmployeeNo">최초 사번</label>
+            <input id="workerEmployeeNo" class="input" type="password" autocomplete="new-password" inputmode="text" maxlength="40" placeholder="영문·숫자 4자 이상" />
+          </div>
+          <button class="btn" data-action="add-worker" type="button">신입사원 등록</button>
         </div>
+        <div class="section-title">작업자 목록</div>
         <div class="list worker-list">
           ${rows.length ? rows.map(renderWorkerRowView).join("") : `<div class="empty">등록된 작업자가 없습니다.</div>`}
         </div>

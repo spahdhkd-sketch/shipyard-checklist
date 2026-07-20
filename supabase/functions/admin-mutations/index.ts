@@ -11,6 +11,8 @@ const PRIVILEGED_POSITIONS = new Set(["\uBC18\uC7A5", "\uB300\uD45C", "\uAD00\uB
 const WORK_PREP_POSITIONS = new Set(["\uC870\uC7A5", "\uBC18\uC7A5", "\uB300\uD45C", "\uAD00\uB9AC", "\uCD1D\uBB34"]);
 const PRIVILEGED_TEAMS = new Set(["\uAD00\uB9AC", "\uCD1D\uBB34"]);
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const WORKER_TEAMS = new Set(["선행", "후행", "관리"]);
+const WORKER_POSITIONS = new Set(["작업자", "조장", "반장", "대표", "관리", "총무"]);
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const ATTEMPT_LOCK_MS = 15 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -822,6 +824,87 @@ async function upsertRows(payload: Record<string, unknown>) {
   return jsonResponse({ ok: true, mutated: securedRows.length });
 }
 
+async function createWorker(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+
+  const worker = rowObject(payload.worker) || {};
+  const id = cleanText(worker.id, 120);
+  const name = cleanText(worker.name, 180);
+  const team = cleanText(worker.team, 40);
+  const position = cleanText(worker.position, 40);
+  const employeeNo = cleanText(worker.employeeNo, 40);
+  if (!/^worker_[A-Za-z0-9_-]{8,110}$/.test(id) || !name || !WORKER_TEAMS.has(team) || !WORKER_POSITIONS.has(position)) {
+    return jsonResponse({ error: "worker_profile_invalid" }, 400);
+  }
+  if (!/^[A-Za-z0-9_-]{4,40}$/.test(employeeNo)) {
+    return jsonResponse({ error: "worker_employee_no_invalid" }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const row = {
+    id,
+    name,
+    team,
+    position,
+    employee_no: employeeNo,
+    active: true,
+    unsafe_push_target: false,
+    created_at: now,
+    updated_at: now,
+  };
+  const { data, error } = await supabase
+    .from("workers")
+    .insert(row)
+    .select("id,name,team,position,active,unsafe_push_target,created_at,updated_at")
+    .single();
+  if (error) {
+    console.error("worker create failed", { code: error.code });
+    if (error.code === "23505") {
+      const { data: existing } = await supabase
+        .from("workers")
+        .select("id,name,team,position,active,unsafe_push_target,created_at,updated_at")
+        .eq("id", id)
+        .eq("employee_no", employeeNo)
+        .eq("name", name)
+        .eq("team", team)
+        .eq("position", position)
+        .maybeSingle();
+      if (existing) {
+        return jsonResponse({
+          ok: true,
+          worker: {
+            id: existing.id,
+            name: existing.name,
+            team: existing.team || "",
+            position: existing.position || "작업자",
+            active: existing.active !== false,
+            unsafePushTarget: Boolean(existing.unsafe_push_target),
+            createdAt: existing.created_at,
+            updatedAt: existing.updated_at,
+          },
+        });
+      }
+      return jsonResponse({ error: "worker_employee_no_exists" }, 409);
+    }
+    return jsonResponse({ error: "worker_create_failed" }, 500);
+  }
+
+  return jsonResponse({
+    ok: true,
+    worker: {
+      id: data.id,
+      name: data.name,
+      team: data.team || "",
+      position: data.position || "작업자",
+      active: data.active !== false,
+      unsafePushTarget: Boolean(data.unsafe_push_target),
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    },
+  });
+}
+
 function safeCreatedAt(value: unknown, fallback: string) {
   const timestamp = parseTime(value);
   if (!timestamp || timestamp > Date.now() + 5 * 60 * 1000) return fallback;
@@ -1407,6 +1490,7 @@ Deno.serve(async (req) => {
   const action = cleanText(payload.action, 80);
   if (action === "createSession") return createSession(payload);
   if (action === "revokeSession") return revokeSession(payload);
+  if (action === "createWorker") return createWorker(payload);
   if (action === "upsertRows") return upsertRows(payload);
   if (action === "submitInspection") return submitInspection(payload);
   if (action === "submitRows") return submitRows(payload);

@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.6-20260715-security-sync";
+    const APP_VERSION = "1.7-20260721-worker-onboarding";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -954,6 +954,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       (Array.isArray(remoteRows) ? remoteRows : []).forEach((row) => {
         if (row?.id) byId.set(row.id, row);
       });
+      if (key === "workers") {
+        state.pendingCreatedWorkers = (Array.isArray(state.pendingCreatedWorkers) ? state.pendingCreatedWorkers : [])
+          .filter((row) => row?.id && !byId.has(row.id));
+        state.pendingCreatedWorkers.forEach((row) => byId.set(row.id, row));
+      }
       pendingSyncRowsForKey(key).forEach((row) => {
         if (row?.id) byId.set(row.id, row);
       });
@@ -2694,6 +2699,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       remoteRealtimeChannel: null,
       remoteRealtimeStatus: "",
       lastRemoteChangeAt: 0,
+      pendingCreatedWorkers: [],
       workerSession: loadWorkerSession(),
       pushSubscriptionStatus: loadJson("pushSubscriptionStatus", {}),
       workerPushSubscriptionStatuses: loadJson("workerPushSubscriptionStatuses", {}),
@@ -2705,6 +2711,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workerPushDeviceLoading: false,
       workerPushDeviceSavingId: "",
       workerEditCardId: "",
+      workerCreateSubmitting: false,
+      workerCreateRequest: { fingerprint: "", id: "" },
       pushEmployeeNoPromptOpen: false,
       pushRegistrationSubmitting: false,
       loginSubmitting: false,
@@ -10230,17 +10238,60 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function addWorker() {
       if (!requireAdminWrite()) return;
+      if (state.workerCreateSubmitting) return;
       const name = $("workerName")?.value.trim() || "";
       const team = normalizeWorkerTeam($("workerTeam")?.value || "");
       const position = normalizeWorkerPosition($("workerPosition")?.value || "");
+      const employeeNo = normalizeEmployeeNo($("workerEmployeeNo")?.value || "");
       if (!name) return toast("작업자 이름을 입력하세요.");
-      const now = serverNow().toISOString();
-      const id = uid("worker");
-      state.workers.push({ id, name, team, position, active: true, createdAt: now, updatedAt: now });
-      state.workerEditCardId = id;
-      if (!(await persistAndSync("workers"))) return;
-      render();
-      toast("작업자를 추가했습니다.");
+      if (!team) return toast("팀 성격을 선택하세요.");
+      if (!/^[A-Za-z0-9_-]{4,40}$/.test(employeeNo)) return toast("사번은 영문·숫자·밑줄·하이픈으로 4자 이상 입력하세요.");
+
+      const requestFingerprint = JSON.stringify([name, team, position, employeeNo]);
+      const requestId = state.workerCreateRequest?.fingerprint === requestFingerprint
+        ? state.workerCreateRequest.id
+        : uid("worker");
+      state.workerCreateRequest = { fingerprint: requestFingerprint, id: requestId };
+      const submitButton = document.querySelector('[data-action="add-worker"]');
+      state.workerCreateSubmitting = true;
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "등록 중";
+      }
+      try {
+        const result = await invokeAdminMutation("createWorker", {
+          worker: { id: requestId, name, team, position, employeeNo },
+        });
+        if (!result.worker?.id) throw new Error("worker_create_response_invalid");
+        const existingIndex = state.workers.findIndex((row) => row.id === result.worker.id);
+        if (existingIndex >= 0) state.workers[existingIndex] = result.worker;
+        else state.workers.push(result.worker);
+        state.pendingCreatedWorkers = [
+          ...(Array.isArray(state.pendingCreatedWorkers) ? state.pendingCreatedWorkers : [])
+            .filter((row) => row?.id !== result.worker.id),
+          result.worker,
+        ];
+        state.workerEditCardId = result.worker.id;
+        persist();
+        state.workerCreateRequest = { fingerprint: "", id: "" };
+        state.workerCreateSubmitting = false;
+        render();
+        toast(`${name} 신입사원을 등록했습니다.`);
+      } catch (error) {
+        console.error(error);
+        const message = String(error?.message || "");
+        if (/worker_employee_no_exists|duplicate|23505/i.test(message)) {
+          toast("이미 사용 중인 사번입니다.");
+        } else {
+          toast("신입사원 등록에 실패했습니다. 사번 중복과 연결 상태를 확인해주세요.");
+        }
+      } finally {
+        state.workerCreateSubmitting = false;
+        if (submitButton?.isConnected) {
+          submitButton.disabled = false;
+          submitButton.textContent = "신입사원 등록";
+        }
+      }
     }
 
     function toggleWorkerCard(id) {
@@ -12259,8 +12310,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         },
       });
       if (error || data?.error) {
-        const message = error?.message || data.error;
-        if (/admin_session_|403|jwt/i.test(String(message || ""))) {
+        let message = data?.error || error?.message;
+        if (!data?.error && error?.context && typeof error.context.json === "function") {
+          try {
+            const context = typeof error.context.clone === "function" ? error.context.clone() : error.context;
+            const errorPayload = await context.json();
+            message = errorPayload?.error || errorPayload?.message || message;
+          } catch (_) {}
+        }
+        const errorStatus = Number(error?.context?.status || 0);
+        if (/admin_session_|admin_forbidden|403|jwt/i.test(String(message || "")) || errorStatus === 401 || errorStatus === 403) {
           clearAdminSessionState();
           setAdminMode(false);
         }
