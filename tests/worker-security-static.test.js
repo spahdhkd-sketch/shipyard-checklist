@@ -65,6 +65,7 @@ expectMatch(workerPushAttempts, /create table if not exists public\.worker_push_
 expectMatch(workerPush, /begin_worker_push_attempt/, "worker push attempts should use the atomic database reservation");
 expectNoMatch(workerPush, /async function readWorkerPushAttempt\(/, "worker push limiter must not use a read then write race");
 expectMatch(workerPushAttemptAtomic, /create or replace function public\.begin_worker_push_attempt/i, "worker push attempt reservation function should be tracked");
+expectNoMatch(workerPushAttemptAtomic, /\bcurrent_time\b/i, "worker push attempt reservation must not use PostgreSQL current_time as a PL/pgSQL variable");
 expectMatch(workerPush, /MISSING_MATERIAL_PUSH_TARGET_NAMES/, "missing material recipients should be server controlled");
 expectMatch(workerPush, /sendKind[\s\S]*?=== "missingMaterial"[\s\S]*?workerIds = \[\.\.\.await missingMaterialTargetWorkerIds\(\)\]/, "missing material sends should resolve all recipients on the server");
 expectMatch(app, /toast\("호선자재 누락이 접수되었습니다\."\);\s*await syncMissingMaterial\(row\);/, "missing material submission should enter the durable save-then-notify flow");
