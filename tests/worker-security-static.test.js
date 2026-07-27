@@ -28,7 +28,8 @@ expectNoMatch(app, /employeeNo: normalizeEmployeeNo\(row\.employee_no\)/, "worke
 expectNoMatch(app, /employee_no: normalizeEmployeeNo\(row\.employeeNo\)/, "worker toDb must not write employee_no from browser worker rows");
 expectMatch(app, /table: "workers",[\s\S]*?toDb: \(row\) => \(\{[\s\S]*?created_at: row\.createdAt \|\| serverNow\(\)\.toISOString\(\)/, "worker toDb still includes created_at for Phase 1 upsert compatibility");
 expectNoMatch(app, /data-worker-edit-field="employeeNo"/, "worker edit panel should not expose employeeNo editing in Phase 1");
-expectNoMatch(app, /data-delete-worker=/, "worker delete UI should not expose direct browser deletion in Phase 1");
+expectMatch(app, /data-delete-worker=/, "worker manager should expose the authenticated worker delete action");
+expectMatch(app, /invokeAdminMutation\("deleteWorker"/, "worker deletion must cross the authenticated Edge Function boundary");
 expectNoMatch(app, /deleteRemoteRows\("workers"/, "browser runtime must not directly delete workers through anon REST");
 expectMatch(app, /employeeNo,\s*loggedInAt: serverNow\(\)\.toISOString\(\)/, "worker session may still keep the typed employee number for push compatibility");
 expectMatch(app, /createAdminSession\(workerId, employeeNo, "worker"\)/, "worker login should create a server mutation session");

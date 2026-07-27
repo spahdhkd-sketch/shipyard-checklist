@@ -24,8 +24,10 @@ expectMatch(app, /order\(config\.orderBy,\s*\{\s*ascending:\s*config\.ascending 
 expectMatch(app, /\.limit\(limit\)/, "remote pulls should support default row limits");
 expectMatch(app, /pullOnStartup:\s*false,[\s\S]*key:\s*"inspectionItems"/, "inspection item rows should lazy-load for detail views");
 expectMatch(app, /pullOnStartup:\s*false,[\s\S]*key:\s*"issuePhotos"/, "issue photo metadata should lazy-load for detail views");
-expectNoMatch(app, /startRemoteSync\(\)\s*\{[\s\S]*startRemoteRealtime\(\)/, "automatic startup sync should not open realtime subscriptions");
-expectNoMatch(app, /startRemoteSync\(\)\s*\{[\s\S]*startRemotePolling\(\)/, "automatic startup sync should not start interval polling");
+expectMatch(app, /startRemoteSync\(\)\s*\{[\s\S]*startRemoteRealtime\(\)/, "automatic startup sync should open the constrained realtime subscription");
+expectMatch(app, /const REALTIME_REMOTE_KEYS = new Set\(\[[\s\S]*"workPrepRecords"[\s\S]*\]\)/, "realtime subscriptions must use an explicit bounded table allowlist");
+expectNoMatch(app.match(/const REALTIME_REMOTE_KEYS = new Set\(\[[\s\S]*?\]\);/)?.[0] || "", /"inspectionItems"|"issuePhotos"/, "high-volume detail tables must stay out of realtime");
+expectMatch(app, /pullRealtimeGap\("poll"\)/, "polling fallback must use cursor-bounded reads for the realtime table allowlist");
 expectMatch(app, /function compressUnsafePhotoFile\(/, "unsafe photo uploads should be compressed client-side");
 expectMatch(app, /const ISSUE_PHOTO_PRIVATE_CACHE_SECONDS = 10 \* 60;/, "private photo cache must not outlive signed URLs");
 expectMatch(app, /cacheControl:\s*String\(ISSUE_PHOTO_PRIVATE_CACHE_SECONDS\)/, "Storage uploads should use the private cache boundary");

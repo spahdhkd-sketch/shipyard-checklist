@@ -906,6 +906,31 @@ async function upsertRows(payload: Record<string, unknown>) {
     return jsonResponse({ ok: true, mutated });
   }
 
+  if (key === "workers") {
+    let mutated = 0;
+    for (const row of securedRows) {
+      const id = cleanText(row.id, 120);
+      const { data, error } = await supabase
+        .from("workers")
+        .update({
+          name: row.name,
+          team: row.team,
+          position: row.position,
+          unsafe_push_target: row.unsafe_push_target,
+          updated_at: row.updated_at,
+        })
+        .eq("id", id)
+        .eq("active", true)
+        .select("id");
+      if (error) {
+        console.error("worker profile update failed", error);
+        return jsonResponse({ error: "admin_upsert_failed" }, 500);
+      }
+      mutated += data?.length || 0;
+    }
+    return jsonResponse({ ok: true, mutated });
+  }
+
   const { error } = await supabase.from(config.table).upsert(securedRows, { onConflict: "id" });
   if (error) {
     console.error("admin upsert failed", error);
@@ -1021,6 +1046,39 @@ async function createWorker(payload: Record<string, unknown>) {
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     },
+  });
+}
+
+async function deleteWorker(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+
+  const workerId = cleanText(payload.workerId, 120);
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(workerId)) {
+    return jsonResponse({ error: "worker_id_invalid" }, 400);
+  }
+  const actorWorkerId = cleanText((authorization as AuthorizedMutationSession).worker.id, 120);
+  const actorSessionId = cleanText((authorization as AuthorizedMutationSession).sessionId, 120);
+  const { data, error } = await supabase.rpc("admin_deactivate_worker", {
+    p_worker_id: workerId,
+    p_actor_worker_id: actorWorkerId,
+    p_actor_session_id: actorSessionId,
+  });
+  if (error) {
+    console.error("worker delete failed", { code: error.code });
+    return jsonResponse({ error: "worker_delete_failed" }, 500);
+  }
+  const result = rowObject(data) || {};
+  if (result.error === "worker_self_delete_forbidden") {
+    return jsonResponse({ error: "worker_self_delete_forbidden" }, 409);
+  }
+  if (result.error === "admin_session_invalid") {
+    return jsonResponse({ error: "admin_session_invalid" }, 403);
+  }
+  return jsonResponse({
+    ok: true,
+    workerId,
+    mutated: Number(result.mutated || 0),
   });
 }
 
@@ -1679,6 +1737,7 @@ Deno.serve(async (req) => {
   if (action === "createSession") return createSession(payload);
   if (action === "revokeSession") return revokeSession(payload);
   if (action === "createWorker") return createWorker(payload);
+  if (action === "deleteWorker") return deleteWorker(payload);
   if (action === "upsertRows") return upsertRows(payload);
   if (action === "submitInspection") return submitInspection(payload);
   if (action === "submitRows") return submitRows(payload);

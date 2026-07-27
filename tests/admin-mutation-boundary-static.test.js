@@ -13,6 +13,8 @@ function expectNoMatch(source, pattern, message) {
 }
 
 const app = read("assets/js/app-v2.js");
+const screenViews = read("assets/js/screen-views.js");
+const styles = read("assets/css/styles-v2.css");
 const edge = read("supabase/functions/admin-mutations/index.ts");
 const migration = read("supabase/migrations/20260527090832_admin_mutation_boundary.sql");
 const lintCleanupMigration = read("supabase/migrations/20260527091242_admin_mutation_policy_lint_cleanup.sql");
@@ -77,6 +79,12 @@ expectMatch(app, /function adminMutationAuthPayload\(/, "frontend must send serv
 expectMatch(app, /adminSessionToken/, "frontend must store an admin session token instead of replaying employee numbers");
 expectMatch(app, /createAdminSession\(worker\.id, employeeNo, "workPrep"\)/, "frontend should request scoped work-prep sessions for work-prep-capable workers");
 expectMatch(app, /async function ensureWorkPrepMutationSession\(\)/, "frontend should lazily refresh scoped work-prep sessions before deleting records");
+expectMatch(app, /function workPrepSyncPresentation\(record\)/, "work prep rows should expose server sync presentation state");
+expectMatch(app, /async function saveWorkPrepRegistration\(\)[\s\S]*await flushPendingSyncQueue\(\)/, "work prep registration should remain responsive while observing the queued server write");
+expectMatch(app, /function refreshVisiblePendingSyncStatus\(\)[\s\S]*state\.manageTab === "workPrep"/, "work prep sync status should refresh after queued writes settle");
+expectMatch(screenViews, /data-work-prep-sync-state="\$\{esc\(model\.syncState\)\}"/, "work prep rows should render their server sync state");
+expectMatch(styles, /\.work-prep-sync-state\.state-synced/, "work prep rows should visually distinguish completed server sync");
+expectMatch(styles, /\.work-prep-sync-state\.state-retry/, "work prep rows should visually distinguish retry state");
 expectNoMatch(app, /adminAuth:\s*adminMutationAuthPayload\(\)/, "frontend must not send replayable adminAuth credentials on each mutation");
 expectNoMatch(app, /client\.from\("safety_inspections"\)\.delete\(/, "inspection history delete/reset must not use direct anon REST delete");
 expectNoMatch(app, /client\.from\("safety_inspection_items"\)\.delete\(/, "inspection item history delete/reset must not use direct anon REST delete");

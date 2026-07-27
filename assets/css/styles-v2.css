@@ -4967,6 +4967,25 @@
       color: var(--ink-strong);
     }
 
+    .work-prep-admin-card-meta > .work-prep-sync-state {
+      background: #fff7ed;
+      color: #b45309;
+      box-shadow: inset 0 0 0 1px rgba(217, 119, 6, .2);
+    }
+
+    .work-prep-admin-card-meta > .work-prep-sync-state.state-synced {
+      background: #ecfdf5;
+      color: #047857;
+      box-shadow: inset 0 0 0 1px rgba(5, 150, 105, .2);
+    }
+
+    .work-prep-admin-card-meta > .work-prep-sync-state.state-retry,
+    .work-prep-admin-card-meta > .work-prep-sync-state.state-offline {
+      background: #fff1f2;
+      color: #be123c;
+      box-shadow: inset 0 0 0 1px rgba(225, 29, 72, .2);
+    }
+
     .work-prep-admin-card-side {
       display: grid;
       align-content: start;

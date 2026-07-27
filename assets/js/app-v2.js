@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.10-20260721-inspection-submit";
+    const APP_VERSION = "1.10-20260728-realtime-sync";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -491,6 +491,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         readTable: "workers_public",
         key: "workers",
         selectColumns: "id,name,team,position,active,unsafe_push_target,created_at,updated_at",
+        rows: (rows) => rows.filter((row) => row.active !== false),
         toDb: (row) => ({
           id: row.id,
           name: row.name,
@@ -682,6 +683,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       "missingMaterials",
       "issuePhotos",
       "workPrepRecords",
+    ]);
+    const REALTIME_REMOTE_KEYS = new Set([
+      "ships",
+      "inspections",
+      "unsafeIssues",
+      "missingMaterials",
+      "workPrepRecords",
+    ]);
+    const REALTIME_DELTA_COLUMNS = new Map([
+      ["inspections", "created_at"],
+      ["unsafeIssues", "updated_at"],
+      ["missingMaterials", "updated_at"],
+      ["workPrepRecords", "updated_at"],
     ]);
     const ADMIN_REMOTE_KEYS = new Set([
       "workers",
@@ -955,6 +969,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (row?.id) byId.set(row.id, row);
       });
       if (key === "workers") {
+        state.workerDeletionTombstones.forEach((id) => {
+          if (byId.has(id)) byId.delete(id);
+          else state.workerDeletionTombstones.delete(id);
+        });
         state.pendingCreatedWorkers = (Array.isArray(state.pendingCreatedWorkers) ? state.pendingCreatedWorkers : [])
           .filter((row) => row?.id && !byId.has(row.id));
         state.pendingCreatedWorkers.forEach((row) => byId.set(row.id, row));
@@ -1528,9 +1546,47 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveWorkPrepRecords();
       if (isSyncConfigured()) {
         enqueueSyncRows("workPrepRecords", [record]);
-        flushPendingSyncQueue();
       }
       return record;
+    }
+
+    function workPrepPendingSyncJobs(record) {
+      if (!record?.id) return [];
+      const recordId = String(record.id);
+      return normalizePendingSyncQueue(state.pendingSyncQueue).filter((job) => (
+        job.type === "rows"
+        && (job.rowIdsByKey?.workPrepRecords || []).map(String).includes(recordId)
+      ));
+    }
+
+    function workPrepSyncPresentation(record) {
+      if (!isSyncConfigured() || !window.supabase) {
+        return {
+          state: "offline",
+          label: "기기에만 저장",
+          detail: "연결되면 서버로 자동 전송됩니다.",
+        };
+      }
+      const jobs = workPrepPendingSyncJobs(record);
+      if (!jobs.length) {
+        return {
+          state: "synced",
+          label: "서버 반영 완료",
+          detail: "PC와 다른 기기에서도 확인할 수 있습니다.",
+        };
+      }
+      if (jobs.some((job) => Number(job.attempts || 0) > 0 || job.nextRetryAt)) {
+        return {
+          state: "retry",
+          label: "서버 재전송 대기",
+          detail: "기기에는 저장되었으며 연결이 회복되면 자동 재전송합니다.",
+        };
+      }
+      return {
+        state: "pending",
+        label: "서버 반영 중",
+        detail: "화면을 바로 이동해도 전송은 계속됩니다.",
+      };
     }
 
     function workPrepRecordById(recordId) {
@@ -1857,7 +1913,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       try {
         const existing = await navigator.serviceWorker.getRegistration("/");
         if (!existing && !navigator.serviceWorker.controller) {
-          await navigator.serviceWorker.register("/sw.js");
+          await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
         }
         return await Promise.race([navigator.serviceWorker.ready, timeoutAfter(5000)]);
       } catch (error) {
@@ -2694,12 +2750,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       serverTimeOffsetMs: 0,
       serverClockSyncedAt: "",
       remotePullInFlight: false,
+      remotePullQueuedOptions: null,
       remoteRefreshTimer: null,
       remotePollTimer: null,
       remoteRealtimeChannel: null,
       remoteRealtimeStatus: "",
+      remoteRealtimeRetryTimer: null,
+      remoteRealtimeGapInFlight: false,
+      remoteRealtimeGapQueuedReason: "",
+      remoteRealtimeCursors: loadJson("remoteRealtimeCursors", {}) || {},
       lastRemoteChangeAt: 0,
       pendingCreatedWorkers: [],
+      workerDeletionTombstones: new Set(),
       workerSession: loadWorkerSession(),
       pushSubscriptionStatus: loadJson("pushSubscriptionStatus", {}),
       workerPushSubscriptionStatuses: loadJson("workerPushSubscriptionStatuses", {}),
@@ -2712,6 +2774,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workerPushDeviceSavingId: "",
       workerEditCardId: "",
       workerCreateSubmitting: false,
+      workerDeleteSubmittingId: "",
       workerCreateRequest: { fingerprint: "", id: "" },
       pushEmployeeNoPromptOpen: false,
       pushRegistrationSubmitting: false,
@@ -3079,6 +3142,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveJson("pendingPhotoUploads", state.pendingPhotoUploads);
       saveJson("pendingSyncQueue", state.pendingSyncQueue);
       saveJson("lastRemotePullAt", state.lastRemotePullAt || 0);
+      saveJson("remoteRealtimeCursors", state.remoteRealtimeCursors || {});
       saveJson("unsafeDraft", state.unsafeDraft);
       saveJson("materialDraft", state.materialDraft);
       saveJson("unsafeFilters", state.unsafeFilters);
@@ -4873,7 +4937,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       renderPreservingScroll();
     }
 
-    function saveWorkPrepRegistration() {
+    async function saveWorkPrepRegistration() {
       const draft = workPrepDraftWithDefaults();
       const category = categoryById(draft.categoryId);
       const tools = category ? visibleToolsForCategory(category.id) : [];
@@ -4890,11 +4954,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const saved = upsertWorkPrepRecord(draft);
       state.workPrepDraft = createFreshWorkPrepRegistrationDraft(draft);
       saveWorkPrepDraft();
-      toast("작업지시서가 저장되었습니다.");
       state.workPrepRegisterOpen = false;
       render();
       scrollScreenTop();
       pushRouteState();
+      const initialSync = workPrepSyncPresentation(saved);
+      toast(initialSync.state === "offline"
+        ? "작업지시서를 기기에 저장했습니다. 연결되면 서버로 자동 전송합니다."
+        : "작업지시서를 기기에 저장했습니다. 서버에 반영하고 있습니다.");
+      if (initialSync.state === "offline") return;
+      await flushPendingSyncQueue();
+      refreshVisiblePendingSyncStatus();
+      const finalSync = workPrepSyncPresentation(saved);
+      toast(finalSync.state === "synced"
+        ? "작업지시서가 서버에 반영되었습니다."
+        : "작업지시서는 기기에 저장되었고 서버 재전송을 기다리고 있습니다.");
     }
 
     function workPrepDateSectionTitle(date) {
@@ -6533,6 +6607,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const progressInfo = workPrepSubmissionProgress(record);
       const participantCount = workPrepParticipantWorkerIds(record).length;
       const status = normalizeWorkPrepStatus(record.status);
+      const sync = workPrepSyncPresentation(record);
       const canEdit = state.adminMode || isRedesignPreviewPage();
       return SCREEN_VIEWS.renderWorkPrepAdminRowView({
         status,
@@ -6551,6 +6626,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         team: record.team || "-",
         dateLabel: shortDate(record.workDate || record.createdAt),
         appearanceMeta: workPrepAppearanceMeta(record),
+        syncState: sync.state,
+        syncLabel: sync.label,
+        syncDetail: sync.detail,
         statusControlHtml: renderWorkPrepStatusControl(record, canEdit),
         canEdit,
         deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 삭제`,
@@ -6832,6 +6910,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderWorkerEditPanel(worker) {
+      const currentWorker = state.workerSession?.workerId === worker.id;
+      const deleting = state.workerDeleteSubmittingId === worker.id;
       return `<div class="worker-edit-panel">
         <div class="worker-edit-grid">
           <div class="field">
@@ -6854,6 +6934,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <p class="small muted worker-security-note">사번/비밀번호 변경은 보안 전환 중 서버 관리 경로로 이동합니다.</p>
         <div class="worker-edit-actions">
           <button class="btn" data-save-worker="${esc(worker.id)}" type="button">수정</button>
+          <button class="btn-danger" data-delete-worker="${esc(worker.id)}" ${currentWorker || deleting ? "disabled" : ""} type="button" title="${currentWorker ? "현재 로그인한 본인은 삭제할 수 없습니다." : ""}">${deleting ? "삭제 중" : "삭제"}</button>
         </div>
       </div>`;
     }
@@ -7395,8 +7476,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>`;
     }
 
-    function refreshVisibleInspectionSyncStatus() {
-      if (state.view !== "pledgeComplete" || !state.lastInspectionId) return;
+    function refreshVisiblePendingSyncStatus() {
+      const inspectionVisible = state.view === "pledgeComplete" && state.lastInspectionId;
+      const workPrepVisible = state.view === "manage"
+        && state.manageTab === "workPrep"
+        && !state.workPrepRegisterOpen;
+      if (!inspectionVisible && !workPrepVisible) return;
       renderPreservingScroll();
     }
 
@@ -9289,6 +9374,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function handleAdminRecordButtonClick(button) {
       if (button.dataset.action === "add-worker") addWorker();
       if (button.dataset.saveWorker) saveWorker(button.dataset.saveWorker);
+      if (button.dataset.deleteWorker) deleteWorker(button.dataset.deleteWorker);
       if (button.dataset.saveRecordStatus) saveAdminRecord(button.dataset.saveRecordStatus, { requireStatusChange: true });
       if (button.dataset.saveRecord) saveAdminRecord(button.dataset.saveRecord);
       if (button.dataset.deleteRecord) deleteAdminRecord(button.dataset.deleteRecord);
@@ -9978,7 +10064,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         syncPromise.catch((error) => {
           console.error(error);
           setSyncStatus("재시도 대기", "pending");
-          refreshVisibleInspectionSyncStatus();
+          refreshVisiblePendingSyncStatus();
         });
       } catch (error) {
         state.inspectionSubmitting = false;
@@ -10374,6 +10460,46 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function toggleWorkerCard(id) {
       state.workerEditCardId = state.workerEditCardId === id ? "" : id;
       renderPreservingScroll();
+    }
+
+    async function deleteWorker(workerId) {
+      if (!requireAdminWrite()) return;
+      const id = String(workerId || "").trim();
+      const worker = state.workers.find((row) => row.id === id);
+      if (!worker) return;
+      if (state.workerSession?.workerId === id) {
+        toast("현재 로그인한 본인은 삭제할 수 없습니다.");
+        return;
+      }
+      if (state.workerDeleteSubmittingId) return;
+      if (!confirm(`${worker.name} 작업자를 삭제할까요?\n로그인 권한과 푸시 알림이 해제되고 과거 점검 이력은 유지됩니다.`)) return;
+
+      state.workerDeleteSubmittingId = id;
+      render();
+      try {
+        await invokeAdminMutation("deleteWorker", { workerId: id });
+        state.workerDeletionTombstones.add(id);
+        state.workers = state.workers.filter((row) => row.id !== id);
+        state.pendingCreatedWorkers = (Array.isArray(state.pendingCreatedWorkers) ? state.pendingCreatedWorkers : [])
+          .filter((row) => row?.id !== id);
+        if (state.workerEditCardId === id) state.workerEditCardId = "";
+        if (state.workerPushDeviceWorkerId === id) {
+          state.workerPushDeviceWorkerId = "";
+          state.workerPushDevices = [];
+        }
+        persist();
+        toast(`${worker.name} 작업자를 삭제했습니다.`);
+      } catch (error) {
+        console.error(error);
+        if (/worker_self_delete_forbidden/i.test(String(error?.message || ""))) {
+          toast("현재 로그인한 본인은 삭제할 수 없습니다.");
+        } else {
+          toast("작업자 삭제에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.");
+        }
+      } finally {
+        if (state.workerDeleteSubmittingId === id) state.workerDeleteSubmittingId = "";
+        render();
+      }
     }
 
     function workerEditFieldValue(id, field) {
@@ -12336,7 +12462,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       if (!client) {
         setSyncStatus("로컬 저장", "offline");
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         return false;
       }
       if (state.syncFlushInFlight) return false;
@@ -12355,7 +12481,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           setSyncStatus(legacyPhotoPending ? "이전 사진 확인 대기" : "해당 작업자 로그인 후 동기화", "pending");
           saveSyncQueue();
         }
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         return false;
       }
       state.syncFlushInFlight = true;
@@ -12380,7 +12506,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         saveSyncQueue();
         setSyncStatus(state.pendingSyncQueue.length ? "동기화 대기" : "온라인", state.pendingSyncQueue.length ? "pending" : "online");
         state.syncFlushInFlight = false;
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         if (state.pendingSyncQueue.length) await flushPendingSyncQueue();
         return true;
       } catch (error) {
@@ -12392,7 +12518,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         setSyncStatus("재시도 대기", "pending");
         state.syncFlushInFlight = false;
         scheduleSyncRetry();
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         return false;
       }
     }
@@ -12490,7 +12616,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const client = supabaseClient();
       if (!client) {
         setSyncStatus("로컬 저장", "offline");
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         return false;
       }
 
@@ -12498,13 +12624,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const itemConfig = remoteConfigByKey("inspectionItems");
       if (!inspectionConfig || !itemConfig) {
         setSyncStatus("동기화 설정 오류", "error");
-        refreshVisibleInspectionSyncStatus();
+        refreshVisiblePendingSyncStatus();
         return false;
       }
       enqueueSyncRows(inspectionConfig.key, [inspection]);
       enqueueSyncRows(itemConfig.key, inspectionItems);
       await flushPendingSyncQueue();
-      refreshVisibleInspectionSyncStatus();
+      refreshVisiblePendingSyncStatus();
       return inspectionPendingSyncJobs(inspection).length === 0;
     }
 
@@ -12521,8 +12647,146 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }, Math.max(0, delay));
     }
 
+    function realtimeRemoteConfigs() {
+      return REMOTE_TABLES.filter((config) => REALTIME_REMOTE_KEYS.has(config.key));
+    }
+
+    function updateRealtimeCursor(config, dbRow) {
+      const column = REALTIME_DELTA_COLUMNS.get(config.key);
+      const value = column ? String(dbRow?.[column] || "") : "";
+      if (!value) return;
+      if (!state.remoteRealtimeCursors || typeof state.remoteRealtimeCursors !== "object" || Array.isArray(state.remoteRealtimeCursors)) {
+        state.remoteRealtimeCursors = {};
+      }
+      const previous = String(state.remoteRealtimeCursors?.[config.key] || "");
+      if (!previous || value > previous) state.remoteRealtimeCursors[config.key] = value;
+    }
+
+    function invalidateInspectionRangesForDate(date) {
+      const target = String(date || "");
+      const ranges = state.remoteLoadedInspectionRanges;
+      if (!target || !ranges || typeof ranges !== "object") return;
+      Object.keys(ranges).forEach((key) => {
+        const [start, end] = key.split("~");
+        if (start && end && target >= start && target <= end) delete ranges[key];
+      });
+    }
+
+    function applyRemoteRealtimeRow(config, eventType, dbRow) {
+      const id = String(dbRow?.id || "");
+      if (!id) return false;
+      updateRealtimeCursor(config, dbRow);
+      const remove = eventType === "DELETE" || (config.key === "workPrepRecords" && Boolean(dbRow?.deleted_at));
+      if (remove) {
+        state[config.key] = (Array.isArray(state[config.key]) ? state[config.key] : [])
+          .filter((row) => String(row?.id || "") !== id);
+        if (config.key === "inspections") {
+          state.archivedInspections = (Array.isArray(state.archivedInspections) ? state.archivedInspections : [])
+            .filter((row) => String(row?.id || "") !== id);
+          invalidateInspectionRangesForDate(dbRow?.date);
+        }
+        return true;
+      }
+
+      const remoteRow = config.fromDb(dbRow);
+      const rows = Array.isArray(state[config.key]) ? state[config.key] : [];
+      const index = rows.findIndex((row) => String(row?.id || "") === id);
+      if (index >= 0) rows[index] = mergeRemoteRecord(rows[index], remoteRow);
+      else rows.unshift(remoteRow);
+      state[config.key] = config.key === "workPrepRecords" ? filterDeletedWorkPrepRecords(rows) : rows;
+      if (config.key === "inspections") {
+        invalidateInspectionRangesForDate(remoteRow.date);
+        if (!Array.isArray(state.archivedInspections)) state.archivedInspections = [];
+        const archivedIndex = state.archivedInspections.findIndex((row) => String(row?.id || "") === id);
+        if (archivedIndex >= 0) state.archivedInspections[archivedIndex] = mergeRemoteRecord(state.archivedInspections[archivedIndex], remoteRow);
+      }
+      return true;
+    }
+
+    function finishRemoteRealtimeApply() {
+      normalizeDataShape();
+      state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+      dedupeShips();
+      cleanupDeliveredShips(true);
+      persist();
+      setSyncStatus("실시간 연결", "online");
+      renderPreservingScroll();
+    }
+
+    function handleRemoteRealtimeChange(config, payload) {
+      const eventType = String(payload?.eventType || payload?.type || "").toUpperCase();
+      const dbRow = eventType === "DELETE" ? payload?.old : payload?.new;
+      if (!eventType || !dbRow?.id) {
+        scheduleRemoteRefresh(`realtime-invalid:${config.key}`, 0);
+        return;
+      }
+      state.lastRemoteChangeAt = Date.now();
+      if (applyRemoteRealtimeRow(config, eventType, dbRow)) finishRemoteRealtimeApply();
+    }
+
+    async function selectRealtimeGapTable(client, config) {
+      const column = REALTIME_DELTA_COLUMNS.get(config.key);
+      let cursor = String(state.remoteRealtimeCursors?.[config.key] || "");
+      if (!column || !cursor) return { ...(await selectTable(client, config)), full: true };
+
+      const rows = [];
+      for (let page = 0; page < 10; page += 1) {
+        const data = await selectDetailRows(client, config, (query) => query
+          .gt(column, cursor)
+          .order(column, { ascending: true })
+          .limit(500));
+        if (!data.length) break;
+        rows.push(...data);
+        data.forEach((row) => {
+          const value = String(row?.[column] || "");
+          if (value > cursor) cursor = value;
+        });
+        if (data.length < 500) break;
+      }
+      return { key: config.key, config, dbRows: rows, cursor, full: false };
+    }
+
+    async function pullRealtimeGap(reason = "reconnect") {
+      const client = supabaseClient();
+      if (!client || !shouldRefreshRemote()) return;
+      if (state.remoteRealtimeGapInFlight) {
+        state.remoteRealtimeGapQueuedReason = reason;
+        return;
+      }
+      state.remoteRealtimeGapInFlight = true;
+      try {
+        const settled = await Promise.allSettled(realtimeRemoteConfigs().map((config) => selectRealtimeGapTable(client, config)));
+        let changed = false;
+        settled.forEach((result) => {
+          if (result.status !== "fulfilled") {
+            console.warn("실시간 공백 보정 실패:", result.reason);
+            return;
+          }
+          if (result.value.full) {
+            applyRemoteTableRows(result.value.key, result.value.rows);
+            changed = true;
+          } else {
+            result.value.dbRows.forEach((row) => {
+              changed = applyRemoteRealtimeRow(result.value.config, "UPDATE", row) || changed;
+            });
+          }
+          if (result.value.cursor) state.remoteRealtimeCursors[result.value.key] = result.value.cursor;
+        });
+        if (changed) finishRemoteRealtimeApply();
+        else saveJson("remoteRealtimeCursors", state.remoteRealtimeCursors || {});
+        state.lastRemoteChangeAt = Date.now();
+        if (reason) console.info(`실시간 공백 보정 완료: ${reason}`);
+      } finally {
+        state.remoteRealtimeGapInFlight = false;
+        const queuedReason = state.remoteRealtimeGapQueuedReason;
+        state.remoteRealtimeGapQueuedReason = "";
+        if (queuedReason) queueMicrotask(() => pullRealtimeGap(queuedReason));
+      }
+    }
+
     async function handleSyncWake() {
       if (!isSyncConfigured()) return;
+      ensureRemoteRealtimeConnection();
       await flushPendingSyncQueue();
       await flushPendingMissingMaterialNotifications();
       await pullRemote({ force: true, silent: true, reason: "wake" });
@@ -12553,52 +12817,88 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           return;
         }
         if (!shouldRefreshRemote()) return;
-        pullRemote({ silent: true, reason: "poll" });
+        pullRealtimeGap("poll");
       }, REMOTE_POLL_INTERVAL_MS);
+    }
+
+    function clearRemoteRealtimeChannel() {
+      const channel = state.remoteRealtimeChannel;
+      state.remoteRealtimeChannel = null;
+      state.remoteRealtimeStatus = "";
+      if (channel) {
+        try { supabaseClient()?.removeChannel(channel); } catch (_) {}
+      }
+    }
+
+    function scheduleRemoteRealtimeRetry() {
+      if (state.remoteRealtimeRetryTimer) return;
+      state.remoteRealtimeRetryTimer = setTimeout(() => {
+        state.remoteRealtimeRetryTimer = null;
+        startRemoteRealtime();
+      }, 5000);
     }
 
     function startRemoteRealtime() {
       const client = supabaseClient();
-      if (!client || state.remoteRealtimeChannel || typeof client.channel !== "function") return;
+      if (!client || state.remoteRealtimeChannel || typeof client.channel !== "function") {
+        if (!state.remoteRealtimeChannel) startRemotePolling();
+        return;
+      }
 
       let channel = client.channel("gs-safety-remote-sync");
-      REMOTE_TABLES.forEach((config) => {
+      realtimeRemoteConfigs().forEach((config) => {
         channel = channel.on(
           "postgres_changes",
           { event: "*", schema: "public", table: config.table },
-          () => {
-            state.lastRemoteChangeAt = Date.now();
-            scheduleRemoteRefresh(`realtime:${config.key}`);
-          },
+          (payload) => handleRemoteRealtimeChange(config, payload),
         );
       });
 
       state.remoteRealtimeChannel = channel.subscribe((status) => {
         state.remoteRealtimeStatus = status;
         if (status === "SUBSCRIBED") {
+          if (state.remoteRealtimeRetryTimer) clearTimeout(state.remoteRealtimeRetryTimer);
+          state.remoteRealtimeRetryTimer = null;
           stopRemotePolling();
+          pullRealtimeGap("subscribed");
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          const ch = state.remoteRealtimeChannel;
-          state.remoteRealtimeChannel = null;
-          state.remoteRealtimeStatus = "";
-          if (ch) { try { supabaseClient()?.removeChannel(ch); } catch (_) {} }
+          clearRemoteRealtimeChannel();
           startRemotePolling();
           scheduleRemoteRefresh("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS);
-          setTimeout(startRemoteRealtime, 5000);
+          scheduleRemoteRealtimeRetry();
         }
       });
     }
 
+    function ensureRemoteRealtimeConnection() {
+      const client = supabaseClient();
+      const socketConnected = typeof client?.realtime?.isConnected === "function"
+        ? client.realtime.isConnected()
+        : remoteRealtimeConnected();
+      if (remoteRealtimeConnected() && socketConnected) return;
+      if (state.remoteRealtimeChannel) clearRemoteRealtimeChannel();
+      startRemoteRealtime();
+      startRemotePolling();
+    }
+
     function startRemoteSync() {
-      scheduleRemoteRefresh("startup", 0);
+      startRemoteRealtime();
+      if (!state.remoteRealtimeChannel) startRemotePolling();
     }
 
     async function pullRemote(options = {}) {
       const client = supabaseClient();
       if (!client) return setSyncStatus("로컬 저장", "offline");
-      if (state.remotePullInFlight) return;
+      if (state.remotePullInFlight) {
+        state.remotePullQueuedOptions = {
+          ...(state.remotePullQueuedOptions || {}),
+          ...options,
+          force: Boolean(state.remotePullQueuedOptions?.force || options.force),
+        };
+        return;
+      }
       if (!options.force && state.lastRemotePullAt && Date.now() - state.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS) {
         flushPendingSyncQueue();
         return;
@@ -12606,7 +12906,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.remotePullInFlight = true;
       if (!options.silent) setSyncStatus("서버 확인 중", "pending");
       try {
-        const pullConfigs = REMOTE_TABLES.filter((config) => config.pullOnStartup !== false);
+        const requestedKeys = Array.isArray(options.keys) ? new Set(options.keys) : null;
+        const pullConfigs = REMOTE_TABLES.filter((config) => config.pullOnStartup !== false && (!requestedKeys || requestedKeys.has(config.key)));
+        if (!pullConfigs.length) return;
         const settled = await Promise.allSettled(pullConfigs.map((config) => selectTable(client, config)));
         const failures = [];
         settled.forEach((result) => {
@@ -12633,6 +12935,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (!options.silent) toast("데이터를 불러오지 못했습니다 — 잠시 후 다시 시도해주세요.");
       } finally {
         state.remotePullInFlight = false;
+        const queuedOptions = state.remotePullQueuedOptions;
+        state.remotePullQueuedOptions = null;
+        if (queuedOptions) queueMicrotask(() => pullRemote(queuedOptions));
       }
     }
 
@@ -12818,7 +13123,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (limit) query = query.limit(limit);
         const { data, error } = await query;
         if (error) throw error;
-        return { key: config.key, rows: (data || []).map(config.fromDb) };
+        const dbRows = data || [];
+        dbRows.forEach((row) => updateRealtimeCursor(config, row));
+        return {
+          key: config.key,
+          rows: dbRows.map(config.fromDb),
+          cursor: state.remoteRealtimeCursors?.[config.key] || "",
+        };
       }
       try {
         return await runSelect(false);

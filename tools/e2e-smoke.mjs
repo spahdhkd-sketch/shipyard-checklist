@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8917;
 const PRE = "shipyardSafetyV1.";
+const PWA_ONLY = process.argv.includes("--pwa-only");
 
 async function resolveChrome() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -65,10 +66,15 @@ function startServer() {
     const srv = createServer((req, res) => {
       let p = decodeURIComponent(req.url.split("?")[0]);
       if (p === "/") p = "/index.html";
-      if (p === "/sw.js") { res.writeHead(404); res.end(""); return; }
+      if (p === "/sw.js" && !PWA_ONLY) { res.writeHead(404); res.end(""); return; }
       try {
         const data = readFileSync(join(ROOT, p));
-        res.writeHead(200, { "Content-Type": MIME[extname(p)] || "application/octet-stream" });
+        const headers = { "Content-Type": MIME[extname(p)] || "application/octet-stream" };
+        if (p === "/sw.js") {
+          headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+          headers["Service-Worker-Allowed"] = "/";
+        }
+        res.writeHead(200, headers);
         res.end(data);
       } catch {
         res.writeHead(404); res.end("nf");
@@ -138,7 +144,8 @@ async function main() {
   let blockedBackendRequests = 0;
   const LOCAL_ORIGINS = [`http://localhost:${PORT}/`, `http://127.0.0.1:${PORT}/`];
   const makePage = async (options = {}) => {
-    const newPage = await browser.newPage();
+    const pageBrowser = options.browserInstance || browser;
+    const newPage = await pageBrowser.newPage();
     await newPage.emulateTimezone(tz);
     await newPage.evaluateOnNewDocument((nowMs) => {
       const NativeDate = Date;
@@ -154,6 +161,70 @@ async function main() {
       Object.setPrototypeOf(TestDate, NativeDate);
       globalThis.Date = TestDate;
     }, testNowMs);
+    if (options.mockRealtime) {
+      await newPage.evaluateOnNewDocument(() => {
+        const handlers = [];
+        const statusCallbacks = [];
+        const metrics = { reads: 0, removedChannels: 0, tables: [] };
+        let socketConnected = true;
+        const queryFor = (table) => {
+          const query = {
+            select() { return query; },
+            order() { return query; },
+            limit() { return query; },
+            gt() { return query; },
+            gte() { return query; },
+            lte() { return query; },
+            eq() { return query; },
+            in() { return query; },
+            then(resolve) {
+              metrics.reads += 1;
+              resolve({ data: [], error: null });
+            },
+          };
+          return query;
+        };
+        const client = {
+          from: (table) => queryFor(table),
+          channel: () => {
+            const channel = {
+              on(_kind, filter, handler) {
+                handlers.push({ table: filter.table, handler });
+                metrics.tables.push(filter.table);
+                return channel;
+              },
+              subscribe(callback) {
+                statusCallbacks.push(callback);
+                queueMicrotask(() => callback("SUBSCRIBED"));
+                return channel;
+              },
+            };
+            return channel;
+          },
+          removeChannel() {
+            metrics.removedChannels += 1;
+          },
+          realtime: { isConnected: () => socketConnected },
+          functions: { invoke: async () => ({ data: { ok: true }, error: null }) },
+        };
+        const fakeSupabase = { createClient: () => client };
+        Object.defineProperty(window, "supabase", {
+          configurable: true,
+          get: () => fakeSupabase,
+          set: () => {},
+        });
+        window.__realtimeTest = {
+          metrics,
+          emit(table, payload) {
+            handlers.filter((entry) => entry.table === table).forEach((entry) => entry.handler(payload));
+          },
+          fail(status = "CHANNEL_ERROR") {
+            socketConnected = false;
+            statusCallbacks.forEach((callback) => callback(status));
+          },
+        };
+      });
+    }
     newPage.on("dialog", (d) => d.accept());
     await newPage.setRequestInterception(true);
     newPage.on("request", (req) => {
@@ -174,7 +245,7 @@ async function main() {
         return;
       }
       if ((options.mockAdminMutations || options.mockSupabaseWrites) && url.includes("/functions/v1/admin-mutations")) {
-        req.respond({
+        const response = {
           status: 200,
           contentType: "application/json",
           headers: {
@@ -183,7 +254,11 @@ async function main() {
             "Access-Control-Allow-Methods": "POST, OPTIONS",
           },
           body: req.method() === "OPTIONS" ? "ok" : JSON.stringify({ ok: true, mutated: 1 }),
-        }).catch(() => {});
+        };
+        const respond = () => req.respond(response).catch(() => {});
+        const delay = Number(options.mockAdminMutationDelayMs || 0);
+        if (delay > 0) setTimeout(respond, delay);
+        else respond();
         return;
       }
       if (LOCAL_ORIGINS.some((o) => url.startsWith(o)) || url.startsWith("data:") || url.startsWith("blob:")) {
@@ -223,7 +298,7 @@ async function main() {
   const goto = async (path) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        await page.goto(`http://localhost:${PORT}/${path}`, { waitUntil: "networkidle2", timeout: 25000 });
+        await page.goto(`http://localhost:${PORT}/${path}`, { waitUntil: "domcontentloaded", timeout: 25000 });
         await wait(1500);
         await page.evaluate(() => document.body.innerText.length);
         return;
@@ -245,7 +320,7 @@ async function main() {
         expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       }));
     }, PRE);
-    await iconPage.goto(`http://localhost:${PORT}/items.html`, { waitUntil: "networkidle2", timeout: 25000 });
+    await iconPage.goto(`http://localhost:${PORT}/items.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
     const result = await iconPage.evaluate(() => {
       const editButton = document.querySelector("[data-edit-category]");
       editButton?.click();
@@ -272,7 +347,198 @@ async function main() {
     return Boolean(result.before && result.after && result.before !== result.after && result.active && applied);
   };
 
+  const runWorkerDeleteFlow = async () => {
+    const workerPage = await makePage({ mockAdminMutations: true });
+    await workerPage.evaluateOnNewDocument((storagePrefix) => {
+      sessionStorage.setItem(storagePrefix + "adminMode", "true");
+      sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+      sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+        token: "e2e-admin-session",
+        workerId: "w-hong",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }));
+    }, PRE);
+    await workerPage.goto(`http://localhost:${PORT}/manage.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-hong"]')?.click());
+    const selfDeleteDisabled = await workerPage.$eval('[data-delete-worker="w-hong"]', (button) => button.disabled);
+    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-lee"]')?.click());
+    await workerPage.evaluate(() => document.querySelector('[data-delete-worker="w-lee"]')?.click());
+    await workerPage.waitForFunction(() => !document.querySelector('[data-worker-card-toggle="w-lee"]'), { timeout: 5000 });
+    const result = await workerPage.evaluate((storagePrefix) => {
+      const workers = JSON.parse(localStorage.getItem(storagePrefix + "workers") || "[]");
+      return {
+        targetRemoved: !workers.some((worker) => worker.id === "w-lee"),
+        countUpdated: document.body.innerText.includes("현재 2명"),
+        toastShown: document.body.innerText.includes("이순신 작업자를 삭제했습니다."),
+      };
+    }, PRE);
+    await workerPage.close();
+    return selfDeleteDisabled && result.targetRemoved && result.countUpdated && result.toastShown;
+  };
+
+  const runRealtimeSyncFlow = async () => {
+    const realtimePage = await makePage({ mockRealtime: true });
+    await realtimePage.goto(`http://localhost:${PORT}/unsafe.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await realtimePage.waitForFunction(() => window.__realtimeTest?.metrics?.tables?.length === 5, { timeout: 5000 });
+    const subscribedTables = await realtimePage.evaluate(() => [...new Set(window.__realtimeTest.metrics.tables)].sort());
+    const expectedTables = ["missing_materials", "safety_inspections", "safety_ships", "unsafe_issues", "work_prep_records"].sort();
+    const subscriptionsOk = JSON.stringify(subscribedTables) === JSON.stringify(expectedTables);
+
+    await realtimePage.evaluate((storagePrefix, createdAt) => {
+      window.__realtimeTest.emit("unsafe_issues", {
+        eventType: "INSERT",
+        new: {
+          id: "unsafe-realtime-e2e",
+          ship_no: "2401",
+          content: "Realtime E2E 위험요소",
+          worker_id: "w-hong",
+          worker_name_snapshot: "홍길동",
+          worker_team_snapshot: "선행",
+          status: "접수",
+          admin_memo: "",
+          created_at: createdAt,
+          updated_at: createdAt,
+          completed_at: null,
+          status_history: [],
+        },
+        old: {},
+      });
+      window.__realtimeTest.insertVisible = JSON.parse(localStorage.getItem(storagePrefix + "unsafeIssues") || "[]")
+        .some((row) => row.id === "unsafe-realtime-e2e");
+    }, PRE, new Date(testNowMs).toISOString());
+    const insertVisible = await realtimePage.evaluate(() => window.__realtimeTest.insertVisible === true);
+
+    await realtimePage.evaluate((storagePrefix) => {
+      window.__realtimeTest.emit("unsafe_issues", {
+        eventType: "DELETE",
+        new: {},
+        old: { id: "unsafe-realtime-e2e" },
+      });
+      window.__realtimeTest.deleteVisible = !JSON.parse(localStorage.getItem(storagePrefix + "unsafeIssues") || "[]")
+        .some((row) => row.id === "unsafe-realtime-e2e");
+    }, PRE);
+    const deleteVisible = await realtimePage.evaluate(() => window.__realtimeTest.deleteVisible === true);
+
+    await realtimePage.waitForFunction(() => window.__realtimeTest.metrics.reads > 0, { timeout: 5000 });
+    const readsBeforeFailure = await realtimePage.evaluate(() => window.__realtimeTest.metrics.reads);
+    await realtimePage.evaluate(() => window.__realtimeTest.fail("CHANNEL_ERROR"));
+    await realtimePage.waitForFunction(
+      (before) => window.__realtimeTest.metrics.removedChannels > 0 && window.__realtimeTest.metrics.reads > before,
+      { timeout: 5000 },
+      readsBeforeFailure,
+    );
+    const fallbackOk = await realtimePage.evaluate(() =>
+      window.__realtimeTest.metrics.removedChannels > 0 && window.__realtimeTest.metrics.reads > 0);
+    await realtimePage.close();
+    return subscriptionsOk && insertVisible && deleteVisible && fallbackOk;
+  };
+
+  const runWorkPrepSyncFlow = async () => {
+    const workPrepBrowser = await launchBrowser();
+    const workPrepPage = await makePage({
+      browserInstance: workPrepBrowser,
+      mockAdminMutations: true,
+      mockSupabaseWrites: true,
+      mockAdminMutationDelayMs: 800,
+    });
+    try {
+      await workPrepPage.evaluateOnNewDocument((storagePrefix) => {
+        sessionStorage.setItem(storagePrefix + "adminMode", "true");
+        sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+        sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+          token: "e2e-admin-session",
+          workerId: "w-hong",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }));
+      }, PRE);
+      await workPrepPage.goto(`http://localhost:${PORT}/manage.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+      if (!await clickBtn(workPrepPage, "작업지시서")) return false;
+      await wait(300);
+      if (!await clickBtn(workPrepPage, "+ 신규 등록")) return false;
+      await wait(300);
+      await workPrepPage.evaluate(() => {
+        document.querySelector("[data-work-prep-tool]")?.click();
+      });
+      await wait(100);
+      if (!await clickBtn(workPrepPage, "작업지시서 저장")) return false;
+      await wait(100);
+      const pendingState = await workPrepPage.evaluate(() => {
+        const status = document.querySelector('[data-work-prep-sync-state="pending"]');
+        return status?.textContent?.trim() || "";
+      });
+      await workPrepPage.waitForFunction(() => (
+        !document.querySelector('[data-work-prep-sync-state="pending"]')
+        && [...document.querySelectorAll('[data-work-prep-sync-state="synced"]')].length >= 2
+      ), { timeout: 5000 });
+      const completed = await workPrepPage.evaluate(() => ({
+        syncedCount: [...document.querySelectorAll('[data-work-prep-sync-state="synced"]')].length,
+        serverToast: document.body.innerText.includes("작업지시서가 서버에 반영되었습니다."),
+        retryCount: [...document.querySelectorAll('[data-work-prep-sync-state="retry"]')].length,
+        offlineCount: [...document.querySelectorAll('[data-work-prep-sync-state="offline"]')].length,
+        pendingCount: [...document.querySelectorAll('[data-work-prep-sync-state="pending"]')].length,
+      }));
+      const ok = pendingState.includes("서버 반영 중") && completed.syncedCount >= 2 && completed.serverToast;
+      if (!ok) console.log("  작업지시서 동기화 진단:", JSON.stringify({ pendingState, completed }));
+      return ok;
+    } finally {
+      try { await workPrepPage.close(); } catch {}
+      try { await withTimeout(workPrepBrowser.close(), 10000); } catch { try { workPrepBrowser.process()?.kill("SIGKILL"); } catch {} }
+    }
+  };
+
+  const runPwaFlow = async () => {
+    await page.goto(`http://localhost:${PORT}/index.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await page.waitForFunction(() => navigator.serviceWorker?.controller, { timeout: 15000 });
+    const result = await page.evaluate(async (expectedVersion, expectedToken) => {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.update();
+      const workerVersion = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("서비스워커 버전 응답 시간 초과")), 5000);
+        const receive = (event) => {
+          if (event.data?.type !== "GS_SW_VERSION") return;
+          clearTimeout(timeout);
+          navigator.serviceWorker.removeEventListener("message", receive);
+          resolve(event.data);
+        };
+        navigator.serviceWorker.addEventListener("message", receive);
+        registration.active?.postMessage({ type: "GS_GET_VERSION" });
+      });
+      const cacheNames = await caches.keys();
+      return {
+        controlled: Boolean(navigator.serviceWorker.controller),
+        active: registration.active?.state === "activated",
+        version: workerVersion.appVersion,
+        cache: workerVersion.cache,
+        hasCurrentCache: cacheNames.includes(`gs-safety-${expectedToken}`),
+        hasStaleCache: cacheNames.some((name) =>
+          name.startsWith("gs-safety-") && name !== `gs-safety-${expectedToken}`),
+        manifestVersioned: document.querySelector('link[rel="manifest"]')?.href.includes(`v=${expectedToken}`),
+        appAssetVersioned: [...document.scripts].some((script) =>
+          script.src.includes("/assets/dist/js/app-v2.min.js") && script.src.includes(`v=${expectedToken}`)),
+        expectedVersion,
+      };
+    }, appVersion, "20260728-realtime-sync-1");
+    const ok = result.controlled
+      && result.active
+      && result.version === result.expectedVersion
+      && result.cache === "gs-safety-20260728-realtime-sync-1"
+      && result.hasCurrentCache
+      && !result.hasStaleCache
+      && result.manifestVersioned
+      && result.appAssetVersioned;
+    if (!ok) console.log("  PWA 진단:", JSON.stringify(result));
+    return ok;
+  };
+
   console.log(`E2E 스모크 시작 (tz=${tz}, today=${todayStr}, app=${appVersion})`);
+  if (PWA_ONLY) {
+    check("PWA: 최신 서비스워커 활성화·캐시 교체·버전 자산 로드", await runPwaFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`PWA E2E 실패: ${failures}건`);
+    console.log("PWA E2E 통과");
+    return;
+  }
   if (process.argv.includes("--icon-picker-only")) {
     check("아이콘 관리: 선택·적용 후 저장값과 완료 안내 변경", await runIconPickerFlow());
     try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
@@ -281,6 +547,32 @@ async function main() {
     console.log("아이콘 E2E 통과");
     return;
   }
+  if (process.argv.includes("--worker-delete-only")) {
+    check("작업자 관리: 본인 삭제 방지·다른 작업자 삭제 후 목록 즉시 반영", await runWorkerDeleteFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`작업자 삭제 E2E 실패: ${failures}건`);
+    console.log("작업자 삭제 E2E 통과");
+    return;
+  }
+  if (process.argv.includes("--realtime-only")) {
+    check("실시간 동기화: 핵심 구독·행 반영·삭제·폴링 폴백", await runRealtimeSyncFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) process.exit(1);
+    console.log("실시간 동기화 E2E 통과");
+    return;
+  }
+  if (process.argv.includes("--work-prep-sync-only")) {
+    check("작업지시서: 즉시 로컬 표시 후 서버 반영 완료 전환", await runWorkPrepSyncFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`작업지시서 동기화 E2E 실패: ${failures}건`);
+    console.log("작업지시서 동기화 E2E 통과");
+    return;
+  }
+
+  check("작업지시서: 즉시 로컬 표시 후 서버 반영 완료 전환", await runWorkPrepSyncFlow());
 
   // 1. 홈 — 오늘 내 점검 카드
   await goto("index.html");
@@ -387,6 +679,8 @@ async function main() {
   check("자재: 등록 플로우 완료", materialsOk);
 
   check("아이콘 관리: 선택·적용 후 저장값과 완료 안내 변경", await runIconPickerFlow());
+  check("작업자 관리: 본인 삭제 방지·다른 작업자 삭제 후 목록 즉시 반영", await runWorkerDeleteFlow());
+  check("실시간 동기화: 핵심 구독·행 반영·삭제·폴링 폴백", await runRealtimeSyncFlow());
 
   try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
   srv.close();

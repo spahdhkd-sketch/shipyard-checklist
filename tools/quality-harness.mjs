@@ -12,10 +12,10 @@ const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
-const APP_VERSION = "1.10-20260721-inspection-submit";
+const APP_VERSION = "1.10-20260728-realtime-sync";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260721-inspection-submit-1";
-const SW_CACHE = "gs-safety-20260721-inspection-submit-1";
+const ASSET_TOKEN = "20260728-realtime-sync-1";
+const SW_CACHE = "gs-safety-20260728-realtime-sync-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -181,7 +181,9 @@ function checkRuntimeSource() {
   assertNotContains(app, "employee_no: normalizeEmployeeNo(row.employeeNo)", "worker sync does not write employee_no");
   assertNotContains(app, "employeeNo: normalizeEmployeeNo(row.employee_no)", "worker sync does not read employee_no");
   assertNotContains(app, 'data-worker-edit-field="employeeNo"', "worker edit UI does not expose employee_no");
-  assertNotContains(app, "data-delete-worker=", "worker delete UI does not expose direct browser deletion");
+  assertContains(app, "data-delete-worker=", "worker delete UI is available to administrators");
+  assertContains(app, 'invokeAdminMutation("deleteWorker"', "worker delete uses authenticated admin mutation");
+  assertContains(app, "worker_self_delete_forbidden", "worker delete protects the signed-in worker");
   assertNotContains(app, 'deleteRemoteRows("workers"', "worker delete does not call anon REST directly");
   add("Supabase anon key is not printed by harness", true, "only project ref is reported");
 

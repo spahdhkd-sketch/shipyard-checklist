@@ -658,6 +658,7 @@
               <span class="work-prep-record-progress">점검 ${model.progressDone}/${model.progressTotal}명</span>
               <span>공기구 ${model.toolCount}개</span>
               <span>${esc(model.team)} · ${esc(model.dateLabel)}${model.appearanceMeta ? ` · ${esc(model.appearanceMeta)}` : ""}</span>
+              <span class="work-prep-sync-state state-${esc(model.syncState)}" data-work-prep-sync-state="${esc(model.syncState)}" title="${esc(model.syncDetail)}">${esc(model.syncLabel)}</span>
             </div>
           </div>
         </div>

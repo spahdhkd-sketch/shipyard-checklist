@@ -1,14 +1,18 @@
 # Version
 
-Current version: `1.10-20260721`
+Current version: `1.10-20260728`
 
-Recorded at: `2026-07-21 (inspection submission immediate-feedback release)`
+Recorded at: `2026-07-28 (Realtime synchronization and PWA refresh release)`
 
-Baseline commit: `e719713`
+Baseline commit: `pending local release`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Starts a constrained Realtime channel for inspections, work preparation, unsafe issues, missing materials, and ships.
+- Applies INSERT/UPDATE/DELETE events directly and falls back to cursor-based polling after channel failures.
+- Reconnects after tab wake and performs a cursor-based gap pull before continuing live updates.
+- Forces service-worker update checks past HTTP caches and reloads existing controlled tabs once after activation.
 - Reflects a completed inspection in local history and the home dashboard immediately after submission.
 - Shows `서버 반영 중`, `서버 반영 완료`, or `서버 재전송 대기` on the completion screen.
 - Keeps server synchronization running after the worker leaves the completion screen.
@@ -31,5 +35,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260721-inspection-submit-1` and service-worker version
-  `1.10-20260721-inspection-submit` so installed clients refresh safely.
+- Issues asset token `20260728-realtime-sync-1` and service-worker version
+  `1.10-20260728-realtime-sync` so installed clients refresh safely.
