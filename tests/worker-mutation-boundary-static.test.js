@@ -8,6 +8,7 @@ const app = read("assets/js/app-v2.js");
 const edge = read("supabase/functions/admin-mutations/index.ts");
 const supportMigration = read("supabase/migrations/20260715110000_add_worker_mutation_support.sql");
 const inspectionMigration = read("supabase/migrations/20260715111000_atomic_worker_inspection_submit.sql");
+const reliabilityMigration = read("supabase/migrations/20260728150000_sync_reliability_and_inspection_dedupe.sql");
 const migration = read("supabase/cutovers/20260715120000_secure_worker_mutations_private_issue_photos.sql");
 const cutoverReadme = read("supabase/cutovers/README.md");
 assert.strictEqual(
@@ -74,12 +75,20 @@ assert.ok(/session\.workerId[\s\S]*expectedWorkerId/.test(app));
 assert.ok(/workerMutationSessionWorkerId !== expectedWorkerId/.test(app));
 assert.ok(/workPrepMutationSessionWorkerId !== expectedWorkerId/.test(app));
 assert.ok(/session\.workerId \|\| ""\) !== expectedWorkerId/.test(app));
+assert.ok(/currentWorkerMutationSessionSnapshot/.test(app));
+assert.ok(/mutationSession:\s*job\.mutationSession/.test(app));
+assert.ok(/worker_inspection_forbidden[\s\S]*오늘 작업준비 명단/.test(app));
+assert.ok(/job\.status = terminal \? "failed" : "pending"/.test(app));
+assert.ok(/data-retry-sync-job/.test(app));
 assert.ok(!/\["issuePhotos",\s*\{[\s\S]*?table:\s*"issue_photos"/.test(edge));
 assert.ok(/\.eq\("storage_bucket",\s*ISSUE_PHOTO_BUCKET\)/.test(edge));
 
 assert.ok(/alter\s+table\s+public\.safety_inspections[\s\S]*add\s+column\s+if\s+not\s+exists\s+worker_id\s+text/i.test(supportMigration));
 assert.ok(/create\s+index\s+if\s+not\s+exists\s+safety_inspections_worker_id_created_at_idx/i.test(supportMigration));
 assert.ok(/create\s+or\s+replace\s+function\s+public\.begin_admin_mutation_attempt/i.test(supportMigration));
+assert.ok(/create or replace function public\.app_server_time/i.test(reliabilityMigration));
+assert.ok(/duplicate_inspection_ids/i.test(reliabilityMigration));
+assert.ok(/safety_inspections_worker_ship_category_date_uidx/i.test(reliabilityMigration));
 assert.ok(/p_bucket_key\s+is\s+distinct\s+from\s+'worker:'\s*\|\|\s*p_worker_id/i.test(supportMigration));
 assert.ok(/from\s+public\.workers\s+worker[\s\S]*worker\.active\s*=\s*true/i.test(supportMigration));
 assert.ok(/add\s+column\s+if\s+not\s+exists\s+upload_status/i.test(supportMigration));

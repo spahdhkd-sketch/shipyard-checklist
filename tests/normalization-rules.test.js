@@ -14,7 +14,13 @@ const now = () => FIXED;
 // --- normalizePendingSyncQueue ---
 let q = normalizePendingSyncQueue(
   [
-    { type: "rows", keys: ["a", "a", "b"], rowIdsByKey: { a: [1] } },
+    {
+      type: "rows",
+      keys: ["a", "a", "b"],
+      rowIdsByKey: { a: [1] },
+      ownerWorkerId: "worker-1",
+      mutationSession: { token: "token-1", workerId: "worker-1", expiresAt: "2026-06-19T00:00:00.000Z" },
+    },
     { type: "bad" },
     { type: "full" },
     { type: "rows", keys: [] },        // dropped: rows with no keys
@@ -28,11 +34,24 @@ assert.deepStrictEqual(q[0].keys, ["a", "b"]); // dedup + String
 assert.strictEqual(q[0].id, "sync-X");          // injected uid
 assert.strictEqual(q[0].createdAt, FIXED);       // injected now
 assert.strictEqual(q[1].type, "full");           // full kept even w/o keys
+assert.strictEqual(q[1].status, "failed");
+assert.match(q[1].lastError, /전체 동기화/);
 assert.strictEqual(q[2].id, "keep");             // existing id kept
 assert.strictEqual(q[2].attempts, 0);            // negative clamped to 0
 assert.strictEqual(q[2].createdAt, "T0");        // existing createdAt kept
 assert.strictEqual(q[2].nextRetryAt, "R");
 assert.strictEqual(q[2].ownerWorkerId, "worker-2");
+assert.deepStrictEqual(q[0].mutationSession, {
+  token: "token-1",
+  workerId: "worker-1",
+  expiresAt: "2026-06-19T00:00:00.000Z",
+});
+const legacyPhotoJob = normalizePendingSyncQueue(
+  [{ type: "rows", keys: ["issuePhotos"], rowIdsByKey: { issuePhotos: ["p1"] } }],
+  { uid, now },
+)[0];
+assert.strictEqual(legacyPhotoJob.status, "failed");
+assert.match(legacyPhotoJob.lastError, /사진/);
 assert.deepStrictEqual(normalizePendingSyncQueue(null, { uid, now }), []);
 
 const staleCachedRow = { id: "server-old", value: "stale" };

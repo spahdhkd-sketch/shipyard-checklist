@@ -12,16 +12,35 @@
     const now = d.now || (() => new Date().toISOString());
     return (Array.isArray(value) ? value : [])
       .filter((job) => job && typeof job === "object" && ["rows", "full"].includes(job.type))
-      .map((job) => ({
-        id: job.id || uid("sync"),
-        type: job.type,
-        keys: Array.isArray(job.keys) ? [...new Set(job.keys.map(String))] : [],
-        rowIdsByKey: job.rowIdsByKey && typeof job.rowIdsByKey === "object" ? job.rowIdsByKey : {},
-        ownerWorkerId: String(job.ownerWorkerId || ""),
-        attempts: Math.max(0, Number(job.attempts) || 0),
-        createdAt: job.createdAt || now(),
-        nextRetryAt: job.nextRetryAt || "",
-      }))
+      .map((job) => {
+        const keys = Array.isArray(job.keys) ? [...new Set(job.keys.map(String))] : [];
+        const legacyFailure = job.type === "full"
+          ? "이전 전체 동기화 작업은 안전하게 자동 전송할 수 없습니다."
+          : keys.includes("issuePhotos")
+            ? "사진은 별도 사진 재전송 화면에서 다시 선택해야 합니다."
+            : "";
+        const session = job.mutationSession && typeof job.mutationSession === "object"
+          ? {
+            token: String(job.mutationSession.token || ""),
+            workerId: String(job.mutationSession.workerId || job.ownerWorkerId || ""),
+            expiresAt: String(job.mutationSession.expiresAt || ""),
+          }
+          : null;
+        return {
+          id: job.id || uid("sync"),
+          type: job.type,
+          keys,
+          rowIdsByKey: job.rowIdsByKey && typeof job.rowIdsByKey === "object" ? job.rowIdsByKey : {},
+          ownerWorkerId: String(job.ownerWorkerId || ""),
+          mutationSession: session?.token ? session : null,
+          status: legacyFailure || job.status === "failed" ? "failed" : "pending",
+          attempts: Math.max(0, Number(job.attempts) || 0),
+          createdAt: job.createdAt || now(),
+          nextRetryAt: job.nextRetryAt || "",
+          lastError: String(job.lastError || legacyFailure),
+          failedAt: String(job.failedAt || (legacyFailure ? now() : "")),
+        };
+      })
       .filter((job) => job.type === "full" || job.keys.length);
   }
 

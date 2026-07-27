@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "assets/js/app-v2.js"), "utf8");
+const normalizer = fs.readFileSync(path.join(root, "assets/js/normalization-rules.js"), "utf8");
 
 assert.strictEqual(
   /REMOTE_TABLES\.forEach\(\(config\) => localStorage\.removeItem\(storeKey\(config\.key\)\)\)/.test(app),
@@ -44,8 +45,8 @@ assert.match(app, /state\.adminMode && !state\.toolAddSubmitting/);
 assert.match(app, /ownerWorkerId:\s*String\(state\.workerSession\?\.workerId/);
 assert.match(app, /pendingSyncJobEligible\(item, workerId\)/);
 assert.match(app, /pending_sync_worker_changed/);
-assert.match(app, /\(item\.keys \|\| \[\]\)\.includes\("issuePhotos"\)/);
-assert.match(app, /이전 사진 확인 대기/);
+assert.match(normalizer, /keys\.includes\("issuePhotos"\)[\s\S]*사진은 별도 사진 재전송 화면/);
+assert.match(app, /hasFailed \? "전송 실패함"/);
 assert.match(app, /queue\.some\(\(job\) => job\.type === "full"\)\) return rows/);
 assert.doesNotMatch(app, /normalizePendingSyncQueue\(state\.pendingSyncQueue\)\.slice\(-80\)/);
 assert.match(app, /\[\.\.\.ids\]\.some\(\(id\) => !rowsById\.has\(id\)\)/);

@@ -10,7 +10,6 @@ const corsHeaders = {
 
 const LEADER_WORKER_POSITION = "조장";
 const FOREMAN_WORKER_POSITION = "반장";
-const MISSING_MATERIAL_PUSH_TARGET_NAMES = new Set(["허지원", "김준혁", "김경제"].map(normalizedWorkerName));
 const WORKER_PUSH_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const WORKER_PUSH_ATTEMPT_LOCK_MS = 15 * 60 * 1000;
 const WORKER_PUSH_MAX_FAILED_ATTEMPTS = 5;
@@ -70,10 +69,6 @@ function cleanText(value: unknown, max = 180) {
 
 function normalizeEmployeeNo(value: unknown) {
   return String(value || "").trim();
-}
-
-function normalizedWorkerName(value: unknown) {
-  return String(value || "").trim().replace(/\s+/g, "");
 }
 
 function booleanValue(value: unknown, fallback = false) {
@@ -235,12 +230,12 @@ async function unsafeTargetWorkerIds() {
 async function missingMaterialTargetWorkerIds() {
   const { data, error } = await supabase
     .from("workers")
-    .select("id,name,active")
-    .eq("active", true);
+    .select("id,unsafe_push_target,active")
+    .eq("active", true)
+    .eq("unsafe_push_target", true);
 
   if (error) throw error;
   return new Set((data || [])
-    .filter((worker) => MISSING_MATERIAL_PUSH_TARGET_NAMES.has(normalizedWorkerName(worker.name)))
     .map((worker) => cleanText(worker.id, 80))
     .filter(Boolean));
 }

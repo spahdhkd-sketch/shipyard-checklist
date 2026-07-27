@@ -9,6 +9,8 @@ const app = read("assets/js/app-v2.js");
 const views = read("assets/js/screen-views.js");
 const edge = read("supabase/functions/admin-mutations/index.ts");
 const migration = read("supabase/migrations/20260721113000_secure_icon_management.sql");
+const historyPolicy = read("supabase/migrations/20260728151000_icon_history_authenticated_read.sql");
+const historyIndex = read("supabase/migrations/20260728152000_icon_history_worker_index.sql");
 
 const clientBuiltIns = [...(app.match(/const PICTOGRAMS = \[([\s\S]*?)\n    \];/)?.[1] || "").matchAll(/key: "([^"]+)"/g)]
   .map((match) => match[1])
@@ -41,5 +43,7 @@ assert.match(migration, /create or replace function public\.upsert_safety_catego
 assert.match(migration, /create or replace function public\.delete_safety_pictogram/i, "icon deletion and category fallback must share a transaction");
 assert.match(migration, /set icon = selected\.id[\s\S]*where (?:safety_categories\.)?id = 'ra_std07'/i, "the active DCP icon must be linked without hardcoding its generated id");
 assert.match(migration, /set icon = 'safetyGear'[\s\S]*where icon = 'C'/i, "legacy C aliases must be canonicalized");
+assert.match(historyPolicy, /to authenticated[\s\S]*using \(true\)/i, "icon history must have an authenticated read policy without exposing it to anon");
+assert.match(historyIndex, /safety_icon_change_history_changed_by_worker_id_idx/i, "icon history worker references must have a covering index");
 
 console.log("icon management static tests passed");

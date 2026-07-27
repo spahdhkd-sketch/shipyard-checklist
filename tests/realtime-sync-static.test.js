@@ -49,5 +49,22 @@ expectMatch(
   /pullRealtimeGap\("poll"\)/,
   "polling fallback must use cursor-bounded Realtime gap reads",
 );
+expectMatch(
+  /async function reconcileRemoteIds[\s\S]*selectAllRemoteIds\(client, config\)/,
+  "limited tables must periodically reconcile complete server ID lists",
+);
+expectMatch(/REMOTE_RECONCILE_INTERVAL_MS/, "remote ID reconciliation must be throttled");
+expectMatch(
+  /remoteRows\.length < remoteListLimit\(key\)[\s\S]*authoritativeRemoteRows\(key, remoteRows\)/,
+  "a complete limited response must authoritatively replace stale local rows",
+);
+expectMatch(
+  /entry\.status === "loaded"[\s\S]*INSPECTION_RANGE_CACHE_TTL_MS/,
+  "inspection range cache must expire instead of staying loaded for the full session",
+);
+expectMatch(
+  /state\.remotePullHealth\[config\.key\][\s\S]*일부 데이터 동기화 실패/,
+  "partial table failures must remain visible with per-table health",
+);
 
 console.log("realtime sync static tests passed");

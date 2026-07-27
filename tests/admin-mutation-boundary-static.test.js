@@ -62,7 +62,7 @@ expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(/, "frontend must classify 
 expectMatch(app, /const ADMIN_REMOTE_KEYS = new Set\(\[[\s\S]*"workPrepRecords"/, "work prep records should delete through admin-mutations");
 expectMatch(app, /const WORKER_INSERT_REMOTE_KEYS = new Set\(/, "frontend must classify worker-submitted records for authenticated Edge writes");
 expectMatch(app, /const WORKER_INSERT_REMOTE_KEYS = new Set\(\[[\s\S]*"inspections"[\s\S]*"inspectionItems"[\s\S]*"unsafeIssues"[\s\S]*"missingMaterials"[\s\S]*\]\)/, "worker submission keys should be limited to authenticated field records");
-expectMatch(app, /if \(WORKER_INSERT_REMOTE_KEYS\.has\(config\.key\)\) \{[\s\S]*ensureWorkerMutationSession\(\)[\s\S]*invokeWorkerMutation\("submitRows", \{ key: config\.key, rows: payload \}\)/, "worker-submitted records must acquire a worker session before crossing the authenticated Edge boundary");
+expectMatch(app, /if \(WORKER_INSERT_REMOTE_KEYS\.has\(config\.key\)\) \{[\s\S]*mutationSession = options\.mutationSession[\s\S]*ensureWorkerMutationSession\(\)[\s\S]*invokeWorkerMutation\("submitRows", \{ key: config\.key, rows: payload \}, \{ mutationSession \}\)/, "worker-submitted records must use a stored or freshly acquired worker session before crossing the authenticated Edge boundary");
 expectNoMatch(app, /PUBLIC_INSERT_ONLY_REMOTE_KEYS/, "worker-submitted records must not retain the anonymous REST write path");
 expectMatch(app, /functions\.invoke\("admin-mutations"/, "frontend admin writes must invoke the Edge Function");
 expectMatch(app, /invokeAdminMutation\("uploadPictogramImage"/, "frontend custom pictogram images should upload through admin-mutations");

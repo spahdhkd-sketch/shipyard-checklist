@@ -16,6 +16,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const REMOTE_REACTIVE_PULL_DELAY_MS = 700;
     const DEFAULT_REMOTE_LIST_LIMIT = 20;
     const REMOTE_INCREMENTAL_LIMIT = 60;
+    const REMOTE_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+    const INSPECTION_RANGE_CACHE_TTL_MS = 2 * 60 * 1000;
     const SYNC_RETRY_DELAY_MS = 8 * 1000;
     const MAX_SYNC_ATTEMPTS = 5;
     const STORAGE_WARNING_KB = 4600;
@@ -51,6 +53,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       "동기화 오류": {
         default: "동기화 실패 — 다시 시도해주세요",
         compact: "동기화 실패",
+      },
+      "일부 데이터 동기화 실패": {
+        default: "일부 데이터 동기화 실패",
+        compact: "일부 실패",
+      },
+      "전송 실패함": {
+        default: "전송 실패 — 확인 필요",
+        compact: "전송 실패",
       },
     };
     const GENERIC_WORKER_LABELS = new Set(["작업자", "로그인 전"]);
@@ -697,6 +707,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       ["missingMaterials", "updated_at"],
       ["workPrepRecords", "updated_at"],
     ]);
+    const REMOTE_RECONCILE_KEYS = new Set(["inspections", "unsafeIssues", "missingMaterials"]);
     const ADMIN_REMOTE_KEYS = new Set([
       "workers",
       "categories",
@@ -1015,7 +1026,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function applyRemoteTableRows(key, rows) {
       const config = remoteConfigByKey(key);
       const nextRows = key === "workPrepRecords" ? filterDeletedWorkPrepRecords(rows) : rows;
-      if (config?.limit || config?.pullOnStartup === false) {
+      if (config?.limit) {
+        const remoteRows = Array.isArray(nextRows) ? nextRows : [];
+        if (remoteRows.length < remoteListLimit(key)) {
+          state[key] = authoritativeRemoteRows(key, remoteRows);
+          return;
+        }
+        const boundary = String(remoteRows[remoteRows.length - 1]?.createdAt || "");
+        const outsideWindow = (Array.isArray(state[key]) ? state[key] : [])
+          .filter((row) => !boundary || String(row?.createdAt || "") < boundary);
+        state[key] = mergeRecordArrays(outsideWindow, authoritativeRemoteRows(key, remoteRows));
+        return;
+      }
+      if (config?.pullOnStartup === false) {
         state[key] = mergeRecordArrays(key === "workPrepRecords" ? filterDeletedWorkPrepRecords(state[key]) : state[key], nextRows);
         return;
       }
@@ -2728,6 +2751,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toastTimer: null,
       syncMode: "offline",
       syncText: "로컬 저장",
+      syncDetailsOpen: false,
+      remotePullHealth: loadJson("remotePullHealth", {}) || {},
       serviceWorkerVersion: "",
       serviceWorkerCache: "",
       pendingSyncQueue: normalizePendingSyncQueue(loadJson("pendingSyncQueue", [])),
@@ -2747,8 +2772,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       adminSessionExpiresAt: initialAdminMode ? (savedAdminSession.expiresAt || "") : "",
       scrollTimer: null,
       lastScrollY: 0,
-      serverTimeOffsetMs: 0,
-      serverClockSyncedAt: "",
+      serverTimeOffsetMs: Number(loadJson("serverClock", {})?.offsetMs || 0),
+      serverClockSyncedAt: String(loadJson("serverClock", {})?.syncedAt || ""),
       remotePullInFlight: false,
       remotePullQueuedOptions: null,
       remoteRefreshTimer: null,
@@ -2760,6 +2785,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       remoteRealtimeGapQueuedReason: "",
       remoteRealtimeCursors: loadJson("remoteRealtimeCursors", {}) || {},
       lastRemoteChangeAt: 0,
+      lastRemoteReconcileAt: Number(loadJson("lastRemoteReconcileAt", 0)) || 0,
       pendingCreatedWorkers: [],
       workerDeletionTombstones: new Set(),
       workerSession: loadWorkerSession(),
@@ -3273,9 +3299,82 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const badge = $(badgeId);
         const label = $(textId);
         const labelText = syncStatusLabel(text, badgeId === "mobileSyncBadge");
-        if (badge) badge.className = `${badgeId === "mobileSyncBadge" ? "sync-chip" : "sync-badge"} ${mode}`;
+        if (badge) {
+          badge.className = `${badgeId === "mobileSyncBadge" ? "sync-chip" : "sync-badge"} ${mode}`;
+          badge.dataset.syncDetails = "true";
+          badge.setAttribute("role", "button");
+          badge.setAttribute("tabindex", "0");
+          badge.setAttribute("aria-label", `${labelText}. 동기화 상세 보기`);
+          badge.title = syncDetailsSummary();
+        }
         if (label) label.textContent = labelText;
       });
+    }
+
+    function syncTableLabel(key) {
+      return {
+        categories: "작업 유형",
+        sections: "점검 구역",
+        items: "점검 항목",
+        tools: "공도구",
+        pictograms: "아이콘",
+        workers: "작업자",
+        ships: "호선",
+        inspections: "점검 이력",
+        unsafeIssues: "불안전 요소",
+        missingMaterials: "누락 자재",
+        workPrepRecords: "작업 준비",
+      }[key] || key;
+    }
+
+    function syncDetailsSummary() {
+      const failedTables = Object.entries(state.remotePullHealth || {})
+        .filter(([, health]) => health?.error)
+        .map(([key]) => syncTableLabel(key));
+      const failedJobs = normalizePendingSyncQueue(state.pendingSyncQueue)
+        .filter((job) => job.status === "failed").length;
+      if (!failedTables.length && !failedJobs) return "동기화 상세 보기";
+      const parts = [];
+      if (failedTables.length) parts.push(`불러오기 실패: ${failedTables.join(", ")}`);
+      if (failedJobs) parts.push(`전송 실패함 ${failedJobs}건`);
+      return parts.join(" · ");
+    }
+
+    function syncTimestampLabel(value) {
+      const parsed = Date.parse(String(value || ""));
+      return Number.isFinite(parsed) ? new Date(parsed).toLocaleString("ko-KR") : "기록 없음";
+    }
+
+    function renderSyncDetailsPanel() {
+      if (!state.syncDetailsOpen) return "";
+      const tableRows = Object.entries(state.remotePullHealth || {})
+        .sort(([a], [b]) => syncTableLabel(a).localeCompare(syncTableLabel(b), "ko"))
+        .map(([key, health]) => `<li class="${health?.error ? "is-error" : "is-ok"}">
+          <span><strong>${esc(syncTableLabel(key))}</strong><small>마지막 성공 ${esc(syncTimestampLabel(health?.successAt))}</small></span>
+          <span>${health?.error ? esc(health.error) : "정상"}</span>
+        </li>`).join("");
+      const failedJobs = normalizePendingSyncQueue(state.pendingSyncQueue).filter((job) => job.status === "failed");
+      const failedRows = failedJobs.map((job) => `<li class="is-error">
+        <span><strong>${esc((job.keys || []).map(syncTableLabel).join(", ") || "이전 동기화")}</strong><small>${esc(job.lastError || "자동 재시도 횟수를 초과했습니다.")}</small></span>
+        <span class="sync-detail-actions">
+          ${job.type === "rows" && !(job.keys || []).includes("issuePhotos") ? `<button type="button" class="btn ghost small" data-retry-sync-job="${esc(job.id)}">다시 시도</button>` : ""}
+          <button type="button" class="btn ghost small" data-discard-sync-job="${esc(job.id)}">폐기</button>
+        </span>
+      </li>`).join("");
+      return `<section class="sync-details-panel" role="dialog" aria-modal="false" aria-label="동기화 상세">
+        <div class="sync-details-head">
+          <div><strong>동기화 상세</strong><small>테이블별 마지막 성공과 전송 실패 작업을 확인합니다.</small></div>
+          <button type="button" class="icon-btn" data-action="close-sync-details" aria-label="닫기">×</button>
+        </div>
+        <div class="sync-details-section">
+          <h3>서버 데이터</h3>
+          <ul>${tableRows || "<li><span>아직 동기화 기록이 없습니다.</span></li>"}</ul>
+        </div>
+        <div class="sync-details-section">
+          <h3>전송 실패함</h3>
+          <ul>${failedRows || "<li><span>실패한 전송이 없습니다.</span></li>"}</ul>
+        </div>
+      </section>`;
     }
 
     function syncStatusLabel(text, compact = false) {
@@ -3410,6 +3509,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       document.body.classList.toggle("login-required", !loggedIn);
       if (!loggedIn) {
         page.innerHTML = renderLogin();
+        page.insertAdjacentHTML("beforeend", renderSyncDetailsPanel());
         setSyncStatus(state.syncText, state.syncMode);
         ensureRenderedAccessibility();
         applyLoginWorkerSearchFilter();
@@ -3433,6 +3533,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       page.insertAdjacentHTML("beforeend", renderPhotoViewer());
       page.insertAdjacentHTML("beforeend", renderPushTemplateEditor());
       page.insertAdjacentHTML("beforeend", renderWorkerPushDeviceManager());
+      page.insertAdjacentHTML("beforeend", renderSyncDetailsPanel());
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
       setupSignaturePad();
@@ -3858,9 +3959,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     async function syncServerClock() {
-      state.serverTimeOffsetMs = 0;
-      state.serverClockSyncedAt = "";
-      updateHeaderClock();
+      const client = supabaseClient();
+      if (!client) return;
+      const startedAt = Date.now();
+      try {
+        const { data, error } = await client.rpc("app_server_time");
+        const endedAt = Date.now();
+        if (error) throw error;
+        const serverMs = Date.parse(String(data || ""));
+        if (!Number.isFinite(serverMs)) throw new Error("server_time_invalid");
+        state.serverTimeOffsetMs = serverMs - Math.round((startedAt + endedAt) / 2);
+        state.serverClockSyncedAt = new Date(endedAt).toISOString();
+        saveJson("serverClock", {
+          offsetMs: state.serverTimeOffsetMs,
+          syncedAt: state.serverClockSyncedAt,
+        });
+      } catch (error) {
+        console.warn("서버 시계 동기화 실패:", error);
+      } finally {
+        updateHeaderClock();
+      }
     }
 
     function visibleNavItems() {
@@ -6930,6 +7048,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               ${renderWorkerPositionOptions(worker.position)}
             </select>
           </div>
+          <label class="check-row worker-push-target-field" for="${esc(workerFieldId(worker, "unsafePushTarget"))}">
+            <input type="checkbox" id="${esc(workerFieldId(worker, "unsafePushTarget"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="unsafePushTarget" ${worker.unsafePushTarget ? "checked" : ""} />
+            <span>불안전·누락자재 알림 대상</span>
+          </label>
         </div>
         <p class="small muted worker-security-note">사번/비밀번호 변경은 보안 전환 중 서버 관리 경로로 이동합니다.</p>
         <div class="worker-edit-actions">
@@ -7448,6 +7570,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           detail: "관리자 화면에서도 바로 확인할 수 있습니다.",
         };
       }
+      const failedJob = jobs.find((job) => job.status === "failed");
+      if (failedJob) {
+        return {
+          state: "failed",
+          label: "서버 반영 실패",
+          detail: failedJob.lastError || "동기화 상세에서 다시 시도하거나 폐기할 수 있습니다.",
+          jobId: failedJob.id,
+        };
+      }
       if (jobs.some((job) => Number(job.attempts || 0) > 0 || job.nextRetryAt)) {
         return {
           state: "retry",
@@ -7471,7 +7602,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         <div class="inspection-submit-status-row inspection-submit-status-server">
           <span class="inspection-submit-status-dot" aria-hidden="true"></span>
-          <span><strong>${esc(sync.label)}</strong><small>${esc(sync.detail)}</small></span>
+          <span><strong>${esc(sync.label)}</strong><small>${esc(sync.detail)}</small>
+            ${sync.jobId ? `<button type="button" class="btn ghost small" data-retry-sync-job="${esc(sync.jobId)}">다시 시도</button>` : ""}
+          </span>
         </div>
       </div>`;
     }
@@ -8988,6 +9121,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     function handleDelegatedClick(event) {
+      const syncDetailsTarget = event.target.closest("[data-sync-details]");
+      if (syncDetailsTarget) {
+        state.syncDetailsOpen = !state.syncDetailsOpen;
+        renderPreservingScroll();
+        return true;
+      }
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
         const enabledAction = disabledReason.querySelector("button:not(:disabled)");
@@ -9067,6 +9206,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (state.loginWorkerPickerOpen && !event.target.closest("[data-login-worker-picker]")) {
         state.loginWorkerPickerOpen = false;
         render();
+        return true;
+      }
+      return false;
+    }
+
+    function handleSyncButtonClick(button) {
+      if (button.dataset.action === "close-sync-details") {
+        state.syncDetailsOpen = false;
+        renderPreservingScroll();
+        return true;
+      }
+      if (button.dataset.retrySyncJob) {
+        retryPendingSyncJob(button.dataset.retrySyncJob);
+        return true;
+      }
+      if (button.dataset.discardSyncJob) {
+        discardPendingSyncJob(button.dataset.discardSyncJob);
         return true;
       }
       return false;
@@ -9514,6 +9670,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const button = event.target.closest("button");
       if (!button) return;
 
+      if (handleSyncButtonClick(button)) return;
       if (handleWorkerBoardButtonClick(button)) return;
       if (handleRecordShortcutButtonClick(button)) return;
       if (handlePledgeButtonClick(button)) return;
@@ -9544,6 +9701,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
       if (event.key !== "Enter" && event.key !== " ") return;
+      const syncDetailsTarget = event.target.closest("[data-sync-details]");
+      if (syncDetailsTarget) {
+        event.preventDefault();
+        state.syncDetailsOpen = !state.syncDetailsOpen;
+        renderPreservingScroll();
+        return;
+      }
       const disabledReason = event.target.closest("[data-disabled-reason]");
       if (disabledReason) {
         event.preventDefault();
@@ -10060,7 +10224,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.inspectionSubmitting = false;
         const syncPromise = syncInspectionHistory(inspection, inspectionItems);
         changeView("pledgeComplete");
-        toast("점검이 제출되었습니다.");
+        toast("점검은 기기에 저장되었습니다. 서버 반영 상태를 확인합니다.");
         syncPromise.catch((error) => {
           console.error(error);
           setSyncStatus("재시도 대기", "pending");
@@ -10507,6 +10671,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         .find((node) => node.dataset.workerEdit === id)?.value || "";
     }
 
+    function workerEditFieldChecked(id, field) {
+      return Boolean(Array.from(document.querySelectorAll(`[data-worker-edit-field="${field}"]`))
+        .find((node) => node.dataset.workerEdit === id)?.checked);
+    }
+
     async function saveWorker(id) {
       if (!requireAdminWrite()) return;
       const worker = state.workers.find((row) => row.id === id);
@@ -10519,6 +10688,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       worker.name = cleanName;
       worker.team = cleanTeam;
       worker.position = cleanPosition;
+      worker.unsafePushTarget = workerEditFieldChecked(id, "unsafePushTarget");
       worker.updatedAt = serverNow().toISOString();
       if (state.workerSession?.workerId === worker.id) {
         state.workerSession = { ...state.workerSession, workerName: cleanName };
@@ -10554,9 +10724,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       };
     }
 
-    function workerMutationAuthPayload() {
+    function currentWorkerMutationSessionSnapshot() {
+      const token = String(state.workerSession?.mutationToken || "");
+      const workerId = String(state.workerSession?.workerId || "");
+      const expiresAt = String(state.workerSession?.mutationExpiresAt || "");
+      return token && workerId ? { token, workerId, expiresAt } : null;
+    }
+
+    function workerMutationAuthPayload(session = null) {
       return {
-        token: state.workerSession?.mutationToken || "",
+        token: session?.token || state.workerSession?.mutationToken || "",
       };
     }
 
@@ -12354,11 +12531,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function pendingSyncJobEligible(job, workerId) {
-      if (job?.type === "full" || (job?.keys || []).includes("issuePhotos")) return false;
+      if (job?.status === "failed" || job?.type === "full" || (job?.keys || []).includes("issuePhotos")) return false;
       if (!pendingSyncJobTouchesWorkerData(job)) return true;
       const ownerWorkerId = pendingSyncJobOwnerWorkerId(job);
       if (ownerWorkerId && !job.ownerWorkerId) job.ownerWorkerId = ownerWorkerId;
-      return Boolean(ownerWorkerId && ownerWorkerId === workerId);
+      const storedSession = job?.mutationSession;
+      const storedSessionValid = Boolean(
+        storedSession?.token
+        && storedSession?.workerId === ownerWorkerId
+        && (!storedSession.expiresAt || Date.parse(storedSession.expiresAt) > Date.now() + 10000)
+      );
+      return Boolean(storedSessionValid || (ownerWorkerId && ownerWorkerId === workerId));
     }
 
     function enqueueSync(keys = null) {
@@ -12395,7 +12578,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const ownerWorkerId = WORKER_INSERT_REMOTE_KEYS.has(key)
         ? (inferredOwner && currentWorkerId && inferredOwner !== currentWorkerId ? "" : inferredOwner || currentWorkerId)
         : "";
+      const mutationSession = WORKER_INSERT_REMOTE_KEYS.has(key)
+        ? currentWorkerMutationSessionSnapshot()
+        : null;
       const existing = state.pendingSyncQueue.find((job) => job.type === "rows"
+        && job.status !== "failed"
         && job.keys.length === 1
         && job.keys[0] === key
         && String(job.ownerWorkerId || "") === ownerWorkerId);
@@ -12403,6 +12590,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (existing) {
         existing.rowIdsByKey[key] = [...new Set([...(existing.rowIdsByKey[key] || []), ...nextIds])];
         existing.nextRetryAt = "";
+        existing.mutationSession = mutationSession || existing.mutationSession || null;
       } else {
         state.pendingSyncQueue.push({
           id: uid("sync"),
@@ -12410,9 +12598,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           keys: [key],
           rowIdsByKey: { [key]: nextIds },
           ownerWorkerId,
+          mutationSession,
+          status: "pending",
           attempts: 0,
           createdAt: serverNow().toISOString(),
           nextRetryAt: "",
+          lastError: "",
+          failedAt: "",
         });
       }
       prunePendingSyncQueue();
@@ -12458,6 +12650,66 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }, SYNC_RETRY_DELAY_MS);
     }
 
+    function pendingSyncFailure(error) {
+      const code = String(error?.code || error?.message || error || "");
+      if (/worker_inspection_forbidden|work prep participant forbidden/i.test(code)) {
+        return {
+          terminal: true,
+          message: "오늘 작업준비 명단에 없어 제출이 거부되었습니다. 조장/반장에게 작업준비 등록을 요청한 뒤 다시 시도하세요.",
+        };
+      }
+      if (/mutation_session_expired|mutation_session_invalid|worker_mutation_session_required|pending_sync_worker_changed/i.test(code)) {
+        return {
+          terminal: true,
+          message: "전송 인증이 만료되었습니다. 같은 작업자로 다시 로그인한 뒤 다시 시도하세요.",
+        };
+      }
+      if (/full_sync_requires_review/i.test(code)) {
+        return { terminal: true, message: "이전 전체 동기화 작업은 자동 전송할 수 없어 확인이 필요합니다." };
+      }
+      if (/pending_sync_rows_missing/i.test(code)) {
+        return { terminal: true, message: "기기에 원본 데이터가 없어 자동 전송할 수 없습니다." };
+      }
+      return { terminal: false, message: remoteErrorMessage(error) };
+    }
+
+    async function retryPendingSyncJob(id) {
+      const job = state.pendingSyncQueue.find((item) => item.id === id);
+      if (!job) return;
+      if (pendingSyncJobTouchesWorkerData(job)) {
+        const ownerWorkerId = pendingSyncJobOwnerWorkerId(job);
+        const currentWorkerId = String(state.workerSession?.workerId || "");
+        if (ownerWorkerId === currentWorkerId) {
+          if (!(await ensureWorkerMutationSession())) {
+            toast("같은 작업자로 다시 로그인한 뒤 재시도하세요.");
+            return;
+          }
+          job.mutationSession = currentWorkerMutationSessionSnapshot();
+        }
+        const expiresAt = String(job.mutationSession?.expiresAt || "");
+        if (!job.mutationSession?.token || (expiresAt && Date.parse(expiresAt) <= Date.now() + 10000)) {
+          toast("같은 작업자로 다시 로그인한 뒤 재시도하세요.");
+          return;
+        }
+      }
+      job.status = "pending";
+      job.attempts = 0;
+      job.nextRetryAt = "";
+      job.lastError = "";
+      job.failedAt = "";
+      saveSyncQueue();
+      renderPreservingScroll();
+      flushPendingSyncQueue();
+    }
+
+    function discardPendingSyncJob(id) {
+      state.pendingSyncQueue = state.pendingSyncQueue.filter((job) => job.id !== id);
+      saveSyncQueue();
+      setSyncStatus(state.pendingSyncQueue.some((job) => job.status === "failed") ? "전송 실패함" : "온라인",
+        state.pendingSyncQueue.some((job) => job.status === "failed") ? "error" : "online");
+      renderPreservingScroll();
+    }
+
     async function flushPendingSyncQueue() {
       const client = supabaseClient();
       if (!client) {
@@ -12477,8 +12729,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const hasEligibleRetry = state.pendingSyncQueue.some((item) => pendingSyncJobEligible(item, workerId));
         if (hasEligibleRetry) scheduleSyncRetry();
         if (state.pendingSyncQueue.length) {
-          const legacyPhotoPending = state.pendingSyncQueue.some((item) => (item.keys || []).includes("issuePhotos"));
-          setSyncStatus(legacyPhotoPending ? "이전 사진 확인 대기" : "해당 작업자 로그인 후 동기화", "pending");
+          const hasFailed = state.pendingSyncQueue.some((item) => item.status === "failed");
+          setSyncStatus(hasFailed ? "전송 실패함" : "해당 작업자 로그인 후 동기화", hasFailed ? "error" : "pending");
           saveSyncQueue();
         }
         refreshVisiblePendingSyncStatus();
@@ -12499,7 +12751,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             });
             if ([...ids].some((id) => !rowsById.has(id))) throw new Error(`pending_sync_rows_missing:${key}`);
             const rows = [...rowsById.values()];
-            await upsertTable(client, config, rows, { expectedWorkerId: pendingSyncJobOwnerWorkerId(job) || "" });
+            await upsertTable(client, config, rows, {
+              expectedWorkerId: pendingSyncJobOwnerWorkerId(job) || "",
+              mutationSession: job.mutationSession || null,
+            });
+            if (config.key === "inspections" || config.key === "inspectionItems") {
+              const inspectionIds = new Set(config.key === "inspections"
+                ? rows.map((row) => String(row.id))
+                : rows.map((row) => String(row.inspectionId)));
+              const itemIds = state.inspectionItems
+                .filter((row) => inspectionIds.has(String(row.inspectionId)))
+                .map((row) => row.id);
+              removePendingSyncRows("inspections", [...inspectionIds]);
+              removePendingSyncRows("inspectionItems", itemIds);
+            }
           }
         }
         state.pendingSyncQueue = state.pendingSyncQueue.filter((item) => item.id !== job.id);
@@ -12512,12 +12777,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.error(error);
         job.attempts = Math.min(MAX_SYNC_ATTEMPTS, (job.attempts || 0) + 1);
+        const failure = pendingSyncFailure(error);
+        const terminal = failure.terminal || job.attempts >= MAX_SYNC_ATTEMPTS;
+        job.status = terminal ? "failed" : "pending";
+        job.lastError = terminal && !failure.terminal
+          ? `자동 재시도 ${MAX_SYNC_ATTEMPTS}회 실패: ${failure.message}`
+          : failure.message;
+        job.failedAt = terminal ? new Date().toISOString() : "";
         const delay = SYNC_RETRY_DELAY_MS * job.attempts;
-        job.nextRetryAt = new Date(Date.now() + delay).toISOString();
+        job.nextRetryAt = terminal ? "" : new Date(Date.now() + delay).toISOString();
         saveSyncQueue();
-        setSyncStatus("재시도 대기", "pending");
+        setSyncStatus(terminal ? "전송 실패함" : "재시도 대기", terminal ? "error" : "pending");
         state.syncFlushInFlight = false;
-        scheduleSyncRetry();
+        if (!terminal) scheduleSyncRetry();
+        if (terminal && /작업준비 명단/.test(job.lastError)) toast(job.lastError);
         refreshVisiblePendingSyncStatus();
         return false;
       }
@@ -12564,19 +12837,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return data || { ok: true };
     }
 
-    async function invokeWorkerMutation(action, payload = {}) {
+    async function invokeWorkerMutation(action, payload = {}, options = {}) {
       const client = supabaseClient();
       if (!client) throw new Error("Supabase client is not configured.");
+      const mutationSession = options.mutationSession || null;
       const { data, error } = await client.functions.invoke("admin-mutations", {
         body: {
           action,
           ...payload,
-          mutationSession: workerMutationAuthPayload(),
+          mutationSession: workerMutationAuthPayload(mutationSession),
         },
       });
       if (error || data?.error) {
-        const message = error?.message || data.error;
-        if (/admin_session_|mutation_session_|403|jwt/i.test(String(message || "")) && state.workerSession) {
+        let responseError = "";
+        try {
+          const response = error?.context?.clone ? error.context.clone() : error?.context;
+          const body = response && typeof response.json === "function" ? await response.json() : null;
+          responseError = String(body?.error || "");
+        } catch (_) {}
+        const message = responseError || data?.error || error?.message || "worker_mutation_failed";
+        if (/admin_session_|mutation_session_|403|jwt/i.test(String(message || ""))
+          && state.workerSession
+          && (!mutationSession?.token || mutationSession.token === state.workerSession.mutationToken)) {
           state.workerSession = {
             ...state.workerSession,
             mutationToken: "",
@@ -12584,7 +12866,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           };
           saveWorkerSession(state.workerSession);
         }
-        throw new Error(message);
+        const mutationError = new Error(message);
+        mutationError.code = message;
+        throw mutationError;
       }
       return data || { ok: true };
     }
@@ -12683,6 +12967,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (config.key === "inspections") {
           state.archivedInspections = (Array.isArray(state.archivedInspections) ? state.archivedInspections : [])
             .filter((row) => String(row?.id || "") !== id);
+          state.inspectionItems = state.inspectionItems.filter((row) => String(row?.inspectionId || "") !== id);
           invalidateInspectionRangesForDate(dbRow?.date);
         }
         return true;
@@ -12709,7 +12994,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       dedupeShips();
       cleanupDeliveredShips(true);
       persist();
-      setSyncStatus("실시간 연결", "online");
+      const hasPullFailure = Object.values(state.remotePullHealth || {}).some((health) => health?.error);
+      setSyncStatus(hasPullFailure ? "일부 데이터 동기화 실패" : "실시간 연결", hasPullFailure ? "error" : "online");
       renderPreservingScroll();
     }
 
@@ -12888,6 +13174,68 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!state.remoteRealtimeChannel) startRemotePolling();
     }
 
+    function remoteErrorMessage(error) {
+      const raw = String(error?.message || error?.details || error || "알 수 없는 오류").trim();
+      return raw.slice(0, 180);
+    }
+
+    async function selectAllRemoteIds(client, config) {
+      const ids = [];
+      const pageSize = 1000;
+      for (let page = 0; page < 20; page += 1) {
+        const from = page * pageSize;
+        const { data, error } = await client
+          .from(config.readTable || config.table)
+          .select("id")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        rows.forEach((row) => {
+          if (row?.id) ids.push(String(row.id));
+        });
+        if (rows.length < pageSize) break;
+      }
+      return ids;
+    }
+
+    async function reconcileRemoteIds(client, force = false) {
+      if (!force && state.lastRemoteReconcileAt && Date.now() - state.lastRemoteReconcileAt < REMOTE_RECONCILE_INTERVAL_MS) return;
+      const configs = REMOTE_TABLES.filter((config) => REMOTE_RECONCILE_KEYS.has(config.key));
+      const settled = await Promise.allSettled(configs.map(async (config) => ({
+        config,
+        ids: await selectAllRemoteIds(client, config),
+      })));
+      let changed = false;
+      settled.forEach((result) => {
+        if (result.status !== "fulfilled") {
+          console.warn("원격 ID 대사 실패:", result.reason);
+          return;
+        }
+        const { config, ids } = result.value;
+        const remoteIds = new Set(ids);
+        pendingSyncRowsForKey(config.key).forEach((row) => remoteIds.add(String(row.id)));
+        const before = Array.isArray(state[config.key]) ? state[config.key] : [];
+        const after = before.filter((row) => remoteIds.has(String(row?.id || "")));
+        if (after.length !== before.length) changed = true;
+        state[config.key] = after;
+        if (config.key === "inspections") {
+          const archivedBefore = Array.isArray(state.archivedInspections) ? state.archivedInspections : [];
+          state.archivedInspections = archivedBefore.filter((row) => remoteIds.has(String(row?.id || "")));
+          const localInspectionIds = new Set([
+            ...state.inspections.map((row) => String(row.id)),
+            ...state.archivedInspections.map((row) => String(row.id)),
+          ]);
+          const pendingItemIds = new Set(pendingSyncRowsForKey("inspectionItems").map((row) => String(row.id)));
+          state.inspectionItems = state.inspectionItems.filter((row) => (
+            localInspectionIds.has(String(row.inspectionId)) || pendingItemIds.has(String(row.id))
+          ));
+        }
+      });
+      state.lastRemoteReconcileAt = Date.now();
+      saveJson("lastRemoteReconcileAt", state.lastRemoteReconcileAt);
+      if (changed) persist();
+    }
+
     async function pullRemote(options = {}) {
       const client = supabaseClient();
       if (!client) return setSyncStatus("로컬 저장", "offline");
@@ -12911,22 +13259,37 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (!pullConfigs.length) return;
         const settled = await Promise.allSettled(pullConfigs.map((config) => selectTable(client, config)));
         const failures = [];
-        settled.forEach((result) => {
+        const checkedAt = new Date().toISOString();
+        settled.forEach((result, index) => {
+          const config = pullConfigs[index];
           if (result.status === "fulfilled") {
             applyRemoteTableRows(result.value.key, result.value.rows);
+            state.remotePullHealth[config.key] = {
+              successAt: checkedAt,
+              errorAt: "",
+              error: "",
+            };
           } else {
-            failures.push(result.reason);
+            const message = remoteErrorMessage(result.reason);
+            failures.push({ key: config.key, error: result.reason });
+            state.remotePullHealth[config.key] = {
+              ...(state.remotePullHealth[config.key] || {}),
+              errorAt: checkedAt,
+              error: message,
+            };
             console.warn("테이블 pull 실패:", result.reason);
           }
         });
-        if (failures.length === pullConfigs.length) throw failures[0];
+        saveJson("remotePullHealth", state.remotePullHealth);
+        if (failures.length === pullConfigs.length) throw failures[0].error;
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
         cleanupDeliveredShips(true);
+        await reconcileRemoteIds(client);
         state.lastRemotePullAt = Date.now();
         persist();
-        setSyncStatus("온라인", "online");
+        setSyncStatus(failures.length ? "일부 데이터 동기화 실패" : "온라인", failures.length ? "error" : "online");
         render();
         flushPendingSyncQueue();
       } catch (error) {
@@ -13064,12 +13427,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (WORKER_INSERT_REMOTE_KEYS.has(config.key)) {
         const expectedWorkerId = String(options.expectedWorkerId || state.workerSession?.workerId || "");
-        if (!expectedWorkerId || state.workerSession?.workerId !== expectedWorkerId) {
-          throw new Error("pending_sync_worker_changed");
-        }
-        if (!(await ensureWorkerMutationSession())) throw new Error("worker_mutation_session_required");
-        if (state.workerSession?.workerId !== expectedWorkerId) {
-          throw new Error("pending_sync_worker_changed");
+        let mutationSession = options.mutationSession || null;
+        if (mutationSession?.token) {
+          if (mutationSession.workerId !== expectedWorkerId) throw new Error("pending_sync_worker_changed");
+          if (mutationSession.expiresAt && Date.parse(mutationSession.expiresAt) <= Date.now() + 10000) {
+            throw new Error("mutation_session_expired");
+          }
+        } else {
+          if (!expectedWorkerId || state.workerSession?.workerId !== expectedWorkerId) {
+            throw new Error("pending_sync_worker_changed");
+          }
+          if (!(await ensureWorkerMutationSession())) throw new Error("worker_mutation_session_required");
+          if (state.workerSession?.workerId !== expectedWorkerId) {
+            throw new Error("pending_sync_worker_changed");
+          }
+          mutationSession = currentWorkerMutationSessionSnapshot();
         }
         if (config.key === "inspections" || config.key === "inspectionItems") {
           const inspectionConfig = remoteConfigByKey("inspections");
@@ -13086,11 +13458,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             await invokeWorkerMutation("submitInspection", {
               inspection: inspectionConfig.toDb(inspection),
               items: inspectionItems.map(itemConfig.toDb),
-            });
+            }, { mutationSession });
           }
           return;
         }
-        await invokeWorkerMutation("submitRows", { key: config.key, rows: payload });
+        await invokeWorkerMutation("submitRows", { key: config.key, rows: payload }, { mutationSession });
         return;
       }
       if (config.key === "issuePhotos") {
@@ -13204,7 +13576,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       const ranges = state.remoteLoadedInspectionRanges;
       const entry = ranges[key];
-      if (entry && (entry.status === "loaded" || entry.status === "loading"
+      if (entry && ((entry.status === "loaded" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_CACHE_TTL_MS) || entry.status === "loading"
         || (entry.status === "error" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_RETRY_MS))) return;
       const client = supabaseClient();
       const config = remoteConfigByKey("inspections");
@@ -13216,9 +13588,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           .lte("date", end)
           .order("created_at", { ascending: false }));
         const rows = (data || []).map(config.fromDb);
-        state.archivedInspections = mergeRecordArrays(state.archivedInspections, rows);
+        const outsideRange = (Array.isArray(state.archivedInspections) ? state.archivedInspections : [])
+          .filter((row) => !row?.date || row.date < start || row.date > end);
+        const pendingRange = pendingSyncRowsForKey("inspections")
+          .filter((row) => row?.date && row.date >= start && row.date <= end);
+        state.archivedInspections = mergeRecordArrays(outsideRange, rows, pendingRange);
         ranges[key] = { status: "loaded", at: Date.now() };
-        if (rows.length) renderPreservingScroll();
+        renderPreservingScroll();
       } catch (error) {
         console.warn("점검 이력 기간 로드 실패:", error);
         ranges[key] = { status: "error", at: Date.now() };

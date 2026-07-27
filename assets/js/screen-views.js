@@ -397,7 +397,7 @@
             </div>
             <button class="push-device-close" data-action="close-worker-push-devices" type="button" aria-label="닫기">×</button>
           </div>
-          <p class="push-device-description">수신을 켠 기기에만 서약 미완료와 불안전요소 브라우저 알림이 발송됩니다.</p>
+          <p class="push-device-description">수신을 켠 기기에만 서약 미완료, 불안전요소, 누락자재 브라우저 알림이 발송됩니다.</p>
           <div class="push-device-list">
             ${model.loading ? `<div class="empty">알림 기기 상태를 확인하고 있습니다.</div>` : model.rowsHtml || `<div class="empty">등록된 알림 기기가 없습니다.</div>`}
           </div>
