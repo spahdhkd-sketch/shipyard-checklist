@@ -1,6 +1,6 @@
 # Version
 
-Current version: `1.10-20260728`
+Current version: `1.11-20260809`
 
 Recorded at: `2026-07-28 (Realtime synchronization and PWA refresh release)`
 
@@ -35,5 +35,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260728-realtime-sync-1` and service-worker version
-  `1.10-20260728-realtime-sync` so installed clients refresh safely.
+- Issues asset token `20260809-delete-wins-1` and service-worker version
+  `1.11-20260809-delete-wins` so installed clients refresh safely.

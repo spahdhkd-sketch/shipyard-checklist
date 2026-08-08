@@ -26,8 +26,8 @@ expectMatch(
   "Realtime events must be applied row-by-row instead of triggering a full pull",
 );
 expectMatch(
-  /eventType === "DELETE"[\s\S]*\.filter\(\(row\) => String\(row\?\.id \|\| ""\) !== id\)/,
-  "Realtime DELETE must remove the local row",
+  /const remove = eventType === "DELETE"[\s\S]*applyDeletedRows\(config\.key, \[id\]\)/,
+  "Realtime DELETE must use the exact-id local cascade",
 );
 expectMatch(
   /\.gt\(column, cursor\)[\s\S]*\.order\(column, \{ ascending: true \}\)/,
@@ -65,6 +65,32 @@ expectMatch(
 expectMatch(
   /state\.remotePullHealth\[config\.key\][\s\S]*일부 데이터 동기화 실패/,
   "partial table failures must remain visible with per-table health",
+);
+expectMatch(/const INSPECTION_DELETION_TABLE = "safety_inspection_deletions"/, "inspection tombstones need a stable remote table contract");
+expectMatch(/function applyRemoteInspectionTombstone\(payload\)/, "tombstone events must use an exact inspection ID");
+expectMatch(/table: INSPECTION_DELETION_TABLE/, "inspection tombstones must have a realtime subscription");
+expectMatch(
+  /\.from\(INSPECTION_DELETION_TABLE\)[\s\S]{0,120}\.select\("inspection_id"\)[\s\S]{0,120}\.in\("inspection_id", chunk\)/,
+  "reconciliation must query tombstones for exact cached inspection IDs",
+);
+expectMatch(/StateShapeRules\.reconciledRemoteDeletedRowIds/, "reconnect reconciliation must let tombstones win over pending uploads");
+expectMatch(/state\.inspectionDeletionTableAvailable = true/, "a successful tombstone query must unlock inspection uploads");
+expectMatch(/state\.inspectionDeletionTableAvailable = false/, "an old database must keep inspection uploads fail-closed");
+expectMatch(
+  /StateShapeRules\.syncJobRequiresInspectionDeleteWins\(item\)[\s\S]{0,120}state\.inspectionDeletionTableAvailable === true/,
+  "queued inspection writes must wait for confirmed server delete-wins support",
+);
+expectMatch(/function abortActiveSyncRows\(key, ids\)/, "remote deletes must cancel matching in-flight uploads");
+expectMatch(/job\.id !== state\.syncActiveJobId/, "new rows must not merge into an in-flight queue job");
+expectMatch(/signal: abortController\?\.signal/, "queue uploads must receive the active abort signal");
+expectMatch(/query\.retry\(false\)/, "aborted transport writes must not retry");
+expectMatch(/invokeAdminMutation\("deleteInspectionHistory", \{ ids: inspectionIds \}\)/, "selected history deletion must use the atomic server action");
+expectMatch(/invokeAdminMutation\("deleteAllInspectionHistory"\)/, "reset-all must use the uncapped atomic server action");
+expectMatch(/state\.archivedInspections = \[\]/, "reset-all must clear the local period archive");
+expectMatch(/applyDeletedRows\("inspections", inspectionIds\)/, "reset-all must cancel queued and active local inspection uploads");
+expectMatch(
+  /pullRealtimeGap\(reason = "reconnect"\)[\s\S]*reconcileDeletedInspectionRows\(client\)/,
+  "Realtime reconnect gap recovery must also reconcile tombstones",
 );
 
 console.log("realtime sync static tests passed");

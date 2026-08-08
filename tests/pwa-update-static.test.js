@@ -5,8 +5,8 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const appVersion = "1.10-20260728-realtime-sync";
-const assetToken = "20260728-realtime-sync-1";
+const appVersion = "1.11-20260809-delete-wins";
+const assetToken = "20260809-delete-wins-1";
 const appPages = [
   "index.html",
   "check.html",

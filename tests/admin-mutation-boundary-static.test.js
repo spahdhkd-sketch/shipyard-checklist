@@ -12,6 +12,12 @@ function expectNoMatch(source, pattern, message) {
   if (pattern.test(source)) throw new Error(message);
 }
 
+function expectBefore(source, earlier, later, message) {
+  const earlierIndex = source.indexOf(earlier);
+  const laterIndex = source.indexOf(later);
+  if (earlierIndex < 0 || laterIndex < 0 || earlierIndex >= laterIndex) throw new Error(message);
+}
+
 const app = read("assets/js/app-v2.js");
 const screenViews = read("assets/js/screen-views.js");
 const styles = read("assets/css/styles-v2.css");
@@ -23,6 +29,7 @@ const workPrepBoundaryMigration = read("supabase/migrations/20260527142709_work_
 const workPrepUpdateShapeMigration = read("supabase/migrations/20260527142910_work_prep_records_update_shape_policy.sql");
 const workPrepSoftDeleteMigration = read("supabase/migrations/20260608152516_work_prep_soft_delete.sql");
 const workPrepStatusHistoryMigration = read("supabase/migrations/20260609113000_work_prep_status_history.sql");
+const inspectionDeleteWinsMigration = read("supabase/migrations/20260806183737_inspection_delete_wins.sql");
 const appStateBoundaryMigration = read("supabase/migrations/20260527143351_app_state_read_only_boundary.sql");
 const issueInsertShapeMigration = read("supabase/migrations/20260527144011_issue_records_insert_shape_policies.sql");
 const workerPushBoundaryMigration = read("supabase/migrations/20260527144418_worker_push_subscriptions_boundary.sql");
@@ -31,6 +38,22 @@ const adminSessionFkIndexMigration = read("supabase/migrations/20260527150501_re
 const pictogramStorageMigration = read("supabase/migrations/20260528001000_safety_pictograms_storage_metadata.sql");
 const pictogramMetadataGrantMigration = read("supabase/migrations/20260528002000_safety_pictograms_metadata_select_grants.sql");
 const pkg = JSON.parse(read("package.json"));
+const deleteRowsEdge = edge.slice(
+  edge.indexOf("async function deleteRows"),
+  edge.indexOf("async function deleteCategoryCascade"),
+);
+const inspectionWriteGuardSql = inspectionDeleteWinsMigration.slice(
+  inspectionDeleteWinsMigration.indexOf("create or replace function public.guard_safety_inspection_delete_wins"),
+  inspectionDeleteWinsMigration.indexOf("revoke all on function public.guard_safety_inspection_delete_wins"),
+);
+const inspectionDeleteRpcSql = inspectionDeleteWinsMigration.slice(
+  inspectionDeleteWinsMigration.indexOf("create or replace function public.delete_safety_inspection_history"),
+  inspectionDeleteWinsMigration.indexOf("revoke all on function public.delete_safety_inspection_history"),
+);
+const inspectionResetRpcSql = inspectionDeleteWinsMigration.slice(
+  inspectionDeleteWinsMigration.indexOf("create or replace function public.delete_all_safety_inspection_history"),
+  inspectionDeleteWinsMigration.indexOf("revoke all on function public.delete_all_safety_inspection_history"),
+);
 
 expectMatch(edge, /const ADMIN_TABLES = new Map/i, "admin-mutations must whitelist table keys");
 expectMatch(edge, /function verifyMutationSession/i, "admin-mutations must verify short-lived mutation sessions server-side");
@@ -38,6 +61,15 @@ expectMatch(edge, /action === "createSession"/, "admin-mutations must issue serv
 expectMatch(edge, /SUPABASE_SERVICE_ROLE_KEY/, "admin-mutations must use service role only inside the Edge Function");
 expectMatch(edge, /action === "upsertRows"/, "admin-mutations must support whitelisted upserts");
 expectMatch(edge, /action === "deleteRows"/, "admin-mutations must support whitelisted deletes");
+expectMatch(edge, /action === "deleteInspectionHistory"/, "admin-mutations must expose exact-ID inspection history deletion");
+expectMatch(edge, /action === "deleteAllInspectionHistory"/, "admin-mutations must expose uncapped inspection history reset");
+expectMatch(edge, /function cleanInspectionIds\([\s\S]*typeof id === "string"[\s\S]*id\.length > 0 && id\.length <= 120/, "inspection deletion must reject overlong IDs instead of truncating them");
+expectMatch(edge, /async function deleteInspectionHistory\([\s\S]*verifyMutationSession\(payload\)[\s\S]*deleteInspectionIds\(ids\)/, "dedicated inspection deletion must authorize before using the atomic RPC path");
+expectMatch(edge, /async function deleteAllInspectionHistory\([\s\S]*verifyMutationSession\(payload\)[\s\S]*rpc\("delete_all_safety_inspection_history"\)/, "inspection reset must authorize before using the uncapped RPC");
+expectMatch(deleteRowsEdge, /key === "inspections"[\s\S]*deleteInspectionIds\(ids\)/, "legacy parent deleteRows must route exact inspection IDs to the atomic RPC");
+expectMatch(deleteRowsEdge, /key === "inspectionItems"[\s\S]*offset < ids\.length[\s\S]*from\("safety_inspection_items"\)[\s\S]*select\("inspection_id"\)[\s\S]*\.in\("id", ids\.slice\(offset, offset \+ 200\)\)[\s\S]*deleteInspectionIds\(inspectionIds, ids\.length\)/, "legacy item deleteRows must resolve parent IDs in bounded batches before using the atomic RPC");
+expectNoMatch(deleteRowsEdge, /dedicated_inspection_delete_required/, "legacy inspection deleteRows must remain transition-compatible");
+expectBefore(deleteRowsEdge, 'if (key === "inspections")', "supabase.from(config.table).delete()", "legacy inspection routing must happen before generic hard delete");
 expectMatch(edge, /action === "deleteCategoryCascade"/, "admin-mutations must support category cascade deletes");
 expectMatch(edge, /action === "deleteSectionCascade"/, "admin-mutations must support section cascade deletes");
 expectMatch(edge, /action === "uploadPictogramImage"/, "admin-mutations must upload custom pictograms through Storage");
@@ -165,6 +197,32 @@ expectMatch(workPrepSoftDeleteMigration, /create policy "public update work prep
 expectMatch(workPrepStatusHistoryMigration, /add column if not exists status_history jsonb not null default '\[\]'::jsonb/i, "work prep status history migration should add jsonb timeline storage");
 expectMatch(workPrepStatusHistoryMigration, /jsonb_typeof\(status_history\) = 'array'/i, "work prep status history should be shape-limited to arrays");
 expectMatch(workPrepStatusHistoryMigration, /create index if not exists work_prep_records_status_idx/i, "work prep status history migration should add status filter index");
+expectMatch(inspectionDeleteWinsMigration, /alter table public\.safety_inspections[\s\S]*add column if not exists deleted_at timestamptz/i, "inspection parents must retain a soft-delete timestamp");
+expectMatch(inspectionDeleteWinsMigration, /create table if not exists public\.safety_inspection_deletions[\s\S]*inspection_id text primary key[\s\S]*deleted_at timestamptz not null/i, "inspection tombstones must retain exact IDs and deletion time");
+expectMatch(inspectionDeleteWinsMigration, /alter table public\.safety_inspection_deletions enable row level security/i, "inspection tombstones must enable RLS");
+expectMatch(inspectionDeleteWinsMigration, /revoke all on table public\.safety_inspection_deletions from public, anon, authenticated/i, "browser roles must not mutate inspection tombstones");
+expectMatch(inspectionDeleteWinsMigration, /grant select on table public\.safety_inspection_deletions to anon, authenticated/i, "browser clients must be able to reconcile tombstones");
+expectMatch(inspectionDeleteWinsMigration, /create policy "public read safety inspection deletions"[\s\S]*for select to anon, authenticated[\s\S]*using \(true\)/i, "inspection tombstones must be a read-only public event stream");
+expectNoMatch(inspectionDeleteWinsMigration, /create policy "[^"]*inspection deletion[^"]*"\s+on public\.safety_inspection_deletions\s+for insert/i, "inspection tombstones must not expose a browser insert policy");
+expectMatch(inspectionDeleteWinsMigration, /drop index if exists public\.safety_inspections_worker_ship_category_date_uidx[\s\S]*where worker_id is not null[\s\S]*and deleted_at is null/i, "soft-deleted parents must not block a later valid submission for the same work tuple");
+expectMatch(inspectionDeleteWinsMigration, /create trigger safety_inspections_delete_wins_guard[\s\S]*before insert or update or delete on public\.safety_inspections/i, "all parent writes must run through the delete-wins guard");
+expectMatch(inspectionDeleteWinsMigration, /create trigger safety_inspection_items_delete_wins_guard[\s\S]*before insert or update or delete on public\.safety_inspection_items/i, "all child writes must run through the delete-wins guard");
+expectBefore(inspectionWriteGuardSql, "pg_catalog.pg_advisory_xact_lock_shared", "pg_catalog.pg_advisory_xact_lock(", "ordinary writers must join the reset read lock before exact-ID locks");
+expectMatch(inspectionWriteGuardSql, /pg_catalog\.hashtextextended\(guarded_id, 1\)/i, "exact-ID locks must use a namespace distinct from the reset lock");
+expectMatch(inspectionWriteGuardSql, /tg_op = 'UPDATE'[\s\S]*old_inspection_id[\s\S]*new_inspection_id/i, "updates must guard both old and new parent IDs");
+expectMatch(inspectionWriteGuardSql, /tg_op = 'DELETE'[\s\S]*tg_table_name = 'safety_inspections'[\s\S]*parents must be soft-deleted by the atomic RPC/i, "service-role parent hard deletes must be rejected");
+expectMatch(inspectionWriteGuardSql, /if not has_tombstone[\s\S]*children require a parent tombstone before deletion/i, "child deletes must require tombstone-first RPC ordering");
+expectMatch(inspectionDeleteWinsMigration, /create policy "public read safety inspections"[\s\S]*using \(deleted_at is null\)/i, "public reads must hide soft-deleted parents");
+expectMatch(inspectionDeleteWinsMigration, /create policy "public insert safety inspections"[\s\S]*deleted_at is null[\s\S]*not exists \([\s\S]*from public\.safety_inspection_deletions/i, "public parent inserts must reject tombstoned IDs");
+expectMatch(inspectionDeleteWinsMigration, /create policy "public insert safety inspection items"[\s\S]*not exists \([\s\S]*from public\.safety_inspection_deletions/i, "public child inserts must reject tombstoned parent IDs");
+expectMatch(inspectionDeleteRpcSql, /returns setof public\.safety_inspection_deletions[\s\S]*security definer[\s\S]*set search_path = ''/i, "inspection deletion RPC must have an empty-search-path service boundary");
+expectBefore(inspectionDeleteRpcSql, "pg_catalog.pg_advisory_xact_lock", "insert into public.safety_inspection_deletions", "selected deletion must lock exact IDs before tombstones");
+expectBefore(inspectionDeleteRpcSql, "insert into public.safety_inspection_deletions", "update public.safety_inspections", "selected deletion must publish tombstones before parent soft delete");
+expectBefore(inspectionDeleteRpcSql, "update public.safety_inspections", "delete from public.safety_inspection_items", "selected deletion must soft-delete parents before child removal");
+expectMatch(inspectionDeleteWinsMigration, /revoke all on function public\.delete_safety_inspection_history\(text\[\]\) from public, anon, authenticated[\s\S]*grant execute on function public\.delete_safety_inspection_history\(text\[\]\) to service_role/i, "selected deletion RPC must be service-role-only");
+expectMatch(inspectionResetRpcSql, /returns setof public\.safety_inspection_deletions[\s\S]*pg_advisory_xact_lock\([\s\S]*safety_inspection_history_reset[\s\S]*from public\.safety_inspections[\s\S]*union[\s\S]*from public\.safety_inspection_items[\s\S]*delete_safety_inspection_history\(active_ids\)/i, "reset must exclusively lock, enumerate all active/orphan IDs, and reuse atomic deletion");
+expectNoMatch(inspectionResetRpcSql, /\blimit\b/i, "inspection reset must never inherit a client fetch cap");
+expectMatch(inspectionDeleteWinsMigration, /revoke all on function public\.delete_all_safety_inspection_history\(\) from public, anon, authenticated[\s\S]*grant execute on function public\.delete_all_safety_inspection_history\(\) to service_role/i, "reset RPC must be service-role-only");
 expectNoMatch(app, /app_state/, "current frontend sync should not depend on legacy app_state writes");
 expectMatch(appStateBoundaryMigration, /revoke\s+insert,\s*update,\s*delete,\s*truncate,\s*references,\s*trigger\s+on\s+table\s+public\.app_state\s+from\s+public,\s*anon,\s*authenticated/i, "app_state public writes and schema-level grants should be revoked");
 expectMatch(appStateBoundaryMigration, /grant\s+select\s+on\s+table\s+public\.app_state\s+to\s+anon,\s*authenticated/i, "app_state should remain public read-only for legacy state reads");

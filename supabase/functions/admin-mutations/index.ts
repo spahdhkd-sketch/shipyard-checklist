@@ -367,6 +367,16 @@ function cleanIds(value: unknown) {
     : [];
 }
 
+function cleanInspectionIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(
+    value
+      .filter((id): id is string => typeof id === "string")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0 && id.length <= 120),
+  )];
+}
+
 function parseDataUrl(value: unknown) {
   const text = String(value || "");
   const match = text.match(/^data:([^;,]+);base64,([a-z0-9+/=\s]+)$/i);
@@ -1484,15 +1494,71 @@ async function listIssuePhotos(payload: Record<string, unknown>) {
   return jsonResponse({ ok: true, photos: signedPhotos });
 }
 
+async function deleteInspectionIds(ids: string[], mutated = ids.length) {
+  if (!ids.length) return jsonResponse({ ok: true, mutated, result: [] });
+  const { data, error } = await supabase.rpc("delete_safety_inspection_history", {
+    p_ids: ids,
+  });
+  if (error) {
+    console.error("admin inspection history delete failed", error);
+    return jsonResponse({ error: "admin_inspection_delete_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, mutated, result: data || [] });
+}
+
+async function deleteInspectionHistory(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload);
+  if (authorization.error) return authorization.error;
+  const ids = cleanInspectionIds(payload.ids);
+  return deleteInspectionIds(ids);
+}
+
+async function deleteAllInspectionHistory(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload);
+  if (authorization.error) return authorization.error;
+
+  const { data, error } = await supabase.rpc("delete_all_safety_inspection_history");
+  if (error) {
+    console.error("admin all inspection history delete failed", error);
+    return jsonResponse({ error: "admin_inspection_delete_all_failed" }, 500);
+  }
+  return jsonResponse({
+    ok: true,
+    mutated: Array.isArray(data) ? data.length : 0,
+    result: data || [],
+  });
+}
+
 async function deleteRows(payload: Record<string, unknown>) {
-  const config = ADMIN_TABLES.get(cleanText(payload.key, 80));
+  const key = cleanText(payload.key, 80);
+  const config = ADMIN_TABLES.get(key);
   if (!config) return jsonResponse({ error: "unknown_key" }, 400);
-  const ids = cleanIds(payload.ids);
+  const ids = key === "inspections" || key === "inspectionItems"
+    ? cleanInspectionIds(payload.ids)
+    : cleanIds(payload.ids);
   if (!ids.length) return jsonResponse({ ok: true, mutated: 0 });
 
-  const key = cleanText(payload.key, 80);
   const authorization = await verifyMutationSession(payload, key === "workPrepRecords" ? "workPrep" : "admin");
   if (authorization.error) return authorization.error;
+
+  if (key === "inspections") return deleteInspectionIds(ids);
+
+  if (key === "inspectionItems") {
+    const parentIds: string[] = [];
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const { data: items, error: lookupError } = await supabase
+        .from("safety_inspection_items")
+        .select("inspection_id")
+        .in("id", ids.slice(offset, offset + 200));
+      if (lookupError) {
+        console.error("admin inspection item parent lookup failed", lookupError);
+        return jsonResponse({ error: "admin_inspection_item_lookup_failed" }, 500);
+      }
+      (items || []).forEach((item) => parentIds.push(item.inspection_id));
+    }
+    const inspectionIds = cleanInspectionIds(parentIds);
+    return deleteInspectionIds(inspectionIds, ids.length);
+  }
 
   if (key === "workPrepRecords") {
     const { data: records, error: lookupError } = await supabase
@@ -1745,6 +1811,8 @@ Deno.serve(async (req) => {
   if (action === "completeIssuePhotoUpload") return completeIssuePhotoUpload(payload);
   if (action === "listIssuePhotos") return listIssuePhotos(payload);
   if (action === "deleteRows") return deleteRows(payload);
+  if (action === "deleteInspectionHistory") return deleteInspectionHistory(payload);
+  if (action === "deleteAllInspectionHistory") return deleteAllInspectionHistory(payload);
   if (action === "deleteCategoryCascade") return deleteCategoryCascade(payload);
   if (action === "deleteSectionCascade") return deleteSectionCascade(payload);
   if (action === "deleteIssuePhotos") return deleteIssuePhotos(payload);

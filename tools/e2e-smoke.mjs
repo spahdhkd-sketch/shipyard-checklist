@@ -142,6 +142,8 @@ async function main() {
   // 헤르메틱 가드 — 실서버(Supabase)로의 모든 요청을 차단해 실데이터 오염/유입을 막는다.
   // 차단(abort)은 샌드박스 프록시 차단과 동일하게 동작하며, 앱은 로컬 데이터로 정상 폴백한다(pullRemote catch).
   let blockedBackendRequests = 0;
+  let inspectionDeletionProbeRequests = 0;
+  let inspectionSubmitMutationRequests = 0;
   const LOCAL_ORIGINS = [`http://localhost:${PORT}/`, `http://127.0.0.1:${PORT}/`];
   const makePage = async (options = {}) => {
     const pageBrowser = options.browserInstance || browser;
@@ -162,7 +164,7 @@ async function main() {
       globalThis.Date = TestDate;
     }, testNowMs);
     if (options.mockRealtime) {
-      await newPage.evaluateOnNewDocument(() => {
+      await newPage.evaluateOnNewDocument((realtimeInspectionRows) => {
         const handlers = [];
         const statusCallbacks = [];
         const metrics = { reads: 0, removedChannels: 0, tables: [] };
@@ -179,7 +181,7 @@ async function main() {
             in() { return query; },
             then(resolve) {
               metrics.reads += 1;
-              resolve({ data: [], error: null });
+              resolve({ data: table === "safety_inspections" ? realtimeInspectionRows : [], error: null });
             },
           };
           return query;
@@ -223,12 +225,32 @@ async function main() {
             statusCallbacks.forEach((callback) => callback(status));
           },
         };
-      });
+      }, options.realtimeInspectionRows || []);
     }
     newPage.on("dialog", (d) => d.accept());
     await newPage.setRequestInterception(true);
     newPage.on("request", (req) => {
       const url = req.url();
+      const isInspectionDeletionRead = url.includes(".supabase.co/rest/v1/safety_inspection_deletions");
+      const isInspectionRead = url.includes(".supabase.co/rest/v1/safety_inspections");
+      if (options.mockSupabaseWrites
+        && req.method() === "GET"
+        && (isInspectionDeletionRead || isInspectionRead)) {
+        const requestHeaders = req.headers();
+        if (isInspectionDeletionRead) inspectionDeletionProbeRequests += 1;
+        req.respond({
+          status: 200,
+          contentType: "application/json",
+          headers: {
+            "Access-Control-Allow-Origin": requestHeaders.origin || `http://localhost:${PORT}`,
+            "Access-Control-Allow-Headers": requestHeaders["access-control-request-headers"] || "authorization, x-client-info, apikey, content-type, prefer, x-retry-count, accept-profile, content-profile",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+            "Access-Control-Expose-Headers": "Content-Range",
+          },
+          body: "[]",
+        }).catch(() => {});
+        return;
+      }
       if (options.mockSupabaseWrites && url.includes(".supabase.co/rest/v1/") && req.method() !== "GET") {
         const requestHeaders = req.headers();
         req.respond({
@@ -245,6 +267,15 @@ async function main() {
         return;
       }
       if ((options.mockAdminMutations || options.mockSupabaseWrites) && url.includes("/functions/v1/admin-mutations")) {
+        if (options.mockSupabaseWrites) {
+          try {
+            const mutation = JSON.parse(req.postData() || "{}");
+            if (mutation.action === "submitInspection"
+              && mutation.inspection
+              && Array.isArray(mutation.items)
+              && mutation.mutationSession?.token) inspectionSubmitMutationRequests += 1;
+          } catch {}
+        }
         const response = {
           status: 200,
           contentType: "application/json",
@@ -377,11 +408,35 @@ async function main() {
   };
 
   const runRealtimeSyncFlow = async () => {
-    const realtimePage = await makePage({ mockRealtime: true });
+    const tombstoneInspectionId = "inspection-tombstone-e2e";
+    const realtimePage = await makePage({
+      mockRealtime: true,
+      realtimeInspectionRows: [{
+        id: tombstoneInspectionId,
+        category_id: "welding",
+        worker_id: "w-hong",
+        worker: "홍길동",
+        ship_no: "2401",
+        date: todayStr,
+        time: "13:00",
+        status: "safe",
+        warnings: 0,
+        completion: 100,
+        tools: [],
+        safety_pledge: "",
+        work_prep_record_id: "",
+        work_prep_worker_id: "",
+        created_at: new Date(testNowMs).toISOString(),
+      }],
+    });
     await realtimePage.goto(`http://localhost:${PORT}/unsafe.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
-    await realtimePage.waitForFunction(() => window.__realtimeTest?.metrics?.tables?.length === 5, { timeout: 5000 });
+    const expectedTables = ["missing_materials", "safety_inspection_deletions", "safety_inspections", "safety_ships", "unsafe_issues", "work_prep_records"].sort();
+    await realtimePage.waitForFunction(
+      (tables) => tables.every((table) => window.__realtimeTest?.metrics?.tables?.includes(table)),
+      { timeout: 5000 },
+      expectedTables,
+    );
     const subscribedTables = await realtimePage.evaluate(() => [...new Set(window.__realtimeTest.metrics.tables)].sort());
-    const expectedTables = ["missing_materials", "safety_inspections", "safety_ships", "unsafe_issues", "work_prep_records"].sort();
     const subscriptionsOk = JSON.stringify(subscribedTables) === JSON.stringify(expectedTables);
 
     await realtimePage.evaluate((storagePrefix, createdAt) => {
@@ -419,6 +474,17 @@ async function main() {
     }, PRE);
     const deleteVisible = await realtimePage.evaluate(() => window.__realtimeTest.deleteVisible === true);
 
+    await realtimePage.evaluate((storagePrefix, inspectionId) => {
+      window.__realtimeTest.emit("safety_inspection_deletions", {
+        eventType: "INSERT",
+        new: { inspection_id: inspectionId },
+        old: {},
+      });
+      window.__realtimeTest.tombstoneDeleteVisible = !JSON.parse(localStorage.getItem(storagePrefix + "inspections") || "[]")
+        .some((row) => row.id === inspectionId);
+    }, PRE, tombstoneInspectionId);
+    const tombstoneDeleteVisible = await realtimePage.evaluate(() => window.__realtimeTest.tombstoneDeleteVisible === true);
+
     await realtimePage.waitForFunction(() => window.__realtimeTest.metrics.reads > 0, { timeout: 5000 });
     const readsBeforeFailure = await realtimePage.evaluate(() => window.__realtimeTest.metrics.reads);
     await realtimePage.evaluate(() => window.__realtimeTest.fail("CHANNEL_ERROR"));
@@ -430,7 +496,7 @@ async function main() {
     const fallbackOk = await realtimePage.evaluate(() =>
       window.__realtimeTest.metrics.removedChannels > 0 && window.__realtimeTest.metrics.reads > 0);
     await realtimePage.close();
-    return subscriptionsOk && insertVisible && deleteVisible && fallbackOk;
+    return subscriptionsOk && insertVisible && deleteVisible && tombstoneDeleteVisible && fallbackOk;
   };
 
   const runWorkPrepSyncFlow = async () => {
@@ -517,11 +583,11 @@ async function main() {
           script.src.includes("/assets/dist/js/app-v2.min.js") && script.src.includes(`v=${expectedToken}`)),
         expectedVersion,
       };
-    }, appVersion, "20260728-realtime-sync-1");
+    }, appVersion, "20260809-delete-wins-1");
     const ok = result.controlled
       && result.active
       && result.version === result.expectedVersion
-      && result.cache === "gs-safety-20260728-realtime-sync-1"
+      && result.cache === "gs-safety-20260809-delete-wins-1"
       && result.hasCurrentCache
       && !result.hasStaleCache
       && result.manifestVersioned
@@ -616,6 +682,7 @@ async function main() {
     return { state: status?.dataset.inspectionSyncState || "missing", text: status?.innerText.replace(/\s+/g, " ").trim() || "" };
   });
   check(`점검: 서버 반영 완료 안내 (${inspectionServerState.state}: ${inspectionServerState.text})`, inspectionServerState.state === "synced" && inspectionCompletionText.includes("서버 반영 완료"));
+  check("점검: 삭제 tombstone capability 확인 후 submitInspection 계약", inspectionDeletionProbeRequests > 0 && inspectionSubmitMutationRequests > 0);
   const completionBottomNavHidden = await page.evaluate(() => {
     const nav = document.querySelector(".bottom-nav");
     return !nav || getComputedStyle(nav).display === "none";

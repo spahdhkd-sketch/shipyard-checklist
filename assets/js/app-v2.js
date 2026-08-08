@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.10-20260728-realtime-sync";
+    const APP_VERSION = "1.11-20260809-delete-wins";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -12,6 +12,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ADMIN_PUSH_STYLES = PUSH_RULES.ADMIN_PUSH_STYLES;
     const SERVER_CLOCK_REFRESH_MS = 5 * 60 * 1000;
     const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
+    const REMOTE_DELETE_RECONCILE_MS = 60 * 1000;
+    const REMOTE_DELETE_RECONCILE_BATCH_SIZE = 50;
+    const INSPECTION_DELETION_TABLE = "safety_inspection_deletions";
     const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
     const REMOTE_REACTIVE_PULL_DELAY_MS = 700;
     const DEFAULT_REMOTE_LIST_LIMIT = 20;
@@ -2758,7 +2761,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pendingSyncQueue: normalizePendingSyncQueue(loadJson("pendingSyncQueue", [])),
       syncRetryTimer: null,
       syncFlushInFlight: false,
+      syncActiveJobId: "",
+      syncActiveAbortController: null,
       lastRemotePullAt: Number(loadJson("lastRemotePullAt", 0)) || 0,
+      lastRemoteDeleteReconcileAt: 0,
       screenMode: localStorage.getItem(storeKey("screenMode")) || "desktop",
       shipSortMode: normalizeShipSortMode(loadJson("shipSortMode", "stage")),
       shipDataCardOpenIds: loadJson("shipDataCardOpenIds", []),
@@ -2780,6 +2786,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       remotePollTimer: null,
       remoteRealtimeChannel: null,
       remoteRealtimeStatus: "",
+      inspectionDeletionRealtimeChannel: null,
+      inspectionDeletionRealtimeStatus: "",
+      inspectionDeletionTableAvailable: null,
       remoteRealtimeRetryTimer: null,
       remoteRealtimeGapInFlight: false,
       remoteRealtimeGapQueuedReason: "",
@@ -11455,10 +11464,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     async function resetHistory() {
       if (!requireAdminWrite()) return;
       if (!confirm("모든 점검 이력을 초기화할까요? 작업 유형, 섹션, 항목, 호선은 유지됩니다.")) return;
-      const inspectionIds = state.inspections.map((row) => row.id).filter(Boolean);
-      const itemIds = state.inspectionItems.map((row) => row.id).filter(Boolean);
-      if (isSyncConfigured() && !(await resetRemoteHistory(inspectionIds, itemIds))) return;
+      const inspectionIds = [...new Set([
+        ...state.inspections.map((row) => row.id),
+        ...state.archivedInspections.map((row) => row.id),
+      ].filter(Boolean))];
+      if (isSyncConfigured() && !(await resetRemoteHistory())) return;
+      if (inspectionIds.length) applyDeletedRows("inspections", inspectionIds);
       state.inspections = [];
+      state.archivedInspections = [];
       state.inspectionItems = [];
       state.historyDetailId = null;
       state.historyScope = "all";
@@ -11537,8 +11550,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!ids.size) return toast("삭제할 이력을 선택하세요.");
       if (!confirm(`선택한 점검 이력 ${ids.size}건을 삭제할까요?`)) return;
       if (isSyncConfigured() && !(await deleteRemoteHistory([...ids]))) return;
-      state.inspections = state.inspections.filter((row) => !ids.has(row.id));
-      state.inspectionItems = state.inspectionItems.filter((row) => !ids.has(row.inspectionId));
+      applyDeletedRows("inspections", [...ids]);
       state.selectedHistoryIds = [];
       persist();
       render();
@@ -12582,6 +12594,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ? currentWorkerMutationSessionSnapshot()
         : null;
       const existing = state.pendingSyncQueue.find((job) => job.type === "rows"
+        && job.id !== state.syncActiveJobId
         && job.status !== "failed"
         && job.keys.length === 1
         && job.keys[0] === key
@@ -12629,6 +12642,165 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         })
         .filter((job) => job.type !== "rows" || job.keys.some((itemKey) => (job.rowIdsByKey[itemKey] || []).length));
       saveSyncQueue();
+    }
+
+    function abortActiveSyncRows(key, ids) {
+      const activeJob = normalizePendingSyncQueue(state.pendingSyncQueue)
+        .find((job) => job.id === state.syncActiveJobId);
+      if (!activeJob || !StateShapeRules.syncJobContainsDeletedRows(activeJob, key, ids)) return false;
+      if (state.syncActiveAbortController && !state.syncActiveAbortController.signal.aborted) {
+        state.syncActiveAbortController.abort();
+      }
+      return true;
+    }
+
+    function applyDeletedRows(key, ids) {
+      const result = StateShapeRules.removeRemoteDeletedRows({
+        rows: state[key],
+        archivedInspections: state.archivedInspections,
+        inspectionItems: state.inspectionItems,
+        selectedHistoryIds: state.selectedHistoryIds,
+        historyDetailId: state.historyDetailId,
+      }, key, ids);
+      abortActiveSyncRows(key, ids);
+      state[key] = result.rows;
+      removePendingSyncRows(key, ids);
+      if (key === "inspections") {
+        if (result.removedItemIds.length) abortActiveSyncRows("inspectionItems", result.removedItemIds);
+        state.archivedInspections = result.archivedInspections;
+        state.inspectionItems = result.inspectionItems;
+        state.selectedHistoryIds = result.selectedHistoryIds;
+        state.historyDetailId = result.historyDetailId;
+        if (result.removedItemIds.length) removePendingSyncRows("inspectionItems", result.removedItemIds);
+      }
+      return result.changed;
+    }
+
+    function applyRemoteInspectionTombstone(payload) {
+      const deletedId = String(payload?.new?.inspection_id || "").trim();
+      if (!deletedId) return false;
+      const changed = applyDeletedRows("inspections", [deletedId]);
+      if (changed) {
+        persist();
+        renderPreservingScroll();
+      }
+      return changed;
+    }
+
+    function isMissingInspectionDeletionTableError(error) {
+      const code = String(error?.code || "").toUpperCase();
+      if (code === "42P01" || code === "PGRST205") return true;
+      const text = remoteErrorText(error).toLowerCase();
+      return text.includes(INSPECTION_DELETION_TABLE)
+        && /(does not exist|could not find|schema cache|relation)/.test(text);
+    }
+
+    function startInspectionDeletionRealtime() {
+      const client = supabaseClient();
+      if (!client || state.inspectionDeletionRealtimeChannel || typeof client.channel !== "function") return;
+      let channel = client.channel("gs-safety-inspection-deletions");
+      channel = channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: INSPECTION_DELETION_TABLE },
+        (payload) => {
+          state.lastRemoteChangeAt = Date.now();
+          applyRemoteInspectionTombstone(payload);
+        },
+      );
+      state.inspectionDeletionRealtimeChannel = channel.subscribe((status) => {
+        state.inspectionDeletionRealtimeStatus = status;
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          const activeChannel = state.inspectionDeletionRealtimeChannel;
+          state.inspectionDeletionRealtimeChannel = null;
+          state.inspectionDeletionRealtimeStatus = "";
+          if (activeChannel) {
+            try { supabaseClient()?.removeChannel(activeChannel); } catch (_) {}
+          }
+          scheduleRemoteRefresh("inspection-deletion-realtime-fallback", 0);
+          setTimeout(startInspectionDeletionRealtime, 5000);
+        }
+      });
+    }
+
+    async function reconcileDeletedInspectionRows(client) {
+      const config = remoteConfigByKey("inspections");
+      if (!client || !config) return false;
+      const queuedJobs = normalizePendingSyncQueue(state.pendingSyncQueue);
+      const hasFullJob = queuedJobs.some((job) => job.type === "full");
+      const cachedRows = [
+        ...(Array.isArray(state.inspections) ? state.inspections : []),
+        ...(Array.isArray(state.archivedInspections) ? state.archivedInspections : []),
+      ];
+      const pendingIds = pendingSyncRowsForKey("inspections").map((row) => row.id);
+      const pendingIdSet = new Set(pendingIds.map((id) => String(id || "").trim()).filter(Boolean));
+      const cachedIds = [...new Set(cachedRows
+        .map((row) => String(row?.id || "").trim())
+        .filter(Boolean))];
+
+      try {
+        const tombstoneIds = [];
+        try {
+          if (cachedIds.length) {
+            for (let index = 0; index < cachedIds.length; index += REMOTE_DELETE_RECONCILE_BATCH_SIZE) {
+              const chunk = cachedIds.slice(index, index + REMOTE_DELETE_RECONCILE_BATCH_SIZE);
+              const { data, error } = await client
+                .from(INSPECTION_DELETION_TABLE)
+                .select("inspection_id")
+                .in("inspection_id", chunk);
+              if (error) throw error;
+              if (!Array.isArray(data)) throw new Error("inspection_tombstone_reconcile_invalid_response");
+              data.forEach((row) => {
+                const id = String(row?.inspection_id || "").trim();
+                if (id) tombstoneIds.push(id);
+              });
+            }
+          } else {
+            const { data, error } = await client
+              .from(INSPECTION_DELETION_TABLE)
+              .select("inspection_id")
+              .limit(1);
+            if (error) throw error;
+            if (!Array.isArray(data)) throw new Error("inspection_tombstone_probe_invalid_response");
+          }
+          state.inspectionDeletionTableAvailable = true;
+          startInspectionDeletionRealtime();
+        } catch (error) {
+          if (!isMissingInspectionDeletionTableError(error)) throw error;
+          state.inspectionDeletionTableAvailable = false;
+        }
+
+        const existingIds = [];
+        if (!hasFullJob) {
+          const tombstoneIdSet = new Set(tombstoneIds);
+          const candidateIds = cachedIds.filter((id) => !pendingIdSet.has(id) && !tombstoneIdSet.has(id));
+          for (let index = 0; index < candidateIds.length; index += REMOTE_DELETE_RECONCILE_BATCH_SIZE) {
+            const chunk = candidateIds.slice(index, index + REMOTE_DELETE_RECONCILE_BATCH_SIZE);
+            const { data, error } = await client
+              .from(config.readTable || config.table)
+              .select("id")
+              .in("id", chunk);
+            if (error) throw error;
+            if (!Array.isArray(data)) throw new Error("inspection_delete_reconcile_invalid_response");
+            data.forEach((row) => {
+              const id = String(row?.id || "").trim();
+              if (id) existingIds.push(id);
+            });
+          }
+        }
+        const deletedIds = StateShapeRules.reconciledRemoteDeletedRowIds({
+          cachedRows,
+          tombstoneIds,
+          existingIds,
+          pendingIds,
+          preserveUnconfirmedMissing: hasFullJob,
+        });
+        if (deletedIds.length) applyDeletedRows("inspections", deletedIds);
+        state.lastRemoteDeleteReconcileAt = Date.now();
+        return deletedIds.length > 0;
+      } catch (error) {
+        console.warn("삭제된 점검 이력 재확인 실패:", error);
+        return false;
+      }
     }
 
     function prunePendingSyncQueue() {
@@ -12721,10 +12893,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       prunePendingSyncQueue();
       const now = Date.now();
       const workerId = String(state.workerSession?.workerId || "");
-      const job = state.pendingSyncQueue.find((item) => (
-        (!item.nextRetryAt || Date.parse(item.nextRetryAt) <= now)
-        && pendingSyncJobEligible(item, workerId)
-      ));
+      const job = state.pendingSyncQueue.find((item) => {
+        if (item.nextRetryAt && Date.parse(item.nextRetryAt) > now) return false;
+        if (!pendingSyncJobEligible(item, workerId)) return false;
+        const writesInspectionHistory = StateShapeRules.syncJobRequiresInspectionDeleteWins(item);
+        return !writesInspectionHistory || state.inspectionDeletionTableAvailable === true;
+      });
       if (!job) {
         const hasEligibleRetry = state.pendingSyncQueue.some((item) => pendingSyncJobEligible(item, workerId));
         if (hasEligibleRetry) scheduleSyncRetry();
@@ -12737,6 +12911,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return false;
       }
       state.syncFlushInFlight = true;
+      state.syncActiveJobId = job.id;
+      const abortController = typeof AbortController === "function" ? new AbortController() : null;
+      state.syncActiveAbortController = abortController;
       setSyncStatus("동기화 중", "pending");
       try {
         if (job.type === "full") {
@@ -12754,6 +12931,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             await upsertTable(client, config, rows, {
               expectedWorkerId: pendingSyncJobOwnerWorkerId(job) || "",
               mutationSession: job.mutationSession || null,
+              signal: abortController?.signal,
             });
             if (config.key === "inspections" || config.key === "inspectionItems") {
               const inspectionIds = new Set(config.key === "inspections"
@@ -12771,26 +12949,42 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         saveSyncQueue();
         setSyncStatus(state.pendingSyncQueue.length ? "동기화 대기" : "온라인", state.pendingSyncQueue.length ? "pending" : "online");
         state.syncFlushInFlight = false;
+        state.syncActiveJobId = "";
+        state.syncActiveAbortController = null;
         refreshVisiblePendingSyncStatus();
         if (state.pendingSyncQueue.length) await flushPendingSyncQueue();
         return true;
       } catch (error) {
-        console.error(error);
-        job.attempts = Math.min(MAX_SYNC_ATTEMPTS, (job.attempts || 0) + 1);
-        const failure = pendingSyncFailure(error);
-        const terminal = failure.terminal || job.attempts >= MAX_SYNC_ATTEMPTS;
-        job.status = terminal ? "failed" : "pending";
-        job.lastError = terminal && !failure.terminal
-          ? `자동 재시도 ${MAX_SYNC_ATTEMPTS}회 실패: ${failure.message}`
-          : failure.message;
-        job.failedAt = terminal ? new Date().toISOString() : "";
-        const delay = SYNC_RETRY_DELAY_MS * job.attempts;
-        job.nextRetryAt = terminal ? "" : new Date(Date.now() + delay).toISOString();
+        const aborted = Boolean(abortController?.signal.aborted);
+        if (!aborted) console.error(error);
+        const activeJobStillQueued = state.pendingSyncQueue.some((item) => item.id === job.id);
+        let terminal = false;
+        if (activeJobStillQueued && aborted) {
+          state.pendingSyncQueue = state.pendingSyncQueue.map((item) => item.id === job.id
+            ? { ...item, status: "pending", nextRetryAt: "", lastError: "", failedAt: "" }
+            : item);
+        } else if (activeJobStillQueued) {
+          const attempts = Math.min(MAX_SYNC_ATTEMPTS, (job.attempts || 0) + 1);
+          const failure = pendingSyncFailure(error);
+          terminal = failure.terminal || attempts >= MAX_SYNC_ATTEMPTS;
+          job.status = terminal ? "failed" : "pending";
+          const lastError = terminal && !failure.terminal
+            ? `자동 재시도 ${MAX_SYNC_ATTEMPTS}회 실패: ${failure.message}`
+            : failure.message;
+          const failedAt = terminal ? new Date().toISOString() : "";
+          const nextRetryAt = terminal ? "" : new Date(Date.now() + (SYNC_RETRY_DELAY_MS * attempts)).toISOString();
+          state.pendingSyncQueue = state.pendingSyncQueue.map((item) => item.id === job.id
+            ? { ...item, attempts, status: job.status, lastError, failedAt, nextRetryAt }
+            : item);
+        }
         saveSyncQueue();
-        setSyncStatus(terminal ? "전송 실패함" : "재시도 대기", terminal ? "error" : "pending");
         state.syncFlushInFlight = false;
-        if (!terminal) scheduleSyncRetry();
-        if (terminal && /작업준비 명단/.test(job.lastError)) toast(job.lastError);
+        state.syncActiveJobId = "";
+        state.syncActiveAbortController = null;
+        setSyncStatus(terminal ? "전송 실패함" : (state.pendingSyncQueue.length ? "재시도 대기" : "온라인"), terminal ? "error" : (state.pendingSyncQueue.length ? "pending" : "online"));
+        if (!terminal && state.pendingSyncQueue.length) scheduleSyncRetry();
+        const failedJob = state.pendingSyncQueue.find((item) => item.id === job.id);
+        if (terminal && /작업준비 명단/.test(failedJob?.lastError || "")) toast(failedJob.lastError);
         refreshVisiblePendingSyncStatus();
         return false;
       }
@@ -12882,7 +13076,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!options.preserveQueue) setSyncStatus("동기화 중", "pending");
       try {
         for (const config of REMOTE_TABLES) {
-          await upsertTable(client, config, state[config.key]);
+          await upsertTable(client, config, state[config.key], { signal: options.signal });
         }
         if (!options.preserveQueue) setSyncStatus("온라인", "online");
         return true;
@@ -12962,15 +13156,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       updateRealtimeCursor(config, dbRow);
       const remove = eventType === "DELETE" || (config.key === "workPrepRecords" && Boolean(dbRow?.deleted_at));
       if (remove) {
-        state[config.key] = (Array.isArray(state[config.key]) ? state[config.key] : [])
-          .filter((row) => String(row?.id || "") !== id);
-        if (config.key === "inspections") {
-          state.archivedInspections = (Array.isArray(state.archivedInspections) ? state.archivedInspections : [])
-            .filter((row) => String(row?.id || "") !== id);
-          state.inspectionItems = state.inspectionItems.filter((row) => String(row?.inspectionId || "") !== id);
-          invalidateInspectionRangesForDate(dbRow?.date);
-        }
-        return true;
+        const changed = applyDeletedRows(config.key, [id]);
+        if (config.key === "inspections") invalidateInspectionRangesForDate(dbRow?.date);
+        return changed;
       }
 
       const remoteRow = config.fromDb(dbRow);
@@ -13058,6 +13246,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           }
           if (result.value.cursor) state.remoteRealtimeCursors[result.value.key] = result.value.cursor;
         });
+        const reconcileReason = reason === "subscribed" || reason === "reconnect";
+        if (!state.lastRemoteDeleteReconcileAt
+          || Date.now() - state.lastRemoteDeleteReconcileAt >= REMOTE_DELETE_RECONCILE_MS
+          || reconcileReason) {
+          changed = (await reconcileDeletedInspectionRows(client)) || changed;
+        }
         if (changed) finishRemoteRealtimeApply();
         else saveJson("remoteRealtimeCursors", state.remoteRealtimeCursors || {});
         state.lastRemoteChangeAt = Date.now();
@@ -13163,7 +13357,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const socketConnected = typeof client?.realtime?.isConnected === "function"
         ? client.realtime.isConnected()
         : remoteRealtimeConnected();
-      if (remoteRealtimeConnected() && socketConnected) return;
+      if (remoteRealtimeConnected() && socketConnected) {
+        if (state.inspectionDeletionTableAvailable === true) startInspectionDeletionRealtime();
+        return;
+      }
       if (state.remoteRealtimeChannel) clearRemoteRealtimeChannel();
       startRemoteRealtime();
       startRemotePolling();
@@ -13171,6 +13368,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function startRemoteSync() {
       startRemoteRealtime();
+      if (state.inspectionDeletionTableAvailable === true) startInspectionDeletionRealtime();
       if (!state.remoteRealtimeChannel) startRemotePolling();
     }
 
@@ -13282,6 +13480,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         });
         saveJson("remotePullHealth", state.remotePullHealth);
         if (failures.length === pullConfigs.length) throw failures[0].error;
+        const reconcileReason = options.reason === "wake"
+          || options.reason === "realtime-fallback"
+          || options.reason === "inspection-deletion-realtime-fallback"
+          || options.reason === "load-more-history";
+        if (!state.lastRemoteDeleteReconcileAt
+          || Date.now() - state.lastRemoteDeleteReconcileAt >= REMOTE_DELETE_RECONCILE_MS
+          || reconcileReason) {
+          await reconcileDeletedInspectionRows(client);
+        }
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
@@ -13304,11 +13511,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
-    async function resetRemoteHistory(inspectionIds = [], itemIds = []) {
-      if (!inspectionIds.length && !itemIds.length) return true;
-      if (itemIds.length && !(await deleteRemoteRows("inspectionItems", itemIds))) return false;
-      if (inspectionIds.length && !(await deleteRemoteRows("inspections", inspectionIds))) return false;
-      return true;
+    async function resetRemoteHistory() {
+      try {
+        if (!canAttemptServerAdminWrite()) throw new Error("admin_session_required");
+        await invokeAdminMutation("deleteAllInspectionHistory");
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("점검 이력 초기화 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
+        return false;
+      }
     }
 
     function cleanupDeliveredShips(syncRemote) {
@@ -13325,13 +13539,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     async function deleteRemoteHistory(ids) {
       const inspectionIds = [...new Set((Array.isArray(ids) ? ids : []).map(String).filter(Boolean))];
       if (!inspectionIds.length) return true;
-      const inspectionSet = new Set(inspectionIds);
-      const itemIds = state.inspectionItems
-        .filter((row) => inspectionSet.has(row.inspectionId))
-        .map((row) => row.id)
-        .filter(Boolean);
-      if (itemIds.length && !(await deleteRemoteRows("inspectionItems", itemIds))) return false;
-      return deleteRemoteRows("inspections", inspectionIds);
+      try {
+        if (!canAttemptServerAdminWrite()) throw new Error("admin_session_required");
+        await invokeAdminMutation("deleteInspectionHistory", { ids: inspectionIds });
+        setSyncStatus("온라인", "online");
+        return true;
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("점검 이력 삭제 실패 — 연결 상태를 확인한 뒤 다시 시도해주세요.");
+        return false;
+      }
     }
 
     async function upsertAdminRows(key, rows) {
@@ -13404,11 +13622,32 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
     }
 
+    function throwIfRemoteSyncAborted(signal) {
+      if (!signal?.aborted) return;
+      const error = new Error("sync_aborted");
+      error.name = "AbortError";
+      throw error;
+    }
+
+    function withRemoteAbortSignal(query, signal) {
+      if (signal && typeof query?.retry === "function") query = query.retry(false);
+      if (signal && typeof query?.abortSignal === "function") return query.abortSignal(signal);
+      return query;
+    }
+
     async function upsertTable(client, config, rows, options = {}) {
       if (!config) throw new Error("Remote table config is missing.");
       const targetRows = config.rows ? config.rows(rows) : rows;
       if (!targetRows.length) return;
       const payload = targetRows.map(config.toDb);
+      const runPublicUpsert = async (upsertRows, upsertOptions) => {
+        throwIfRemoteSyncAborted(options.signal);
+        const query = client.from(config.table).upsert(upsertRows, upsertOptions);
+        const result = await withRemoteAbortSignal(query, options.signal);
+        throwIfRemoteSyncAborted(options.signal);
+        return result;
+      };
+      throwIfRemoteSyncAborted(options.signal);
       if (ADMIN_REMOTE_KEYS.has(config.key)) {
         if (config.key === "workPrepRecords") {
           const expectedWorkerId = String(state.workerSession?.workerId || "");
@@ -13423,6 +13662,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           if (!shouldRetryRemoteWithoutOptionalColumns(config, error)) throw error;
           await invokeAdminMutation("upsertRows", { key: config.key, rows: remoteFallbackPayload(config, payload) });
         }
+        throwIfRemoteSyncAborted(options.signal);
         return;
       }
       if (WORKER_INSERT_REMOTE_KEYS.has(config.key)) {
@@ -13453,34 +13693,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           const inspections = state.inspections.filter((row) => inspectionIds.has(String(row.id)));
           if (inspections.length !== inspectionIds.size) throw new Error("inspection_sync_header_missing");
           for (const inspection of inspections) {
+            throwIfRemoteSyncAborted(options.signal);
             const inspectionItems = state.inspectionItems.filter((row) => String(row.inspectionId) === String(inspection.id));
             if (!inspectionItems.length) throw new Error("inspection_sync_items_missing");
             await invokeWorkerMutation("submitInspection", {
               inspection: inspectionConfig.toDb(inspection),
               items: inspectionItems.map(itemConfig.toDb),
             }, { mutationSession });
+            throwIfRemoteSyncAborted(options.signal);
           }
           return;
         }
+        throwIfRemoteSyncAborted(options.signal);
         await invokeWorkerMutation("submitRows", { key: config.key, rows: payload }, { mutationSession });
+        throwIfRemoteSyncAborted(options.signal);
         return;
       }
       if (config.key === "issuePhotos") {
         return;
       }
-      let { error } = await client.from(config.table).upsert(payload, { onConflict: "id" });
+      let { error } = await runPublicUpsert(payload, { onConflict: "id" });
       if (error && config.key === "categories" && /tool_ids/i.test(String(error.message || error.details || ""))) {
         const fallbackPayload = payload.map(({ tool_ids, ...row }) => row);
-        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+        const retry = await runPublicUpsert(fallbackPayload, { onConflict: "id" });
         error = retry.error;
       }
       if (error && config.key === "inspections" && /safety_pledge/i.test(String(error.message || error.details || ""))) {
         const fallbackPayload = payload.map(({ safety_pledge, ...row }) => row);
-        const retry = await client.from(config.table).upsert(fallbackPayload, { onConflict: "id" });
+        const retry = await runPublicUpsert(fallbackPayload, { onConflict: "id" });
         error = retry.error;
       }
       if (error && shouldRetryRemoteWithoutOptionalColumns(config, error)) {
-        const retry = await client.from(config.table).upsert(remoteFallbackPayload(config, payload), { onConflict: "id" });
+        const retry = await runPublicUpsert(remoteFallbackPayload(config, payload), { onConflict: "id" });
         error = retry.error;
       }
       if (error) throw error;

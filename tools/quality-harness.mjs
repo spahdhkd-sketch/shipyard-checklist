@@ -12,10 +12,10 @@ const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
-const APP_VERSION = "1.10-20260728-realtime-sync";
+const APP_VERSION = "1.11-20260809-delete-wins";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260728-realtime-sync-1";
-const SW_CACHE = "gs-safety-20260728-realtime-sync-1";
+const ASSET_TOKEN = "20260809-delete-wins-1";
+const SW_CACHE = "gs-safety-20260809-delete-wins-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -194,7 +194,7 @@ function checkRuntimeSource() {
   assertContains(app, "function startRemotePolling()", "polling fallback starter exists");
   assertContains(app, "function stopRemotePolling()", "polling fallback stopper exists");
   assertMatch(app, /if \(remoteRealtimeConnected\(\)\) \{\s*stopRemotePolling\(\);/, "polling stops while realtime is connected");
-  assertMatch(app, /if \(status === "SUBSCRIBED"\) \{\s*stopRemotePolling\(\);\s*return;\s*\}/, "polling stops on realtime subscription");
+  assertMatch(app, /if \(status === "SUBSCRIBED"\) \{[^}]*stopRemotePolling\(\);[^}]*return;[^}]*\}/, "polling stops on realtime subscription");
   assertMatch(app, /startRemotePolling\(\);\s*scheduleRemoteRefresh\("realtime-fallback", REMOTE_REACTIVE_PULL_DELAY_MS\);/, "polling restarts on realtime fallback");
 
   assertContains(app, "function captureFocusedFieldState()", "focused input capture exists");
@@ -222,7 +222,7 @@ function checkRuntimeSource() {
   assertContains(app, 'workPrepRegisterOpen: false', "work prep register state exists");
   assertContains(app, 'workPrepRegisterOpen: state.view === "check" && state.workPrepRegisterOpen', "work prep register route state is preserved");
   assertContains(app, "work-prep-appearance-badge", "work prep appearance time badge exists");
-  assertContains(app, "작업지시 기본 정보", "work prep basic info section exists");
+  assertContains(app, "작업지시서 등록", "work prep registration section exists");
 
   assertNotContains(app, "L/C일 입력 전 비공개", "old L/C private helper text removed");
   assertNotContains(app, "호선 추가/삭제는 수정 모드를 ON으로 전환", "old ship edit notice removed");

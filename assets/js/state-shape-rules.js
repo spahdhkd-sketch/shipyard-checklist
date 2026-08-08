@@ -106,10 +106,123 @@
     return { categories, sections, items };
   }
 
+  function normalizedIdSet(values) {
+    return new Set((Array.isArray(values) ? values : [values])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean));
+  }
+
+  function missingRemoteRowIds(cachedRows, existingIds, pendingIds) {
+    const existing = normalizedIdSet(existingIds);
+    const pending = normalizedIdSet(pendingIds);
+    const missing = [];
+    const seen = new Set();
+    (Array.isArray(cachedRows) ? cachedRows : []).forEach((row) => {
+      const id = String(row?.id || "").trim();
+      if (!id || seen.has(id) || existing.has(id) || pending.has(id)) return;
+      seen.add(id);
+      missing.push(id);
+    });
+    return missing;
+  }
+
+  function reconciledRemoteDeletedRowIds({
+    cachedRows,
+    tombstoneIds,
+    existingIds,
+    pendingIds,
+    preserveUnconfirmedMissing = false,
+  } = {}) {
+    const tombstones = normalizedIdSet(tombstoneIds);
+    const deletedIds = [];
+    const seen = new Set();
+    (Array.isArray(cachedRows) ? cachedRows : []).forEach((row) => {
+      const id = String(row?.id || "").trim();
+      if (!id || seen.has(id) || !tombstones.has(id)) return;
+      seen.add(id);
+      deletedIds.push(id);
+    });
+    if (preserveUnconfirmedMissing) return deletedIds;
+    missingRemoteRowIds(cachedRows, existingIds, pendingIds).forEach((id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      deletedIds.push(id);
+    });
+    return deletedIds;
+  }
+
+  function syncJobRequiresInspectionDeleteWins(job) {
+    if (!job) return false;
+    if (job.type === "full") return true;
+    const keys = Array.isArray(job.keys) ? job.keys : [];
+    return keys.some((key) => key === "inspections" || key === "inspectionItems");
+  }
+
+  function syncJobContainsDeletedRows(job, key, deletedIds) {
+    const targetKey = String(key || "").trim();
+    const removeIds = normalizedIdSet(deletedIds);
+    if (!job || !targetKey || !removeIds.size) return false;
+    if (job.type === "full") return true;
+    const jobIds = Array.isArray(job.rowIdsByKey?.[targetKey]) ? job.rowIdsByKey[targetKey] : [];
+    return jobIds.some((id) => removeIds.has(String(id || "").trim()));
+  }
+
+  function removeRemoteDeletedRows(snapshot, key, deletedIds) {
+    const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+    const removeIds = normalizedIdSet(deletedIds);
+    const rows = Array.isArray(source.rows) ? source.rows : [];
+    const archivedInspections = Array.isArray(source.archivedInspections) ? source.archivedInspections : [];
+    const inspectionItems = Array.isArray(source.inspectionItems) ? source.inspectionItems : [];
+    const selectedHistoryIds = Array.isArray(source.selectedHistoryIds) ? source.selectedHistoryIds : [];
+    const base = {
+      rows,
+      archivedInspections,
+      inspectionItems,
+      selectedHistoryIds,
+      historyDetailId: source.historyDetailId || null,
+      removedItemIds: [],
+      changed: false,
+    };
+    if (!String(key || "").trim() || !removeIds.size) return base;
+
+    const nextRows = rows.filter((row) => !removeIds.has(String(row?.id || "")));
+    if (key !== "inspections") {
+      return {
+        ...base,
+        rows: nextRows,
+        changed: nextRows.length !== rows.length,
+      };
+    }
+
+    const removedItems = inspectionItems.filter((row) => removeIds.has(String(row?.inspectionId || "")));
+    const nextArchivedInspections = archivedInspections.filter((row) => !removeIds.has(String(row?.id || "")));
+    const nextInspectionItems = inspectionItems.filter((row) => !removeIds.has(String(row?.inspectionId || "")));
+    const nextSelectedHistoryIds = selectedHistoryIds.filter((id) => !removeIds.has(String(id || "")));
+    const nextHistoryDetailId = removeIds.has(String(source.historyDetailId || "")) ? null : (source.historyDetailId || null);
+    return {
+      rows: nextRows,
+      archivedInspections: nextArchivedInspections,
+      inspectionItems: nextInspectionItems,
+      selectedHistoryIds: nextSelectedHistoryIds,
+      historyDetailId: nextHistoryDetailId,
+      removedItemIds: removedItems.map((row) => row.id).filter(Boolean),
+      changed: nextRows.length !== rows.length
+        || nextArchivedInspections.length !== archivedInspections.length
+        || nextInspectionItems.length !== inspectionItems.length
+        || nextSelectedHistoryIds.length !== selectedHistoryIds.length
+        || nextHistoryDetailId !== (source.historyDetailId || null),
+    };
+  }
+
   return {
     dedupeChecklistItems,
     dedupeTools,
     dedupeShips,
     migrateOldChecklists,
+    missingRemoteRowIds,
+    reconciledRemoteDeletedRowIds,
+    removeRemoteDeletedRows,
+    syncJobContainsDeletedRows,
+    syncJobRequiresInspectionDeleteWins,
   };
 });

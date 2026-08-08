@@ -1,5 +1,5 @@
-const APP_VERSION = "1.10-20260728-realtime-sync";
-const ASSET_TOKEN = "20260728-realtime-sync-1";
+const APP_VERSION = "1.11-20260809-delete-wins";
+const ASSET_TOKEN = "20260809-delete-wins-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
