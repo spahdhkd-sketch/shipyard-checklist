@@ -74,6 +74,8 @@ declare
   guarded_ids text[];
   guarded_id text;
   has_tombstone boolean;
+  has_live_parents boolean;
+  has_existing_child boolean;
   old_row jsonb;
   new_row jsonb;
 begin
@@ -155,6 +157,45 @@ begin
       message = 'deleted safety inspection history cannot be recreated';
   end if;
 
+  if tg_table_name = 'safety_inspection_items'
+    and tg_op in ('INSERT', 'UPDATE')
+  then
+    select not exists (
+      select 1
+      from pg_catalog.unnest(guarded_ids) as guarded(inspection_id)
+      where not exists (
+        select 1
+        from public.safety_inspections parent
+        where parent.id = guarded.inspection_id
+          and parent.deleted_at is null
+      )
+    )
+    into has_live_parents;
+
+    if not has_live_parents then
+      raise exception using
+        errcode = '23503',
+        message = 'safety inspection children require a live parent';
+    end if;
+  end if;
+
+  if tg_table_name = 'safety_inspections'
+    and tg_op = 'INSERT'
+  then
+    select exists (
+      select 1
+      from public.safety_inspection_items item
+      where item.inspection_id = new_inspection_id
+    )
+    into has_existing_child;
+
+    if has_existing_child then
+      raise exception using
+        errcode = '23514',
+        message = 'safety inspection parents cannot attach to pre-existing children';
+    end if;
+  end if;
+
   return new;
 end;
 $$;
@@ -207,7 +248,13 @@ create policy "public read safety inspection items"
   on public.safety_inspection_items
   for select to anon, authenticated
   using (
-    not exists (
+    exists (
+      select 1
+      from public.safety_inspections parent
+      where parent.id = safety_inspection_items.inspection_id
+        and parent.deleted_at is null
+    )
+    and not exists (
       select 1
       from public.safety_inspection_deletions deletion
       where deletion.inspection_id = safety_inspection_items.inspection_id
@@ -224,6 +271,12 @@ create policy "public insert safety inspection items"
     and char_length(item_id) between 1 and 120
     and char_length(risk) between 1 and 40
     and char_length(text) between 1 and 1000
+    and exists (
+      select 1
+      from public.safety_inspections parent
+      where parent.id = safety_inspection_items.inspection_id
+        and parent.deleted_at is null
+    )
     and not exists (
       select 1
       from public.safety_inspection_deletions deletion
