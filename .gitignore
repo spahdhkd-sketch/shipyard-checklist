@@ -6,6 +6,7 @@ node_modules/
 supabase/.temp/
 visual-verification/
 .tmp-chrome-*/
+.omo/
 docs/quality/claude-cowork-review-2026-05-24.md
 
 # Local env (secrets) - never commit
