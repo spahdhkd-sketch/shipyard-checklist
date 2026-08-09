@@ -76,12 +76,13 @@
         done: { strong: "오늘 점검을 모두 마쳤습니다", span: `${myCheck.total}건 제출 완료 · 안전한 하루 되세요`, btn: "이력 보기", view: "history", disabled: false },
       };
       const line = lines[myCheck.status] || lines.none;
+      const headline = "운영 릴리스 패키지 실배포 검증";
       return `<section class="ops-my-check is-${esc(myCheck.status)}" aria-labelledby="dashboardMyCheckHeading">
         ${sectionHeading("dashboardMyCheckHeading", "오늘 내 점검")}
         <div class="ops-my-check-card">
           <div class="ops-my-check-info">
-            <strong>${line.strong}</strong>
-            ${line.span ? `<span>${line.span}</span>` : ""}
+            <strong>${headline}</strong>
+            <span>${line.strong}${line.span ? ` · ${line.span}` : ""}</span>
           </div>
           <button class="btn ops-my-check-btn" data-view="${line.view}" type="button" ${line.disabled ? `disabled title="${esc(myCheck.lockMessage)}"` : ""}>${line.btn}</button>
         </div>

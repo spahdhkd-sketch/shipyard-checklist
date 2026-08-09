@@ -46,6 +46,19 @@ assert(html.includes('<div class="mini-stage" style="--dot:#111111">'));
 assert(html.includes('<div class="small muted">탑재</div>'));
 assert(html.includes('<i data-icon="board"></i>'));
 
+const myCheckHtml = dashboardView.renderDashboardView({
+  myCheck: {
+    status: "ready",
+    name: "박테스트",
+    pending: 3,
+    nextLabel: "DRY POWDER SYSTEM 작동 검사 및 약재 충전",
+  },
+});
+assert(myCheckHtml.includes("<strong>운영 릴리스 패키지 실배포 검증</strong>"));
+assert(myCheckHtml.includes("박테스트님, 미점검 3건"));
+assert(myCheckHtml.includes("다음 점검: DRY POWDER SYSTEM 작동 검사 및 약재 충전"));
+assert(myCheckHtml.includes('data-view="check"'));
+
 const unsafeZero = dashboardView.renderDashboardView({
   unsafeCount: 0,
   processStages: [],
