@@ -704,6 +704,12 @@ async function main() {
   let text = await bodyText(page);
   check("홈: '오늘 내 점검' 카드 표시", text.includes("오늘 내 점검"));
   check("홈: 로그인 작업자 미점검 안내", /홍길동님, 미점검 1건/.test(text));
+  const myCheckCard = await page.$eval(".ops-my-check-card", (element) => ({
+    headline: element.querySelector("strong")?.textContent?.trim() || "",
+    backgroundColor: getComputedStyle(element).backgroundColor,
+  }));
+  check("홈: 운영 릴리스 패키지 문구 반영", myCheckCard.headline === "운영 릴리스 패키지 실배포 검증");
+  check("홈: 운영 릴리스 패키지 배경색 반영", myCheckCard.backgroundColor === "rgb(255, 248, 231)");
 
   // 1-2. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
   await goto("ships.html");
