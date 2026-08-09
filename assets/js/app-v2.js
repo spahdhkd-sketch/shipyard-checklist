@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.11-20260809-delete-wins";
+    const APP_VERSION = "1.11.1-20260809-delete-wins";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -14,6 +14,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const REMOTE_PULL_THROTTLE_MS = 10 * 1000;
     const REMOTE_DELETE_RECONCILE_MS = 60 * 1000;
     const REMOTE_DELETE_RECONCILE_BATCH_SIZE = 50;
+    const INSPECTION_DELETION_REALTIME_READY_TIMEOUT_MS = 2000;
     const INSPECTION_DELETION_TABLE = "safety_inspection_deletions";
     const REMOTE_POLL_INTERVAL_MS = 15 * 1000;
     const REMOTE_REACTIVE_PULL_DELAY_MS = 700;
@@ -2973,11 +2974,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       window.addEventListener("popstate", restoreRouteState);
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
+        await startRemoteSync();
         syncServerClock();
         await flushPendingSyncQueue();
         await flushPendingMissingMaterialNotifications();
         await pullRemote({ force: true });
-        startRemoteSync();
       }
     }
 
@@ -12695,9 +12696,37 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         && /(does not exist|could not find|schema cache|relation)/.test(text);
     }
 
+    function clearInspectionDeletionRealtimeChannel() {
+      const activeChannel = state.inspectionDeletionRealtimeChannel;
+      state.inspectionDeletionRealtimeChannel = null;
+      state.inspectionDeletionRealtimeStatus = "";
+      if (activeChannel) {
+        try { supabaseClient()?.removeChannel(activeChannel); } catch (_) {}
+      }
+    }
+
+    function waitForInspectionDeletionRealtimeReady() {
+      if (state.inspectionDeletionTableAvailable === false) return Promise.resolve(false);
+      if (state.inspectionDeletionRealtimeStatus === "SUBSCRIBED") return Promise.resolve(true);
+      const startedAt = Date.now();
+      return new Promise((resolve) => {
+        const check = () => {
+          if (state.inspectionDeletionRealtimeStatus === "SUBSCRIBED") return resolve(true);
+          if (state.inspectionDeletionTableAvailable === false
+            || Date.now() - startedAt >= INSPECTION_DELETION_REALTIME_READY_TIMEOUT_MS) {
+            return resolve(false);
+          }
+          setTimeout(check, 25);
+        };
+        check();
+      });
+    }
+
     function startInspectionDeletionRealtime() {
+      if (state.inspectionDeletionTableAvailable === false) return Promise.resolve(false);
       const client = supabaseClient();
-      if (!client || state.inspectionDeletionRealtimeChannel || typeof client.channel !== "function") return;
+      if (!client || typeof client.channel !== "function") return Promise.resolve(false);
+      if (state.inspectionDeletionRealtimeChannel) return waitForInspectionDeletionRealtimeReady();
       let channel = client.channel("gs-safety-inspection-deletions");
       channel = channel.on(
         "postgres_changes",
@@ -12710,16 +12739,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.inspectionDeletionRealtimeChannel = channel.subscribe((status) => {
         state.inspectionDeletionRealtimeStatus = status;
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          const activeChannel = state.inspectionDeletionRealtimeChannel;
-          state.inspectionDeletionRealtimeChannel = null;
-          state.inspectionDeletionRealtimeStatus = "";
-          if (activeChannel) {
-            try { supabaseClient()?.removeChannel(activeChannel); } catch (_) {}
-          }
+          clearInspectionDeletionRealtimeChannel();
           scheduleRemoteRefresh("inspection-deletion-realtime-fallback", 0);
-          setTimeout(startInspectionDeletionRealtime, 5000);
+          if (state.inspectionDeletionTableAvailable !== false) {
+            setTimeout(startInspectionDeletionRealtime, 5000);
+          }
         }
       });
+      return waitForInspectionDeletionRealtimeReady();
     }
 
     async function reconcileDeletedInspectionRows(client) {
@@ -12767,6 +12794,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         } catch (error) {
           if (!isMissingInspectionDeletionTableError(error)) throw error;
           state.inspectionDeletionTableAvailable = false;
+          clearInspectionDeletionRealtimeChannel();
         }
 
         const existingIds = [];
@@ -13340,7 +13368,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           if (state.remoteRealtimeRetryTimer) clearTimeout(state.remoteRealtimeRetryTimer);
           state.remoteRealtimeRetryTimer = null;
           stopRemotePolling();
-          pullRealtimeGap("subscribed");
+          startInspectionDeletionRealtime().then(() => pullRealtimeGap("subscribed"));
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
@@ -13358,7 +13386,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ? client.realtime.isConnected()
         : remoteRealtimeConnected();
       if (remoteRealtimeConnected() && socketConnected) {
-        if (state.inspectionDeletionTableAvailable === true) startInspectionDeletionRealtime();
+        startInspectionDeletionRealtime();
         return;
       }
       if (state.remoteRealtimeChannel) clearRemoteRealtimeChannel();
@@ -13367,9 +13395,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function startRemoteSync() {
+      const inspectionDeletionRealtimeReady = startInspectionDeletionRealtime();
       startRemoteRealtime();
-      if (state.inspectionDeletionTableAvailable === true) startInspectionDeletionRealtime();
       if (!state.remoteRealtimeChannel) startRemotePolling();
+      return inspectionDeletionRealtimeReady;
     }
 
     function remoteErrorMessage(error) {

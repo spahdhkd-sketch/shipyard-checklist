@@ -12,10 +12,10 @@ const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 
-const APP_VERSION = "1.11-20260809-delete-wins";
+const APP_VERSION = "1.11.1-20260809-delete-wins";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260809-delete-wins-1";
-const SW_CACHE = "gs-safety-20260809-delete-wins-1";
+const ASSET_TOKEN = "20260809-delete-wins-2";
+const SW_CACHE = "gs-safety-20260809-delete-wins-2";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [

@@ -151,7 +151,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-MwCd3nt0T9czEt1NzePJQDM6TT99C3GpRQ84GpyeJXg=' 'sha256-lXYMoSXJ8RFBaTdYraYeRYsU28NLs3X6MPmqtDfwdNo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://yuuroocvxvzgmsdeeiws.supabase.co; connect-src 'self' https://yuuroocvxvzgmsdeeiws.supabase.co wss://yuuroocvxvzgmsdeeiws.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' 'sha256-MwCd3nt0T9czEt1NzePJQDM6TT99C3GpRQ84GpyeJXg=' 'sha256-lXYMoSXJ8RFBaTdYraYeRYsU28NLs3X6MPmqtDfwdNo=' 'sha256-YhQZ0nSGi8c7aI/NWA4/yYRj83ScdmpcU6tVbp7RA6c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://yuuroocvxvzgmsdeeiws.supabase.co; connect-src 'self' https://yuuroocvxvzgmsdeeiws.supabase.co wss://yuuroocvxvzgmsdeeiws.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'"
         },
         {
           "key": "Referrer-Policy",

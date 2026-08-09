@@ -167,7 +167,7 @@ async function main() {
       await newPage.evaluateOnNewDocument((realtimeInspectionRows) => {
         const handlers = [];
         const statusCallbacks = [];
-        const metrics = { reads: 0, removedChannels: 0, tables: [] };
+        const metrics = { reads: 0, removedChannels: 0, tables: [], channels: {}, timeline: [] };
         let socketConnected = true;
         const queryFor = (table) => {
           const query = {
@@ -187,24 +187,45 @@ async function main() {
           return query;
         };
         const client = {
-          from: (table) => queryFor(table),
-          channel: () => {
+          from: (table) => {
+            metrics.timeline.push({ type: "from", table });
+            return queryFor(table);
+          },
+          channel: (name) => {
+            const channelState = metrics.channels[name] || (metrics.channels[name] = {
+              on: [],
+              statuses: [],
+              subscribeCalls: 0,
+              subscribed: false,
+            });
             const channel = {
-              on(_kind, filter, handler) {
-                handlers.push({ table: filter.table, handler });
+              __realtimeTestState: channelState,
+              on(kind, filter, handler) {
+                handlers.push({ channelState, table: filter.table, handler });
+                channelState.on.push({ kind, filter });
                 metrics.tables.push(filter.table);
                 return channel;
               },
               subscribe(callback) {
-                statusCallbacks.push(callback);
-                queueMicrotask(() => callback("SUBSCRIBED"));
+                metrics.timeline.push({ type: "subscribe-call", channel: name });
+                channelState.subscribeCalls += 1;
+                channelState.subscribed = true;
+                statusCallbacks.push({ channelState, callback });
+                const notifySubscribed = () => {
+                  channelState.statuses.push("SUBSCRIBED");
+                  metrics.timeline.push({ type: "status", channel: name, status: "SUBSCRIBED" });
+                  callback("SUBSCRIBED");
+                };
+                if (name === "gs-safety-inspection-deletions") setTimeout(notifySubscribed, 50);
+                else queueMicrotask(notifySubscribed);
                 return channel;
               },
             };
             return channel;
           },
-          removeChannel() {
+          removeChannel(channel) {
             metrics.removedChannels += 1;
+            if (channel?.__realtimeTestState) channel.__realtimeTestState.subscribed = false;
           },
           realtime: { isConnected: () => socketConnected },
           functions: { invoke: async () => ({ data: { ok: true }, error: null }) },
@@ -218,11 +239,16 @@ async function main() {
         window.__realtimeTest = {
           metrics,
           emit(table, payload) {
-            handlers.filter((entry) => entry.table === table).forEach((entry) => entry.handler(payload));
+            handlers
+              .filter((entry) => entry.channelState.subscribed && entry.table === table)
+              .forEach((entry) => entry.handler(payload));
           },
           fail(status = "CHANNEL_ERROR") {
             socketConnected = false;
-            statusCallbacks.forEach((callback) => callback(status));
+            statusCallbacks.forEach(({ channelState, callback }) => {
+              channelState.statuses.push(status);
+              callback(status);
+            });
           },
         };
       }, options.realtimeInspectionRows || []);
@@ -438,6 +464,39 @@ async function main() {
     );
     const subscribedTables = await realtimePage.evaluate(() => [...new Set(window.__realtimeTest.metrics.tables)].sort());
     const subscriptionsOk = JSON.stringify(subscribedTables) === JSON.stringify(expectedTables);
+    await realtimePage.waitForFunction(
+      () => window.__realtimeTest?.metrics?.timeline?.some((entry) =>
+        entry.type === "status"
+        && entry.channel === "gs-safety-inspection-deletions"
+        && entry.status === "SUBSCRIBED"),
+      { timeout: 5000 },
+    );
+    await realtimePage.waitForFunction(
+      () => window.__realtimeTest?.metrics?.timeline?.some((entry) => entry.type === "from"),
+      { timeout: 5000 },
+    );
+    const tombstoneStatusBeforeFirstFromRead = await realtimePage.evaluate(() => {
+      const timeline = window.__realtimeTest?.metrics?.timeline || [];
+      const tombstoneStatusIndex = timeline.findIndex((entry) =>
+        entry.type === "status"
+        && entry.channel === "gs-safety-inspection-deletions"
+        && entry.status === "SUBSCRIBED");
+      const firstFromReadIndex = timeline.findIndex((entry) => entry.type === "from");
+      return tombstoneStatusIndex >= 0 && firstFromReadIndex >= 0 && tombstoneStatusIndex < firstFromReadIndex;
+    });
+    if (!tombstoneStatusBeforeFirstFromRead) {
+      const timeline = await realtimePage.evaluate(() => window.__realtimeTest?.metrics?.timeline || []);
+      console.error(`Realtime startup ordering failed: ${JSON.stringify(timeline)}`);
+    }
+    const tombstoneChannelSubscriptionOk = await realtimePage.evaluate(() => {
+      const channel = window.__realtimeTest?.metrics?.channels?.["gs-safety-inspection-deletions"];
+      const expectedFilter = { event: "*", schema: "public", table: "safety_inspection_deletions" };
+      return channel?.subscribeCalls === 1
+        && channel?.subscribed === true
+        && channel?.on?.length === 1
+        && channel.on[0]?.kind === "postgres_changes"
+        && JSON.stringify(channel.on[0]?.filter) === JSON.stringify(expectedFilter);
+    });
 
     await realtimePage.evaluate((storagePrefix, createdAt) => {
       window.__realtimeTest.emit("unsafe_issues", {
@@ -496,7 +555,7 @@ async function main() {
     const fallbackOk = await realtimePage.evaluate(() =>
       window.__realtimeTest.metrics.removedChannels > 0 && window.__realtimeTest.metrics.reads > 0);
     await realtimePage.close();
-    return subscriptionsOk && insertVisible && deleteVisible && tombstoneDeleteVisible && fallbackOk;
+    return subscriptionsOk && tombstoneStatusBeforeFirstFromRead && tombstoneChannelSubscriptionOk && insertVisible && deleteVisible && tombstoneDeleteVisible && fallbackOk;
   };
 
   const runWorkPrepSyncFlow = async () => {
@@ -583,11 +642,11 @@ async function main() {
           script.src.includes("/assets/dist/js/app-v2.min.js") && script.src.includes(`v=${expectedToken}`)),
         expectedVersion,
       };
-    }, appVersion, "20260809-delete-wins-1");
+    }, appVersion, "20260809-delete-wins-2");
     const ok = result.controlled
       && result.active
       && result.version === result.expectedVersion
-      && result.cache === "gs-safety-20260809-delete-wins-1"
+      && result.cache === "gs-safety-20260809-delete-wins-2"
       && result.hasCurrentCache
       && !result.hasStaleCache
       && result.manifestVersioned

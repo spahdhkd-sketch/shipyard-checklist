@@ -22,6 +22,26 @@ expectMatch(
   "boot synchronization must start Realtime and retain polling fallback",
 );
 expectMatch(
+  /async function boot\(\)[\s\S]*if \(isSyncConfigured\(\)\) \{[\s\S]*await startRemoteSync\(\)[\s\S]*await pullRemote\(\{ force: true \}\)/,
+  "boot must await the Realtime deletion channel before the first pull can expose remote rows",
+);
+expectMatch(
+  /const INSPECTION_DELETION_REALTIME_READY_TIMEOUT_MS = \d+[\s\S]*function waitForInspectionDeletionRealtimeReady\(\)/,
+  "tombstone startup must have a bounded readiness wait",
+);
+expectMatch(
+  /function startInspectionDeletionRealtime\(\) \{[\s\S]{0,180}inspectionDeletionTableAvailable === false[\s\S]{0,60}return/,
+  "an explicitly unsupported server must suppress the early tombstone channel",
+);
+expectMatch(
+  /function startRemoteSync\(\) \{[\s\S]{0,160}startInspectionDeletionRealtime\(\)[\s\S]{0,80}startRemoteRealtime\(\)/,
+  "boot must join the tombstone channel before the general Realtime channel",
+);
+expectMatch(
+  /status === "SUBSCRIBED"[\s\S]{0,320}startInspectionDeletionRealtime\(\)\.then\(\(\) => pullRealtimeGap\("subscribed"\)\)/,
+  "the general Realtime gap pull must wait for tombstone subscription readiness",
+);
+expectMatch(
   /realtimeRemoteConfigs\(\)\.forEach\(\(config\) =>[\s\S]*postgres_changes[\s\S]*handleRemoteRealtimeChange\(config, payload\)/,
   "Realtime events must be applied row-by-row instead of triggering a full pull",
 );
