@@ -465,6 +465,19 @@ try {
       (value) => value.ready,
       "focused work type manager"
     );
+    const readThemeColors = () => cdp.send("Runtime.evaluate", {
+      returnByValue: true,
+      expression: `(() => {
+        const body = getComputedStyle(document.body);
+        const manager = getComputedStyle(document.querySelector('.work-type-manager'));
+        return { bodyBackground: body.backgroundColor, bodyColor: body.color, managerBackground: manager.backgroundColor };
+      })()`,
+    });
+    await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
+    const lightThemeResult = await readThemeColors();
+    await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+    const darkPreferenceResult = await readThemeColors();
+    await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
   const workTypeDesktopResult = await cdp.send("Runtime.evaluate", {
     returnByValue: true,
     expression: `(() => {
@@ -592,11 +605,13 @@ try {
     assert(workTypeSectionsResult.result.value.cards === 2 && workTypeSectionsResult.result.value.expandedBodies === 1, "Section manager should expand one section at a time", workTypeSectionsResult.result.value);
     assert(workTypeSectionsResult.result.value.compactRows === 2 && workTypeSectionsResult.result.value.editRows === 0, "Section manager should start with compact item rows", workTypeSectionsResult.result.value);
     assert(workTypeItemEditResult.result.value.editRows === 1 && workTypeItemEditResult.result.value.cancelVisible, "Item edit should open only the selected row", workTypeItemEditResult.result.value);
+    assert(JSON.stringify(lightThemeResult.result.value) === JSON.stringify(darkPreferenceResult.result.value), "Dark OS preference should not change site colors", { light: lightThemeResult.result.value, dark: darkPreferenceResult.result.value });
     cdpIsOpen = false;
     cdp.close();
     chrome.kill();
     console.log(JSON.stringify({
       categoryRename: categoryRenameResult.result.value,
+      theme: { light: lightThemeResult.result.value, darkPreference: darkPreferenceResult.result.value },
       desktop: workTypeDesktopResult.result.value,
       copy: workTypeCopyResult.result.value,
       mobile: workTypeMobileResult.result.value,

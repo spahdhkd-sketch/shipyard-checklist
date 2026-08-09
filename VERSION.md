@@ -1,14 +1,15 @@
 # Version
 
-Current version: `1.12.0-20260810`
+Current version: `1.12.1-20260810`
 
-Recorded at: `2026-08-10 (Work type management UI and tool-setting copy release)`
+Recorded at: `2026-08-10 (Light-theme-only release)`
 
 Baseline commit: `pending local release`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
 - Adds staged copying of another work type's active tool assignments; changes apply only after explicit save.
@@ -39,5 +40,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260810-work-type-manager-1` and service-worker version
-  `1.12.0-20260810-work-type-manager` so installed clients refresh safely.
+- Issues asset token `20260810-light-only-1` and service-worker version
+  `1.12.1-20260810-light-only` so installed clients refresh safely.
