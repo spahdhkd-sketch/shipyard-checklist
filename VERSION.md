@@ -1,14 +1,18 @@
 # Version
 
-Current version: `1.11.1-20260809`
+Current version: `1.12.0-20260810`
 
-Recorded at: `2026-07-28 (Realtime synchronization and PWA refresh release)`
+Recorded at: `2026-08-10 (Work type management UI and tool-setting copy release)`
 
 Baseline commit: `pending local release`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
+- Separates basic information, tool assignments, and section/item administration into focused tabs.
+- Adds staged copying of another work type's active tool assignments; changes apply only after explicit save.
+- Expands one section and one item editor at a time to reduce form density and scrolling.
 - Starts a constrained Realtime channel for inspections, work preparation, unsafe issues, missing materials, and ships.
 - Applies INSERT/UPDATE/DELETE events directly and falls back to cursor-based polling after channel failures.
 - Reconnects after tab wake and performs a cursor-based gap pull before continuing live updates.
@@ -35,5 +39,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260809-delete-wins-2` and service-worker version
-  `1.11.1-20260809-delete-wins` so installed clients refresh safely.
+- Issues asset token `20260810-work-type-manager-1` and service-worker version
+  `1.12.0-20260810-work-type-manager` so installed clients refresh safely.

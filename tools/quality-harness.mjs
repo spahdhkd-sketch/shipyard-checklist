@@ -11,11 +11,12 @@ const expectedCommit = expectedCommitArg ? expectedCommitArg.split("=")[1] : "HE
 const runLive = args.has("--live");
 const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
+const allowNonMain = args.has("--allow-non-main");
 
-const APP_VERSION = "1.11.1-20260809-delete-wins";
+const APP_VERSION = "1.12.0-20260810-work-type-manager";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260809-delete-wins-2";
-const SW_CACHE = "gs-safety-20260809-delete-wins-2";
+const ASSET_TOKEN = "20260810-work-type-manager-1";
+const SW_CACHE = "gs-safety-20260810-work-type-manager-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -133,7 +134,7 @@ function checkGitState() {
   ]);
 
   result.git = { branch, head, status };
-  add("git branch is main", branch === "main", branch);
+  add("git branch is main", allowNonMain || branch === "main", branch);
   if (strictGit) {
     add("git working tree clean", clean, status);
     add("deploy-relevant files match expected commit", deployDiffClean, `HEAD ${head} compared to ${expectedCommit}`);

@@ -4,6 +4,7 @@ const {
   dedupeChecklistItems,
   dedupeTools,
   dedupeShips,
+  copyCategoryToolIds,
   migrateOldChecklists,
   removeRemoteDeletedRows,
   missingRemoteRowIds,
@@ -42,6 +43,13 @@ assert.strictEqual(tools.find((t) => t.id === "t2").deleted, true);
 assert.strictEqual(tools.find((t) => t.id === "t3").deleted, undefined);
 assert.strictEqual(tools.find((t) => t.id === "t4").deleted, undefined);
 assert.strictEqual(tools.find((t) => t.id === "t5").deleted, true);
+
+assert.deepStrictEqual(copyCategoryToolIds(
+  ["tool-2", "tool-1", "tool-2", "deleted-tool", "", null],
+  ["tool-1", "tool-2", "tool-3"],
+), ["tool-2", "tool-1"]);
+assert.deepStrictEqual(copyCategoryToolIds(null, ["tool-1"]), []);
+assert.deepStrictEqual(copyCategoryToolIds(["tool-1"], null), []);
 
 // --- dedupeShips (in-place mutation + reference preserved) ---
 const ships = [

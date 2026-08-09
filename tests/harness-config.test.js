@@ -33,11 +33,11 @@ const duplicateAliases = [
 assert.match(harness, /GS Safety Quality Harness/);
 assert.match(harness, /https:\/\/gs-safety-checklist\.vercel\.app/);
 assert.match(harness, /yuuroocvxvzgmsdeeiws/);
-assert.match(harness, /1\.11\.1-20260809-delete-wins/);
+assert.match(harness, /1\.12\.0-20260810-work-type-manager/);
 assert.match(harness, /VERSION_LOADING_COPY/);
 assert.doesNotMatch(harness, /version 0\.8/);
-assert.match(harness, /20260809-delete-wins-2/);
-assert.match(harness, /gs-safety-20260809-delete-wins-2/);
+assert.match(harness, /20260810-work-type-manager-1/);
+assert.match(harness, /gs-safety-20260810-work-type-manager-1/);
 assert.match(harness, /ADMIN_PREENTRY_WORKER_POSITIONS/);
 assert.match(harness, /canWorkerPreEnterAdminMode/);
 assert.match(harness, /ship-date-field \\.input/);
@@ -55,6 +55,7 @@ assert.match(harness, /DUPLICATE_VERCEL_ALIASES/);
 assert.match(harness, /live duplicate alias root is closed/);
 assert.match(harness, /--strict-git/);
 assert.match(harness, /--live/);
+assert.match(harness, /--allow-non-main/);
 assert.doesNotMatch(harness, /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9/);
 
 for (const alias of duplicateAliases) {

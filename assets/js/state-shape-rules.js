@@ -112,6 +112,14 @@
       .filter(Boolean));
   }
 
+  function copyCategoryToolIds(sourceToolIds, availableToolIds) {
+    const available = normalizedIdSet(Array.isArray(availableToolIds) ? availableToolIds : []);
+    const seen = new Set();
+    return (Array.isArray(sourceToolIds) ? sourceToolIds : [])
+      .map((value) => String(value || "").trim())
+      .filter((id) => id && available.has(id) && !seen.has(id) && seen.add(id));
+  }
+
   function missingRemoteRowIds(cachedRows, existingIds, pendingIds) {
     const existing = normalizedIdSet(existingIds);
     const pending = normalizedIdSet(pendingIds);
@@ -218,6 +226,7 @@
     dedupeChecklistItems,
     dedupeTools,
     dedupeShips,
+    copyCategoryToolIds,
     migrateOldChecklists,
     missingRemoteRowIds,
     reconciledRemoteDeletedRowIds,

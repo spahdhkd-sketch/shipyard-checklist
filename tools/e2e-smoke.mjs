@@ -642,11 +642,11 @@ async function main() {
           script.src.includes("/assets/dist/js/app-v2.min.js") && script.src.includes(`v=${expectedToken}`)),
         expectedVersion,
       };
-    }, appVersion, "20260809-delete-wins-2");
+    }, appVersion, "20260810-work-type-manager-1");
     const ok = result.controlled
       && result.active
       && result.version === result.expectedVersion
-      && result.cache === "gs-safety-20260809-delete-wins-2"
+      && result.cache === "gs-safety-20260810-work-type-manager-1"
       && result.hasCurrentCache
       && !result.hasStaleCache
       && result.manifestVersioned

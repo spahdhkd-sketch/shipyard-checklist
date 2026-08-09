@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.11.1-20260809-delete-wins";
+    const APP_VERSION = "1.12.0-20260810-work-type-manager";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -2721,6 +2721,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       unsafePhotoUploadingIds: [],
       selectedCategoryId: null,
       manageCategoryId: null,
+      workTypeManagerSelectedId: null,
+      workTypeManagerTab: "summary",
+      workTypeManagerMobileDetailOpen: false,
+      workTypeSearchQuery: "",
+      categoryToolSearchQuery: "",
       editCategoryId: null,
       editSectionId: null,
       editItemId: null,
@@ -2729,9 +2734,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toolAddSubmitting: false,
       toolManagerOpen: false,
       categoryAddOpen: false,
-      categoryToolAssignmentOpenIds: [],
       categoryToolDrafts: {},
       openAddItemSectionIds: [],
+      openManageSectionId: null,
       categoryVisualOpen: false,
       workerFallbackOpen: false,
       pledgeWorkerCollapsed: false,
@@ -3681,6 +3686,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function applyClientSearchFilters() {
       applyShipSearchFilter();
       applyToolSearchFilter();
+      applyWorkTypeSearchFilter();
+      applyCategoryToolSearchFilter();
       applyLoginWorkerSearchFilter();
     }
 
@@ -3725,6 +3732,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const counter = document.querySelector("[data-tool-search-count]");
       if (counter) counter.textContent = query ? `${visibleCount}/${cards.length}개` : `${cards.length}개`;
       const empty = document.querySelector("[data-tool-search-empty]");
+      if (empty) empty.hidden = visibleCount > 0;
+    }
+
+    function applyWorkTypeSearchFilter() {
+      const rows = Array.from(document.querySelectorAll("[data-work-type-search-item]"));
+      if (!rows.length) return;
+      const query = normalizeSearchQuery(state.workTypeSearchQuery);
+      let visibleCount = 0;
+      rows.forEach((row) => {
+        const matches = !query || (row.dataset.workTypeSearchText || "").includes(query);
+        row.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
+      const counter = document.querySelector("[data-work-type-search-count]");
+      if (counter) counter.textContent = query ? `${visibleCount}/${rows.length}개` : `${rows.length}개`;
+      const empty = document.querySelector("[data-work-type-search-empty]");
+      if (empty) empty.hidden = visibleCount > 0;
+    }
+
+    function applyCategoryToolSearchFilter() {
+      const options = Array.from(document.querySelectorAll("[data-category-tool-search-item]"));
+      if (!options.length) return;
+      const query = normalizeSearchQuery(state.categoryToolSearchQuery);
+      let visibleCount = 0;
+      options.forEach((option) => {
+        const matches = !query || (option.dataset.categoryToolSearchText || "").includes(query);
+        option.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
+      const counter = document.querySelector("[data-category-tool-search-count]");
+      if (counter) counter.textContent = query ? `${visibleCount}/${options.length}개` : `${options.length}개`;
+      const empty = document.querySelector("[data-category-tool-search-empty]");
       if (empty) empty.hidden = visibleCount > 0;
     }
 
@@ -6097,7 +6136,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderItems() {
       if (!state.manageCategoryId) {
         return SCREEN_VIEWS.renderItemManagerHomeView({
-          pageHeadHtml: pageHead("항목 관리", "공기구를 등록하고, 작업 유형별로 작업자에게 보일 공기구를 지정합니다.", adminToggleButton()),
+          pageHeadHtml: pageHead("작업 유형 관리", "작업 유형별 기본 정보, 공기구, 섹션과 점검 항목을 한곳에서 관리합니다.", adminToggleButton()),
           sessionLabel: currentWorkerSessionLabel(),
           logoutButtonHtml: logoutButton(),
           toolManagerShellHtml: renderToolManagerShell(),
@@ -8102,6 +8141,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderSectionManager(cat, section) {
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
       const addOpen = state.openAddItemSectionIds.includes(section.id);
+      const expanded = state.openManageSectionId === section.id;
       return SCREEN_VIEWS.renderSectionManagerView({
         sectionId: section.id,
         sectionTitle: section.title,
@@ -8109,13 +8149,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         frequency: section.frequency,
         severity: section.severity,
         editing: state.editSectionId === section.id,
+        expanded,
         addOpen,
         adminMode: state.adminMode,
         moreToggleHtml: moreToggle(`data-toggle-add-item="${esc(section.id)}"`, addOpen),
         visibilityOptionsHtml: addOpen ? visibilityConditionOptions("항상 표시") : "",
         toolPickerHtml: addOpen ? renderItemToolPicker({ groupId: `add_${section.id}`, categoryId: cat.id, selectedIds: [] }) : "",
         rows: items.map((row) => ({
-          html: state.adminMode ? renderEditableItemRow(row) : "",
+          html: state.adminMode ? (state.editItemId === row.id ? renderEditableItemRow(row) : renderManageItemSummaryRow(row)) : "",
           text: row.text,
           requiredLabel: row.required ? "제출 필수 항목" : "일반 항목",
           visibilityLabel: describeItemVisibility(row),
@@ -8158,6 +8199,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         <div class="item-actions manage-actions">
           <button class="btn" data-save-item="${row.id}" type="button">저장</button>
+          <button class="btn-light" data-action="cancel-edit-item" type="button">취소</button>
           <button class="btn-danger" data-delete-item="${row.id}" type="button">삭제</button>
         </div>
       </div>`;
@@ -8190,7 +8232,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${tools.length ? `<div class="category-tool-options">
           ${tools.map((tool) => {
             const inputId = `categoryTool_${groupId}_${tool.id}`;
-            return `<label class="item-tool-option" for="${esc(inputId)}">
+            return `<label class="item-tool-option" for="${esc(inputId)}" data-category-tool-search-item data-category-tool-search-text="${esc(normalizeSearchQuery(`${tool.name} ${tool.nature}`))}">
               <input id="${esc(inputId)}" type="checkbox" value="${esc(tool.id)}" data-category-tool-group="${esc(groupId)}" ${selected.has(tool.id) ? "checked" : ""} ${state.adminMode ? "" : "disabled"} />
               <span>${esc(tool.name)}</span>
               ${natureBadge(tool.nature)}
@@ -8203,38 +8245,124 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderCategoryToolAssignments() {
       const categories = state.categories.slice().sort(byOrder);
-      const tools = activeTools();
       if (!categories.length) return `<div class="empty compact-empty">등록된 작업 유형이 없습니다. 먼저 작업 유형을 추가하세요.</div>`;
-      return `<div class="category-tool-assignment-list">
-        ${categories.map((cat) => {
-          const selectedToolIds = categoryToolDraftIds(cat.id, cat.toolIds);
-          const selectedCount = selectedToolIds.length;
-          const expanded = state.categoryToolAssignmentOpenIds.includes(cat.id);
-          const editingCategory = state.editCategoryId === cat.id;
-          return `<article class="category-tool-assignment-row" data-toggle-category-tools="${esc(cat.id)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" style="--accent:${esc(categoryAccent(cat))}">
-            <div class="category-tool-assignment-head">
-              <span class="category-tool-assignment-icon">${categoryVisual(cat)}</span>
-              <div class="category-tool-assignment-copy">
-                <strong>${esc(cat.label)}</strong>
-                <span>${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${esc(normalizeToolNature(cat.toolNature))}</span>
-              </div>
-              <em>${selectedCount ? `${selectedCount}개 지정` : "전체 표시"}</em>
-              ${renderCategoryToggleImage(expanded, cat)}
-            </div>
-            ${editingCategory ? renderCategoryEditPanel(cat) : ""}
-            ${expanded ? (tools.length ? renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: selectedToolIds }) : `<div class="notice">등록된 공기구/준비물이 없습니다. 먼저 공기구를 추가하세요.</div>`) : renderCategoryToolSummary(selectedToolIds)}
-            <div class="category-tool-assignment-actions">
-              ${expanded ? `<button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 지정 저장</button>` : ""}
-              ${editingCategory ? `
-                <button class="btn" data-save-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">수정 저장</button>
-                <button class="btn-light" data-action="cancel-edit-category" type="button">취소</button>` : `
-                <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션/항목 관리</button>
-                <button class="btn-light" data-edit-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">수정</button>
-                <button class="btn-danger" data-delete-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">삭제</button>`}
-            </div>
-          </article>`;
-        }).join("")}
+      const selectedCategory = categoryById(state.workTypeManagerSelectedId) || categories[0];
+      state.workTypeManagerSelectedId = selectedCategory.id;
+      const selectedToolIds = categoryToolDraftIds(selectedCategory.id, selectedCategory.toolIds);
+      return SCREEN_VIEWS.renderWorkTypeManagerView({
+        searchQuery: state.workTypeSearchQuery,
+        mobileDetailOpen: state.workTypeManagerMobileDetailOpen,
+        categories: categories.map((cat) => ({
+          id: cat.id,
+          label: cat.label,
+          meta: `${sectionsFor(cat.id).length}개 섹션 · ${activeItems(cat.id).length}개 항목 · ${normalizeToolNature(cat.toolNature)}`,
+          countLabel: sanitizeToolIds(cat.toolIds).length ? `${sanitizeToolIds(cat.toolIds).length}개 지정` : "전체 표시",
+          searchText: normalizeSearchQuery(`${cat.label} ${cat.toolNature}`),
+          active: cat.id === selectedCategory.id,
+          accent: categoryAccent(cat),
+          iconHtml: categoryVisual(cat),
+        })),
+        detailHtml: renderWorkTypeDetail(selectedCategory, selectedToolIds, categories),
+      });
+    }
+
+    function renderWorkTypeDetail(cat, selectedToolIds, categories) {
+      const tab = ["summary", "tools", "sections"].includes(state.workTypeManagerTab) ? state.workTypeManagerTab : "summary";
+      const sections = sectionsFor(cat.id);
+      const items = activeItems(cat.id);
+      const tabs = [
+        ["summary", "기본 정보"],
+        ["tools", `공기구 ${selectedToolIds.length}`],
+        ["sections", `섹션·항목 ${items.length}`],
+      ];
+      return `<div class="work-type-detail-shell" style="--accent:${esc(categoryAccent(cat))}">
+        <button class="work-type-mobile-back" data-action="back-work-type-list" type="button">‹ 작업 유형 목록</button>
+        <header class="work-type-detail-head">
+          <span class="work-type-detail-icon">${categoryVisual(cat)}</span>
+          <div>
+            <span class="work-type-detail-kicker">작업 유형</span>
+            <h2>${esc(cat.label)}</h2>
+            <p>${sections.length}개 섹션 · ${items.length}개 점검 항목 · ${esc(normalizeToolNature(cat.toolNature))}</p>
+          </div>
+        </header>
+        <nav class="work-type-tabs" aria-label="작업 유형 관리 메뉴">
+          ${tabs.map(([id, label]) => `<button class="${tab === id ? "active" : ""}" data-work-type-tab="${id}" type="button" aria-current="${tab === id ? "page" : "false"}">${esc(label)}</button>`).join("")}
+        </nav>
+        <div class="work-type-tab-panel">
+          ${tab === "summary" ? renderWorkTypeSummaryTab(cat, selectedToolIds, sections, items) : ""}
+          ${tab === "tools" ? renderWorkTypeToolsTab(cat, selectedToolIds, categories) : ""}
+          ${tab === "sections" ? renderWorkTypeSectionsTab(cat, sections, items) : ""}
+        </div>
       </div>`;
+    }
+
+    function renderWorkTypeSummaryTab(cat, selectedToolIds, sections, items) {
+      if (state.editCategoryId === cat.id) {
+        return `${renderCategoryEditPanel(cat)}
+          <div class="work-type-sticky-actions">
+            <button class="btn" data-save-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">변경사항 저장</button>
+            <button class="btn-light" data-action="cancel-edit-category" type="button">취소</button>
+          </div>`;
+      }
+      return `<div class="work-type-summary-grid">
+          <div><strong>${sections.length}</strong><span>섹션</span></div>
+          <div><strong>${items.length}</strong><span>점검 항목</span></div>
+          <div><strong>${selectedToolIds.length || "전체"}</strong><span>지정 공기구</span></div>
+        </div>
+        <div class="work-type-summary-block">
+          <div class="section-title">현재 공기구 설정</div>
+          ${renderCategoryToolSummary(selectedToolIds)}
+        </div>
+        <div class="work-type-detail-actions">
+          <button class="btn" data-edit-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">기본 정보 수정</button>
+          <button class="btn-light" data-manage-category="${esc(cat.id)}" type="button">섹션·항목 관리</button>
+          <details class="work-type-overflow">
+            <summary>기타</summary>
+            <button class="btn-danger" data-delete-category="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">작업 유형 삭제</button>
+          </details>
+        </div>`;
+    }
+
+    function renderWorkTypeToolsTab(cat, selectedToolIds, categories) {
+      const sources = categories.filter((row) => row.id !== cat.id);
+      return `<section class="work-type-copy-panel">
+          <div>
+            <strong>다른 작업 유형의 공기구 설정 복사</strong>
+            <p>가져온 설정은 바로 반영되지 않습니다. 아래 저장 버튼을 눌러야 적용됩니다.</p>
+          </div>
+          <div class="work-type-copy-controls">
+            <label class="sr-only" for="copyCategorySource_${esc(cat.id)}">복사할 작업 유형</label>
+            <select class="select" id="copyCategorySource_${esc(cat.id)}" data-copy-category-source>
+              <option value="">복사할 작업 유형 선택</option>
+              ${sources.map((source) => `<option value="${esc(source.id)}">${esc(source.label)} · ${sanitizeToolIds(source.toolIds).length || "전체"}</option>`).join("")}
+            </select>
+            <button class="btn-light" data-copy-category-tools="${esc(cat.id)}" ${state.adminMode && sources.length ? "" : "disabled"} type="button">설정 가져오기</button>
+          </div>
+        </section>
+        <div class="work-type-tool-toolbar">
+          <label class="sr-only" for="categoryToolSearch_${esc(cat.id)}">공기구 검색</label>
+          <input class="input" id="categoryToolSearch_${esc(cat.id)}" type="search" value="${esc(state.categoryToolSearchQuery)}" placeholder="공기구 이름 검색" data-category-tool-search />
+          <span data-category-tool-search-count>${activeTools().length}개</span>
+        </div>
+        ${renderCategoryToolPicker({ groupId: `category_${cat.id}`, selectedIds: selectedToolIds })}
+        <div class="empty compact-empty" data-category-tool-search-empty hidden>검색 결과가 없습니다.</div>
+        <div class="work-type-sticky-actions">
+          <span>${selectedToolIds.length ? `${selectedToolIds.length}개 선택됨` : "전체 공기구 표시"}</span>
+          <button class="btn" data-save-category-tools="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">공기구 설정 저장</button>
+        </div>`;
+    }
+
+    function renderWorkTypeSectionsTab(cat, sections, items) {
+      return `<div class="work-type-section-list">
+          ${sections.map((section) => {
+            const count = items.filter((item) => item.sectionId === section.id).length;
+            return `<div class="work-type-section-row"><span>${esc(section.title)}</span><em>${count}개 항목</em></div>`;
+          }).join("") || `<div class="empty compact-empty">등록된 섹션이 없습니다.</div>`}
+        </div>
+        <div class="work-type-sticky-actions">
+          <span>섹션과 점검 항목을 상세 화면에서 편집합니다.</span>
+          <button class="btn" data-manage-category="${esc(cat.id)}" type="button">섹션·항목 관리 열기</button>
+        </div>`;
     }
 
     function renderCategoryToggleImage(expanded, cat) {
@@ -9201,12 +9329,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return true;
       }
 
-      const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
-      if (categoryToolRow && !event.target.closest("button,input,label,select,textarea,.category-edit-panel,.category-tool-picker")) {
-        toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
-        return true;
-      }
-
       const workerCard = event.target.closest("[data-worker-card-toggle]");
       if (workerCard && !event.target.closest("button,input,label,select,textarea,.worker-edit-panel")) {
         toggleWorkerCard(workerCard.dataset.workerCardToggle);
@@ -9618,11 +9740,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (button.dataset.action === "add-pictogram") addPictogram();
       if (button.dataset.savePictogram) savePictogram(button.dataset.savePictogram);
       if (button.dataset.deletePictogram) deletePictogram(button.dataset.deletePictogram);
+      if (button.dataset.selectWorkType) {
+        state.workTypeManagerSelectedId = button.dataset.selectWorkType;
+        state.workTypeManagerMobileDetailOpen = true;
+        state.editCategoryId = null;
+        state.categoryToolSearchQuery = "";
+        render();
+      }
+      if (button.dataset.workTypeTab) {
+        state.workTypeManagerTab = button.dataset.workTypeTab;
+        state.categoryToolSearchQuery = "";
+        render();
+      }
+      if (button.dataset.action === "back-work-type-list") {
+        state.workTypeManagerMobileDetailOpen = false;
+        render();
+      }
+      if (button.dataset.copyCategoryTools) copyCategoryTools(button.dataset.copyCategoryTools);
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
         state.editCategoryId = null;
+        state.editItemId = null;
         state.categoryAddOpen = false;
         state.openAddItemSectionIds = [];
+        state.openManageSectionId = sectionsFor(state.manageCategoryId)[0]?.id || null;
         state.categoryVisualOpen = false;
         render();
       }
@@ -9637,7 +9778,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (button.dataset.action === "back-items") {
         state.manageCategoryId = null;
         state.editSectionId = null;
+        state.editItemId = null;
         state.openAddItemSectionIds = [];
+        state.openManageSectionId = null;
         state.categoryAddOpen = false;
         state.categoryVisualOpen = false;
         render();
@@ -9647,15 +9790,36 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function handleSectionItemButtonClick(button) {
       if (button.dataset.action === "add-section") addSection();
-      if (button.dataset.editSection) editSection(button.dataset.editSection);
+      if (button.dataset.toggleManageSection) {
+        const sectionId = button.dataset.toggleManageSection;
+        state.openManageSectionId = state.openManageSectionId === sectionId ? null : sectionId;
+        state.editSectionId = null;
+        state.editItemId = null;
+        state.openAddItemSectionIds = [];
+        render();
+      }
+      if (button.dataset.editSection) {
+        state.openManageSectionId = button.dataset.editSection;
+        editSection(button.dataset.editSection);
+      }
       if (button.dataset.saveSection) saveSection(button.dataset.saveSection);
       if (button.dataset.deleteSection) deleteSection(button.dataset.deleteSection);
       if (button.dataset.toggleAddItem) {
         const sectionId = button.dataset.toggleAddItem;
+        state.openManageSectionId = sectionId;
         const open = new Set(state.openAddItemSectionIds);
         open.has(sectionId) ? open.delete(sectionId) : open.add(sectionId);
         state.openAddItemSectionIds = [...open];
         render();
+      }
+      if (button.dataset.editItem) {
+        const row = state.items.find((item) => item.id === button.dataset.editItem);
+        if (row) {
+          state.openManageSectionId = row.sectionId;
+          state.editItemId = row.id;
+          state.editSectionId = null;
+          render();
+        }
       }
       if (button.dataset.addItem) addChecklistItem(button.dataset.addItem);
       if (button.dataset.saveItem) saveChecklistItem(button.dataset.saveItem);
@@ -9669,6 +9833,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "cancel-edit-section") {
         state.editSectionId = null;
+        render();
+      }
+      if (button.dataset.action === "cancel-edit-item") {
+        state.editItemId = null;
         render();
       }
       return false;
@@ -9760,11 +9928,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         event.preventDefault();
         openAnalyticsRecord(analyticsRow.dataset.analyticsRecordKind, analyticsRow.dataset.analyticsRecordId);
         return;
-      }
-      const categoryToolRow = event.target.closest(".category-tool-assignment-row[data-toggle-category-tools]");
-      if (categoryToolRow && event.target === categoryToolRow) {
-        event.preventDefault();
-        toggleCategoryTools(categoryToolRow.dataset.toggleCategoryTools);
       }
     });
 
@@ -9991,6 +10154,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (event.target.matches("[data-tool-search]")) {
         state.toolSearchQuery = event.target.value;
         applyToolSearchFilter();
+      }
+      if (event.target.matches("[data-work-type-search]")) {
+        state.workTypeSearchQuery = event.target.value;
+        applyWorkTypeSearchFilter();
+      }
+      if (event.target.matches("[data-category-tool-search]")) {
+        state.categoryToolSearchQuery = event.target.value;
+        applyCategoryToolSearchFilter();
       }
       if (event.target.matches("[data-login-worker-search]")) {
         state.loginWorkerSearch = event.target.value;
@@ -11671,11 +11842,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function editCategory(id) {
       if (!requireAdminWrite()) return;
+      state.workTypeManagerSelectedId = id;
+      state.workTypeManagerTab = "summary";
+      state.workTypeManagerMobileDetailOpen = true;
       state.editCategoryId = id;
       state.categoryAddOpen = false;
-      if (!state.categoryToolAssignmentOpenIds.includes(id)) {
-        state.categoryToolAssignmentOpenIds = [...state.categoryToolAssignmentOpenIds, id];
-      }
       render();
     }
 
@@ -11712,16 +11883,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toast(iconChanged ? "작업 유형 아이콘을 변경했습니다." : "작업 유형 설정을 수정했습니다.");
     }
 
-    function toggleCategoryTools(id) {
-      const openIds = new Set(state.categoryToolAssignmentOpenIds);
-      if (openIds.has(id)) {
-        openIds.delete(id);
-      } else {
-        openIds.add(id);
-        if (!state.categoryToolDrafts?.[id]) setCategoryToolDraft(id, categoryById(id)?.toolIds || []);
-      }
-      state.categoryToolAssignmentOpenIds = [...openIds];
+    function copyCategoryTools(targetId) {
+      if (!requireAdminWrite()) return;
+      const target = categoryById(targetId);
+      const sourceId = $(`copyCategorySource_${targetId}`)?.value || "";
+      const source = categoryById(sourceId);
+      if (!target || !source) return toast("복사할 작업 유형을 선택하세요.");
+      const copiedIds = StateShapeRules.copyCategoryToolIds(source.toolIds, activeTools().map((tool) => tool.id));
+      setCategoryToolDraft(target.id, copiedIds);
+      state.workTypeManagerSelectedId = target.id;
+      state.workTypeManagerTab = "tools";
       render();
+      toast(`${source.label}의 공기구 설정 ${copiedIds.length}개를 가져왔습니다. 저장하면 반영됩니다.`);
     }
 
     async function saveCategoryTools(id) {
@@ -11735,7 +11908,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } : row);
       syncCategoryToolMetaItem(id, categoryById(id)?.toolIds || []);
       clearCategoryToolDraft(id);
-      state.categoryToolAssignmentOpenIds = state.categoryToolAssignmentOpenIds.filter((openId) => openId !== id);
       if (!(await persistAndSync(["categories", "items"]))) return;
       render();
       toast(`${cat.label} 공기구 지정을 저장했습니다.`);
@@ -11877,6 +12049,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         toolIds,
         visibilityCondition,
       } : row);
+      state.editItemId = null;
       if (!(await persistAndSync("items"))) return;
       render();
       toast("점검 항목을 수정했습니다.");
@@ -12720,6 +12893,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         };
         check();
       });
+    }
+
+    function renderManageItemSummaryRow(row) {
+      return `<div class="item-row manage-item-row compact-manage-item-row">
+        <div class="item-main">
+          <div class="item-name" title="${esc(row.text)}">${esc(row.text)}</div>
+          <div class="manage-item-meta">
+            <span>${row.required ? "제출 필수" : "일반"}</span>
+            <span>${esc(describeItemVisibility(row))}</span>
+          </div>
+        </div>
+        ${badge(row.risk)}
+        <button class="btn-light" data-edit-item="${esc(row.id)}" type="button">편집</button>
+      </div>`;
     }
 
     function startInspectionDeletionRealtime() {

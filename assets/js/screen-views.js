@@ -826,7 +826,7 @@
             작업 유형 관리
             <button class="btn" data-action="toggle-category-add" ${model.adminMode ? "" : "disabled"} type="button">${model.categoryAddOpen ? "추가 닫기" : "+ 작업 유형 추가"}</button>
           </div>
-          <p class="section-help">작업 유형 카드 안에서 공기구 지정과 섹션/항목 관리를 함께 처리합니다. 카드를 누르면 공기구 지정 영역이 펼쳐집니다.</p>
+          <p class="section-help">왼쪽 목록에서 작업 유형을 선택한 뒤 기본 정보, 공기구, 섹션과 항목을 탭별로 관리하세요.</p>
           ${model.categoryAddOpen ? `
           <div class="collapsible-panel category-add-panel">
           <div class="form-row">
@@ -850,6 +850,31 @@
           </div>` : ""}
           ${model.categoryToolAssignmentsHtml}
         </div>`;
+  }
+
+  function renderWorkTypeManagerView(model = {}) {
+    const categories = Array.isArray(model.categories) ? model.categories : [];
+    return `<section class="work-type-manager ${model.mobileDetailOpen ? "is-mobile-detail-open" : ""}">
+        <aside class="work-type-master" aria-label="작업 유형 목록">
+          <div class="work-type-search-field">
+            <label class="sr-only" for="workTypeSearch">작업 유형 검색</label>
+            <input class="input" id="workTypeSearch" type="search" value="${esc(model.searchQuery)}" placeholder="작업 유형 검색" data-work-type-search />
+            <span data-work-type-search-count>${categories.length}개</span>
+          </div>
+          <div class="work-type-list" role="listbox" aria-label="작업 유형 선택">
+            ${categories.map((category) => `<button class="work-type-list-row ${category.active ? "active" : ""}" data-select-work-type="${esc(category.id)}" data-work-type-search-item data-work-type-search-text="${esc(category.searchText)}" type="button" role="option" aria-selected="${category.active ? "true" : "false"}" style="--accent:${esc(category.accent)}">
+                <span class="work-type-list-icon">${category.iconHtml}</span>
+                <span class="work-type-list-copy">
+                  <strong>${esc(category.label)}</strong>
+                  <span>${esc(category.meta)}</span>
+                </span>
+                <em>${esc(category.countLabel)}</em>
+              </button>`).join("")}
+            <div class="empty compact-empty" data-work-type-search-empty hidden>검색 결과가 없습니다.</div>
+          </div>
+        </aside>
+        <div class="work-type-detail" aria-live="polite">${model.detailHtml}</div>
+      </section>`;
   }
 
   // 항목 관리: 작업 유형별 섹션/항목 관리 화면 (읽기 전용 마크업)
@@ -954,11 +979,12 @@
               <div class="small muted">${rows.length}개 항목</div>
             </div>
             <div class="item-actions manage-actions">
+              <button class="btn-light section-expand-button" data-toggle-manage-section="${model.sectionId}" type="button" aria-expanded="${model.expanded ? "true" : "false"}">${model.expanded ? "접기" : "열기"}</button>
               <button class="btn-light" data-edit-section="${model.sectionId}" ${model.adminMode ? "" : "disabled"} type="button">수정</button>
               <button class="btn-danger" data-delete-section="${model.sectionId}" ${model.adminMode ? "" : "disabled"} type="button">섹션 삭제</button>
             </div>`}
         </div>
-        <div class="section-card-body">
+        ${model.expanded ? `<div class="section-card-body">
           ${model.moreToggleHtml}
           ${model.addOpen ? `<div class="inline-form item-add-form">
             <div class="field">
@@ -1000,7 +1026,7 @@
               ${row.badgeHtml}
             </div>`).join("") || `<div class="empty">아직 항목이 없습니다.</div>`}
           </div>
-        </div>
+        </div>` : ""}
       </section>`;
   }
 
@@ -1057,6 +1083,7 @@
     renderInspectionRecordView,
     renderInspectionWorkPrepMiniCardView,
     renderItemManagerHomeView,
+    renderWorkTypeManagerView,
     renderItemManagerCategoryView,
     renderSectionManagerView,
     renderWorkPrepStatusControlView,

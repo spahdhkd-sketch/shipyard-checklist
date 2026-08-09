@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 const chromePath = process.argv[2];
 const baseUrl = process.argv[3] || "http://127.0.0.1:4173";
 const accessUrl = process.argv[4] || "";
+const itemsOnly = process.argv.includes("--items-only");
 const port = 9223;
 const STORAGE_PREFIX = "shipyardSafetyV1.";
 
@@ -13,6 +16,7 @@ if (!chromePath) {
 
 const chrome = spawn(chromePath, [
   "--headless=new",
+  "--incognito",
   "--disable-gpu",
   "--window-size=1280,900",
   "--no-first-run",
@@ -282,8 +286,12 @@ try {
       const backup = Object.fromEntries(keys.map((key) => [key, localStorage.getItem('${STORAGE_PREFIX}' + key)]));
       sessionStorage.setItem('categoryRenameSmokeBackup', JSON.stringify(backup));
       sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminAuthSource', 'worker');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminSession', JSON.stringify({ token: 'browser-smoke-token', workerId: 'browser-smoke-admin', expiresAt: new Date(Date.now() + 3600000).toISOString() }));
+      sessionStorage.setItem('${STORAGE_PREFIX}workerSession', JSON.stringify({ workerId: 'browser-smoke-admin', workerName: 'Browser Smoke 관리자', mutationToken: 'browser-smoke-token', mutationExpiresAt: new Date(Date.now() + 3600000).toISOString() }));
       localStorage.setItem('${STORAGE_PREFIX}categories', JSON.stringify([
-        { id: 'rename-smoke', label: 'Rename Smoke Before', icon: 'blockAssembly', color: '#1f6eb3', requireToolCheck: true, order: 1 }
+        { id: 'rename-smoke', label: 'Rename Smoke Before', icon: 'blockAssembly', color: '#1f6eb3', requireToolCheck: true, toolIds: ['items-smoke-tool-1'], order: 1 },
+        { id: 'copy-source-smoke', label: 'Copy Source Smoke', icon: 'weldingWork', color: '#168a94', requireToolCheck: true, toolIds: ['items-smoke-tool-2', 'items-smoke-tool-3'], order: 2 }
       ]));
       localStorage.setItem('${STORAGE_PREFIX}sections', JSON.stringify([
         { id: 'rename-section', categoryId: 'rename-smoke', title: 'Rename Section', order: 1 }
@@ -300,7 +308,11 @@ try {
     `(() => ({
       hasRenameCategory: Boolean(document.querySelector('[data-manage-category="rename-smoke"]')),
       adminPressed: document.querySelector('[data-action="toggle-admin"]')?.getAttribute('aria-pressed') || '',
-      storedLabel: JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]').find((row) => row.id === 'rename-smoke')?.label || ''
+      storedLabel: JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]').find((row) => row.id === 'rename-smoke')?.label || '',
+      pageTitle: document.querySelector('h1')?.textContent?.trim() || '',
+      bodyClass: document.body.className,
+      managerRows: document.querySelectorAll('[data-select-work-type]').length,
+      runtimeText: document.querySelector('#app')?.textContent?.trim().slice(0, 200) || ''
     }))()`,
     (value) => value.hasRenameCategory && value.adminPressed === "true" && value.storedLabel === "Rename Smoke Before",
     "rename smoke category in admin mode"
@@ -317,15 +329,12 @@ try {
       }
       document.querySelector('[data-save-category="rename-smoke"]')?.click();
       const stored = JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]');
-      const cardText = document.querySelector('[data-manage-category="rename-smoke"]')?.closest('.category-card')?.textContent || '';
-      document.querySelector('[data-manage-category="rename-smoke"]')?.click();
-      const heading = document.querySelector('h1')?.textContent?.trim() || '';
+      const cardText = document.querySelector('.work-type-detail-shell')?.textContent || '';
       return {
         hadEditButton: Boolean(editButton),
         hadInput: Boolean(input),
         storedLabel: stored.find((row) => row.id === 'rename-smoke')?.label || '',
-        cardHasNewLabel: cardText.includes('Rename Smoke After'),
-        heading
+        cardHasNewLabel: cardText.includes('Rename Smoke After')
       };
     })()`,
   });
@@ -339,6 +348,8 @@ try {
       });
       sessionStorage.removeItem('categoryRenameSmokeBackup');
       sessionStorage.removeItem('${STORAGE_PREFIX}adminMode');
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminAuthSource');
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminSession');
       location.reload();
     })()`,
   });
@@ -359,6 +370,8 @@ try {
   await cdp.send("Runtime.evaluate", {
     expression: `(() => {
       sessionStorage.removeItem('${STORAGE_PREFIX}adminMode');
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminAuthSource');
+      sessionStorage.removeItem('${STORAGE_PREFIX}adminSession');
       localStorage.setItem('${STORAGE_PREFIX}screenMode', 'mobile');
       location.reload();
     })()`,
@@ -389,6 +402,8 @@ try {
   await cdp.send("Runtime.evaluate", {
     expression: `(() => {
       sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminAuthSource', 'worker');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminSession', JSON.stringify({ token: 'browser-smoke-token', workerId: 'browser-smoke-admin', expiresAt: new Date(Date.now() + 3600000).toISOString() }));
       localStorage.setItem('${STORAGE_PREFIX}screenMode', 'mobile');
       location.reload();
     })()`,
@@ -416,6 +431,182 @@ try {
       };
     })()`,
   });
+  if (itemsOnly) {
+    await cdp.send("Emulation.clearDeviceMetricsOverride");
+    await cdp.send("Runtime.evaluate", {
+      expression: `(() => {
+        const expiresAt = new Date(Date.now() + 3600000).toISOString();
+        sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+        sessionStorage.setItem('${STORAGE_PREFIX}adminAuthSource', 'worker');
+        sessionStorage.setItem('${STORAGE_PREFIX}adminSession', JSON.stringify({ token: 'browser-smoke-token', workerId: 'browser-smoke-admin', expiresAt }));
+        sessionStorage.setItem('${STORAGE_PREFIX}workerSession', JSON.stringify({ workerId: 'browser-smoke-admin', workerName: 'Browser Smoke 관리자', mutationToken: 'browser-smoke-token', mutationExpiresAt: expiresAt }));
+        localStorage.setItem('${STORAGE_PREFIX}screenMode', 'desktop');
+        localStorage.setItem('${STORAGE_PREFIX}categories', JSON.stringify([
+          { id: 'rename-smoke', label: 'Rename Smoke After', icon: 'blockAssembly', color: '#1f6eb3', requireToolCheck: true, toolIds: ['items-smoke-tool-1'], order: 1 },
+          { id: 'copy-source-smoke', label: 'Copy Source Smoke', icon: 'weldingWork', color: '#168a94', requireToolCheck: true, toolIds: ['items-smoke-tool-2', 'items-smoke-tool-3'], order: 2 }
+        ]));
+        localStorage.setItem('${STORAGE_PREFIX}sections', JSON.stringify([
+          { id: 'rename-section', categoryId: 'rename-smoke', title: '작업 전 준비', order: 1 },
+          { id: 'rename-section-2', categoryId: 'rename-smoke', title: '작업 중 확인', order: 2 }
+        ]));
+        localStorage.setItem('${STORAGE_PREFIX}items', JSON.stringify([
+          { id: 'rename-item', categoryId: 'rename-smoke', sectionId: 'rename-section', text: '보호구 착용 확인', risk: 'high', required: true, active: true, toolIds: [], order: 1 },
+          { id: 'rename-item-2', categoryId: 'rename-smoke', sectionId: 'rename-section', text: '주변 정리 확인', risk: 'medium', required: false, active: true, toolIds: [], order: 2 },
+          { id: 'rename-item-3', categoryId: 'rename-smoke', sectionId: 'rename-section-2', text: '환기 상태 확인', risk: 'low', required: false, active: true, toolIds: [], order: 1 }
+        ]));
+      })()`,
+    });
+    const workTypeLoaded = new Promise((resolve) => cdp.on("Page.loadEventFired", resolve));
+    await cdp.send("Page.navigate", { url: `${baseUrl}/items.html` });
+    await Promise.race([workTypeLoaded, delay(4000)]);
+    await waitForValue(
+      cdp,
+      `(() => ({ ready: document.querySelectorAll('[data-select-work-type]').length === 2 }))()`,
+      (value) => value.ready,
+      "focused work type manager"
+    );
+  const workTypeDesktopResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const manager = document.querySelector('.work-type-manager');
+      const firstRow = document.querySelector('.work-type-list-row');
+      return {
+        title: document.querySelector('h1')?.textContent?.trim() || '',
+        rows: document.querySelectorAll('.work-type-list-row').length,
+        columns: manager ? getComputedStyle(manager).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
+        tabs: Array.from(document.querySelectorAll('[data-work-type-tab]')).map((node) => node.textContent.trim()),
+        nestedButtons: firstRow?.querySelectorAll('button').length || 0,
+        visibleInputs: Array.from(document.querySelectorAll('.work-type-manager input, .work-type-manager select')).filter((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length).length
+      };
+    })()`,
+  });
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.querySelector('[data-work-type-tab="tools"]')?.click()`,
+  });
+  await waitForValue(
+    cdp,
+    `(() => ({
+      ready: Boolean(document.querySelector('[data-copy-category-source]')),
+      title: document.querySelector('h1')?.textContent?.trim() || '',
+      tabs: Array.from(document.querySelectorAll('[data-work-type-tab]')).map((node) => ({ id: node.dataset.workTypeTab, active: node.classList.contains('active') })),
+      selected: document.querySelector('.work-type-detail-head h2')?.textContent?.trim() || '',
+      bodyClass: document.body.className
+    }))()`,
+    (value) => value.ready,
+    "work type tools tab"
+  );
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      const source = document.querySelector('[data-copy-category-source]');
+      if (source) source.value = 'copy-source-smoke';
+      document.querySelector('[data-copy-category-tools="rename-smoke"]')?.click();
+    })()`,
+  });
+  const workTypeCopyResult = await waitForValue(
+    cdp,
+    `(() => {
+      const stored = JSON.parse(localStorage.getItem('${STORAGE_PREFIX}categories') || '[]').find((row) => row.id === 'rename-smoke');
+      return {
+        checkedIds: Array.from(document.querySelectorAll('[data-category-tool-group]:checked')).map((node) => node.value).sort(),
+        storedIds: Array.isArray(stored?.toolIds) ? stored.toolIds.slice().sort() : [],
+        hasCopyPanel: Boolean(document.querySelector('.work-type-copy-panel')),
+        saveVisible: Boolean(document.querySelector('[data-save-category-tools="rename-smoke"]'))
+      };
+    })()`,
+    (value) => value.checkedIds.join('|') === 'items-smoke-tool-2|items-smoke-tool-3',
+    "copied work type tool draft"
+  );
+  const workTypeEvidenceDir = resolve(".omo/evidence/work-type-manager-20260810");
+  await mkdir(workTypeEvidenceDir, { recursive: true });
+  const desktopCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
+  const desktopScreenshot = resolve(workTypeEvidenceDir, "desktop-tools-copy.png");
+  await writeFile(desktopScreenshot, Buffer.from(desktopCapture.data, "base64"));
+  await cdp.send("Emulation.setDeviceMetricsOverride", { width: 420, height: 844, deviceScaleFactor: 1, mobile: true });
+  await cdp.send("Runtime.evaluate", {
+    expression: `Array.from(document.querySelectorAll('[data-screen-mode="mobile"]')).find((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length)?.click()`,
+  });
+  await delay(3200);
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('.work-type-manager')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -72)` });
+  const mobileListCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  const mobileListScreenshot = resolve(workTypeEvidenceDir, "mobile-list.png");
+  await writeFile(mobileListScreenshot, Buffer.from(mobileListCapture.data, "base64"));
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('[data-select-work-type="rename-smoke"]')?.click()` });
+  await delay(250);
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('[data-work-type-tab="tools"]')?.click()` });
+  await delay(250);
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('.work-type-manager')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -72)` });
+  const workTypeMobileResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const isVisible = (node) => Boolean(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+      return {
+        listVisible: isVisible(document.querySelector('.work-type-master')),
+        detailVisible: isVisible(document.querySelector('.work-type-detail')),
+        backVisible: isVisible(document.querySelector('.work-type-mobile-back')),
+        copyPanelVisible: isVisible(document.querySelector('.work-type-copy-panel')),
+        tabsSingleRow: new Set(Array.from(document.querySelectorAll('[data-work-type-tab]')).map((node) => Math.round(node.getBoundingClientRect().top))).size === 1
+      };
+    })()`,
+  });
+  const mobileDetailCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  const mobileDetailScreenshot = resolve(workTypeEvidenceDir, "mobile-tools-copy.png");
+  await writeFile(mobileDetailScreenshot, Buffer.from(mobileDetailCapture.data, "base64"));
+  await cdp.send("Emulation.clearDeviceMetricsOverride");
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('[data-work-type-tab="sections"]')?.click()` });
+  await delay(250);
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('[data-manage-category="rename-smoke"]')?.click()` });
+  await delay(250);
+  categoryRenameResult.result.value.heading = (await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `document.querySelector('h1')?.textContent?.trim() || ''`,
+  })).result.value;
+  const workTypeSectionsResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => ({
+      cards: document.querySelectorAll('.section-card').length,
+      expandedBodies: document.querySelectorAll('.section-card-body').length,
+      compactRows: document.querySelectorAll('.compact-manage-item-row').length,
+      editRows: document.querySelectorAll('.edit-item-row').length,
+      visibleControls: Array.from(document.querySelectorAll('.section-card input, .section-card select')).filter((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length).length
+    }))()`,
+  });
+  await cdp.send("Runtime.evaluate", { expression: `document.querySelector('[data-edit-item="rename-item"]')?.click()` });
+  await delay(250);
+  const workTypeItemEditResult = await cdp.send("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => ({
+      expandedBodies: document.querySelectorAll('.section-card-body').length,
+      editRows: document.querySelectorAll('.edit-item-row').length,
+      visibleControls: Array.from(document.querySelectorAll('.section-card input, .section-card select')).filter((node) => node.offsetWidth || node.offsetHeight || node.getClientRects().length).length,
+      cancelVisible: Boolean(document.querySelector('[data-action="cancel-edit-item"]'))
+    }))()`,
+  });
+    assert(categoryRenameResult.result.value.hadEditButton && categoryRenameResult.result.value.hadInput, "Category edit controls should open in admin mode", categoryRenameResult.result.value);
+    assert(workTypeDesktopResult.result.value.rows === 2, "Desktop manager should render the injected work types", workTypeDesktopResult.result.value);
+    assert(workTypeDesktopResult.result.value.columns === 2, "Desktop manager should render a master-detail grid", workTypeDesktopResult.result.value);
+    assert(workTypeDesktopResult.result.value.nestedButtons === 0, "Work type rows should not contain nested buttons", workTypeDesktopResult.result.value);
+    assert(workTypeCopyResult.result.value.checkedIds.join("|") === "items-smoke-tool-2|items-smoke-tool-3", "Copy should stage source tool IDs", workTypeCopyResult.result.value);
+    assert(workTypeCopyResult.result.value.storedIds.join("|") === "items-smoke-tool-1", "Copy should not persist before save", workTypeCopyResult.result.value);
+    assert(workTypeMobileResult.result.value.detailVisible && workTypeMobileResult.result.value.backVisible, "Mobile selection should open a detail view with a back action", workTypeMobileResult.result.value);
+    assert(workTypeMobileResult.result.value.copyPanelVisible && workTypeMobileResult.result.value.tabsSingleRow, "Mobile tools tab should keep copy controls and tabs visible", workTypeMobileResult.result.value);
+    assert(workTypeSectionsResult.result.value.cards === 2 && workTypeSectionsResult.result.value.expandedBodies === 1, "Section manager should expand one section at a time", workTypeSectionsResult.result.value);
+    assert(workTypeSectionsResult.result.value.compactRows === 2 && workTypeSectionsResult.result.value.editRows === 0, "Section manager should start with compact item rows", workTypeSectionsResult.result.value);
+    assert(workTypeItemEditResult.result.value.editRows === 1 && workTypeItemEditResult.result.value.cancelVisible, "Item edit should open only the selected row", workTypeItemEditResult.result.value);
+    cdpIsOpen = false;
+    cdp.close();
+    chrome.kill();
+    console.log(JSON.stringify({
+      categoryRename: categoryRenameResult.result.value,
+      desktop: workTypeDesktopResult.result.value,
+      copy: workTypeCopyResult.result.value,
+      mobile: workTypeMobileResult.result.value,
+      sections: workTypeSectionsResult.result.value,
+      itemEdit: workTypeItemEditResult.result.value,
+      screenshots: { desktopScreenshot, mobileListScreenshot, mobileDetailScreenshot },
+      runtimeErrors: runtimeErrors.slice(),
+    }, null, 2));
+    process.exit(0);
+  }
   await cdp.send("Runtime.evaluate", {
     expression: `document.querySelector('#mobileAdminShortcut')?.click()`,
   });
@@ -480,6 +671,8 @@ try {
   await cdp.send("Runtime.evaluate", {
     expression: `(() => {
       sessionStorage.setItem('${STORAGE_PREFIX}adminMode', 'true');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminAuthSource', 'worker');
+      sessionStorage.setItem('${STORAGE_PREFIX}adminSession', JSON.stringify({ token: 'browser-smoke-token', workerId: 'browser-smoke-admin', expiresAt: new Date(Date.now() + 3600000).toISOString() }));
       localStorage.setItem('${STORAGE_PREFIX}manageTab', JSON.stringify('unsafe'));
       localStorage.setItem('${STORAGE_PREFIX}unsafeFilters', JSON.stringify({ shipNo: '', status: '접수', workerId: '', sort: 'status' }));
       localStorage.setItem('${STORAGE_PREFIX}unsafeIssues', JSON.stringify([

@@ -1,5 +1,5 @@
-const APP_VERSION = "1.11.1-20260809-delete-wins";
-const ASSET_TOKEN = "20260809-delete-wins-2";
+const APP_VERSION = "1.12.0-20260810-work-type-manager";
+const ASSET_TOKEN = "20260810-work-type-manager-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
