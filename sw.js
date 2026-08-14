@@ -1,5 +1,5 @@
-const APP_VERSION = "1.12.3-20260810-empty-sections";
-const ASSET_TOKEN = "20260810-empty-sections-1";
+const APP_VERSION = "1.12.4-20260814-editor-safety";
+const ASSET_TOKEN = "20260814-editor-safety-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",

@@ -120,7 +120,10 @@ async function checkAllBoxes(page) {
 const bodyText = (page) => page.evaluate(() => document.body.innerText.replace(/\s+/g, " "));
 
 async function main() {
-  const appVersion = (readFileSync(join(ROOT, "sw.js"), "utf8").match(/APP_VERSION = "([^"]+)"/) || [])[1] || "";
+  const swSource = readFileSync(join(ROOT, "sw.js"), "utf8");
+  const appVersion = (swSource.match(/APP_VERSION = "([^"]+)"/) || [])[1] || "";
+  const assetToken = (swSource.match(/ASSET_TOKEN = "([^"]+)"/) || [])[1] || "";
+  if (!appVersion || !assetToken) throw new Error("sw.js에서 APP_VERSION/ASSET_TOKEN을 확인할 수 없습니다.");
   const tz = TEST_TIME_ZONE;
   const todayStr = dateInTz(tz);
   const testNowMs = Date.parse(`${todayStr}T13:00:00+09:00`);
@@ -642,11 +645,11 @@ async function main() {
           script.src.includes("/assets/dist/js/app-v2.min.js") && script.src.includes(`v=${expectedToken}`)),
         expectedVersion,
       };
-    }, appVersion, "20260810-light-only-1");
+    }, appVersion, assetToken);
     const ok = result.controlled
       && result.active
       && result.version === result.expectedVersion
-      && result.cache === "gs-safety-20260810-light-only-1"
+      && result.cache === `gs-safety-${assetToken}`
       && result.hasCurrentCache
       && !result.hasStaleCache
       && result.manifestVersioned

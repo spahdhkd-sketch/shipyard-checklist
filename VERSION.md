@@ -1,20 +1,26 @@
 # Version
 
-Current version: `1.12.3-20260810`
+Current version: `1.12.4-20260814`
 
-Recorded at: `2026-08-10 (Work-prep checklist section filtering release)`
+Recorded at: `2026-08-14 (Section editor safety release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Preserves every in-progress section editor field across realtime pulls and other background re-renders.
+- Warns before discarding unsaved section changes and before reloading or closing the page.
+- Keeps the editor open, restores the previous section, and prevents duplicate actions when a remote save fails or is still running.
+- Derives the PWA E2E asset token from `sw.js` so release-token checks cannot drift from the deployed service worker.
+- Replaces inline section-score and sign-image handlers with CSP-compatible delegated events.
+- Uses a context-neutral empty-checklist message for both work-order and direct inspection flows.
 - Hides checklist sections when all of their items are excluded by the work-order supply selection.
 - Shows one page-level notice instead of rendering empty section titles with `0/0` counts.
 - Opens section editing directly below the selected section row without leaving the work-type manager.
 - Preserves danger-sign image proportions in the selection preview.
 - Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
-- Uses `20260810-empty-sections-1` to refresh PWA assets after deployment.
+- Uses `20260814-editor-safety-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -46,5 +52,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260810-empty-sections-1` and service-worker version
-  `1.12.3-20260810-empty-sections` so installed clients refresh safely.
+- Issues asset token `20260814-editor-safety-1` and service-worker version
+  `1.12.4-20260814-editor-safety` so installed clients refresh safely.

@@ -5,8 +5,8 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const appVersion = "1.12.3-20260810-empty-sections";
-const assetToken = "20260810-empty-sections-1";
+const appVersion = "1.12.4-20260814-editor-safety";
+const assetToken = "20260814-editor-safety-1";
 const appPages = [
   "index.html",
   "check.html",
@@ -52,6 +52,13 @@ assert.match(sw, /\.then\(\(\) => self\.clients\.claim\(\)\)/);
 assert.match(sw, /fetch\(new Request\(event\.request, \{ cache: "no-store" \}\)\)/);
 assert.match(sw, /keys\s*\.filter\(\(key\) => key\.startsWith\("gs-safety-"\) && key !== CACHE\)/);
 assert.match(sw, /type: "GS_SW_VERSION"/);
+
+const e2eSmoke = read("tools/e2e-smoke.mjs");
+assert.ok(e2eSmoke.includes('const swSource = readFileSync(join(ROOT, "sw.js"), "utf8")'));
+assert.ok(e2eSmoke.includes('swSource.match(/ASSET_TOKEN = "([^"]+)"/)'));
+assert.ok(e2eSmoke.includes("}, appVersion, assetToken);"));
+assert.ok(e2eSmoke.includes("result.cache === `gs-safety-${assetToken}`"));
+assert.ok(!e2eSmoke.includes("light-only"));
 
 const vercel = JSON.parse(read("vercel.json"));
 const headerRules = vercel.headers || [];

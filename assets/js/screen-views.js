@@ -900,7 +900,7 @@
   function renderSectionRiskEditor(model = {}) {
     const sid = model.sectionId;
     const signCode = String(model.signCode || "");
-    const validSign = /^[PMSW]-\d{2}$/.test(signCode);
+    const validSign = /^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode);
     const signGroups = [
       { label: "금지", prefix: "P" },
       { label: "지시", prefix: "M" },
@@ -926,29 +926,28 @@
     const sev = Number(model.severity);
     const totalInit = (Number.isInteger(freq) && freq >= 1 && freq <= 5 && Number.isInteger(sev) && sev >= 1 && sev <= 5) ? freq * sev : "-";
     const signPreviewSrc = validSign ? `assets/pictograms/signs/${signCode}.png` : "";
-    const scoreOnchange = `var f=parseInt(document.getElementById('editSectionFrequency_${sid}').value,10),s=parseInt(document.getElementById('editSectionSeverity_${sid}').value,10),o=document.getElementById('editSectionTotal_${sid}');if(f>=1&&f<=5&&s>=1&&s<=5){o.textContent=f*s;}else{o.textContent='-';}`;
     return `
       <div class="field" style="margin-top:8px">
         <label for="editSectionSign_${sid}">위험 표지</label>
-        <select class="select" id="editSectionSign_${sid}" data-section-sign-preview="editSectionSignPreview_${sid}">
+        <select class="select" id="editSectionSign_${sid}" data-section-editor-id="${sid}" data-section-editor-field="signCode" data-section-sign-preview="editSectionSignPreview_${sid}" ${model.saving ? "disabled" : ""}>
           <option value="" ${!validSign ? "selected" : ""}>없음</option>
           ${signOptions}
         </select>
         <div class="section-sign-preview" id="editSectionSignPreview_${sid}" ${validSign ? "" : "hidden"}>
-          <img alt="선택한 위험 표지 미리보기" src="${signPreviewSrc}" onerror="this.closest('.section-sign-preview').hidden=true" />
+          <img alt="선택한 위험 표지 미리보기" src="${signPreviewSrc}" data-section-sign-image />
           <span>${validSign ? signCode : ""}</span>
         </div>
       </div>
       <div class="grid-2" style="margin-top:8px">
         <div class="field">
           <label for="editSectionFrequency_${sid}">빈도</label>
-          <select class="select" id="editSectionFrequency_${sid}" onchange="${scoreOnchange}">
+          <select class="select" id="editSectionFrequency_${sid}" data-section-editor-id="${sid}" data-section-editor-field="frequency" data-section-score-preview="editSectionTotal_${sid}" ${model.saving ? "disabled" : ""}>
             ${scoreOptions(model.frequency)}
           </select>
         </div>
         <div class="field">
           <label for="editSectionSeverity_${sid}">강도</label>
-          <select class="select" id="editSectionSeverity_${sid}" onchange="${scoreOnchange}">
+          <select class="select" id="editSectionSeverity_${sid}" data-section-editor-id="${sid}" data-section-editor-field="severity" data-section-score-preview="editSectionTotal_${sid}" ${model.saving ? "disabled" : ""}>
             ${scoreOptions(model.severity)}
           </select>
         </div>
@@ -968,12 +967,12 @@
           ${model.editing ? `
             <div class="field section-card-info">
               <label for="editSectionTitle_${model.sectionId}">섹션명 수정</label>
-              <input class="input" id="editSectionTitle_${model.sectionId}" value="${esc(model.sectionTitle)}" />
+              <input class="input" id="editSectionTitle_${model.sectionId}" value="${esc(model.sectionTitle)}" data-section-editor-id="${model.sectionId}" data-section-editor-field="title" ${model.saving ? "disabled" : ""} />
               ${renderSectionRiskEditor(model)}
             </div>
             <div class="item-actions manage-actions">
-              <button class="btn" data-save-section="${model.sectionId}" type="button">저장</button>
-              <button class="btn-light" data-action="cancel-edit-section" type="button">취소</button>
+              <button class="btn" data-save-section="${model.sectionId}" ${model.saving || !model.adminMode ? "disabled" : ""} type="button">${model.saving ? "저장 중" : "저장"}</button>
+              <button class="btn-light" data-action="cancel-edit-section" ${model.saving ? "disabled" : ""} type="button">취소</button>
             </div>` : `
             <div class="section-card-info">
               <div class="section-card-name" style="font-weight:800" title="${esc(model.sectionTitle)}">${esc(model.sectionTitle)}</div>

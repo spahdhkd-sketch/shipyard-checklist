@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.12.3-20260810-empty-sections";
+    const APP_VERSION = "1.12.4-20260814-editor-safety";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -2728,6 +2728,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       categoryToolSearchQuery: "",
       editCategoryId: null,
       editSectionId: null,
+      sectionEditorDraft: null,
+      sectionSaveSubmittingId: "",
       editItemId: null,
       editToolId: null,
       toolAddOpen: false,
@@ -2977,6 +2979,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       window.addEventListener("storage", handleStorageSyncWake);
       window.addEventListener("popstate", restoreRouteState);
+      window.addEventListener("beforeunload", (event) => {
+        if (!state.sectionSaveSubmittingId && !isSectionEditorDirty()) return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
         await startRemoteSync();
@@ -5553,8 +5560,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function sectionSignImg(signCode) {
-      if (!/^[PMSW]-\d{2}$/.test(signCode)) return "";
-      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" onerror="this.style.display='none'" loading="lazy">`;
+      if (!/^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode)) return "";
+      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" data-section-sign-image loading="lazy">`;
     }
 
     function sectionRiskBadge(section) {
@@ -5580,7 +5587,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           items: visibleItems.filter((row) => row.sectionId === section.id),
         }))
         .filter(({ items }) => items.length);
-      if (!visibleSections.length) return `<div class="empty empty-section-note">작업지시서 준비물에 해당하는 점검 항목이 없습니다.</div>`;
+      if (!visibleSections.length) return `<div class="empty empty-section-note">선택한 공기구/준비물에 해당하는 점검 항목이 없습니다.</div>`;
       return visibleSections.map(({ section, items }) => {
         const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
         return `<section class="check-section" data-check-section="${esc(section.id)}">
@@ -8148,13 +8155,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
       const addOpen = state.openAddItemSectionIds.includes(section.id);
       const expanded = state.openManageSectionId === section.id;
+      const editing = state.editSectionId === section.id;
+      const editor = editing ? sectionEditorDraftFor(section) : section;
       return SCREEN_VIEWS.renderSectionManagerView({
         sectionId: section.id,
-        sectionTitle: section.title,
-        signCode: section.signCode || "",
-        frequency: section.frequency,
-        severity: section.severity,
-        editing: state.editSectionId === section.id,
+        sectionTitle: editor.title,
+        signCode: editor.signCode || "",
+        frequency: editor.frequency,
+        severity: editor.severity,
+        editing,
+        saving: state.sectionSaveSubmittingId === section.id,
         expanded,
         addOpen,
         adminMode: state.adminMode,
@@ -8169,6 +8179,80 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           badgeHtml: badge(row.risk),
         })),
       });
+    }
+
+    function normalizeSectionEditorScore(value) {
+      const score = parseInt(value, 10);
+      return Number.isInteger(score) && score >= 1 && score <= 5 ? score : null;
+    }
+
+    function normalizeSectionEditorSign(value) {
+      const signCode = String(value || "").trim();
+      return /^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode) ? signCode : "";
+    }
+
+    function createSectionEditorDraft(section) {
+      return {
+        sectionId: section.id,
+        title: String(section.title || ""),
+        signCode: normalizeSectionEditorSign(section.signCode),
+        frequency: normalizeSectionEditorScore(section.frequency),
+        severity: normalizeSectionEditorScore(section.severity),
+      };
+    }
+
+    function sectionEditorDraftFor(section) {
+      if (!section) return null;
+      if (state.sectionEditorDraft?.sectionId !== section.id) {
+        state.sectionEditorDraft = createSectionEditorDraft(section);
+      }
+      return state.sectionEditorDraft;
+    }
+
+    function beginSectionEditor(section) {
+      state.sectionEditorDraft = section ? createSectionEditorDraft(section) : null;
+    }
+
+    function updateSectionEditorDraft(sectionId, field, value) {
+      const section = state.sections.find((row) => row.id === sectionId);
+      if (!section || state.editSectionId !== sectionId || !["title", "signCode", "frequency", "severity"].includes(field)) return;
+      const draft = sectionEditorDraftFor(section);
+      state.sectionEditorDraft = { ...draft, [field]: value };
+    }
+
+    function clearSectionEditorDraft(sectionId = state.editSectionId) {
+      if (!sectionId || state.sectionEditorDraft?.sectionId === sectionId) state.sectionEditorDraft = null;
+    }
+
+    function isSectionEditorDirty(sectionId = state.editSectionId) {
+      const section = state.sections.find((row) => row.id === sectionId);
+      if (!section || !sectionId) return false;
+      const draft = sectionEditorDraftFor(section);
+      return String(draft.title || "").trim() !== String(section.title || "").trim()
+        || normalizeSectionEditorSign(draft.signCode) !== normalizeSectionEditorSign(section.signCode)
+        || normalizeSectionEditorScore(draft.frequency) !== normalizeSectionEditorScore(section.frequency)
+        || normalizeSectionEditorScore(draft.severity) !== normalizeSectionEditorScore(section.severity);
+    }
+
+    function shouldPreserveSectionEditorOnAdminExit() {
+      const sectionId = state.editSectionId || state.sectionSaveSubmittingId;
+      if (!sectionId) return false;
+      return state.sectionSaveSubmittingId === sectionId || isSectionEditorDirty(sectionId);
+    }
+
+    function confirmSectionEditorDiscard(button) {
+      const sectionId = state.editSectionId;
+      if (!sectionId) return true;
+      if (state.sectionSaveSubmittingId === sectionId) {
+        toast("섹션 저장 중입니다. 잠시만 기다려주세요.");
+        return false;
+      }
+      if (button?.dataset.action === "toggle-admin" && !state.adminMode) return true;
+      if (button?.dataset.saveSection === sectionId || button?.dataset.action === "cancel-edit-section") return true;
+      if (isSectionEditorDirty(sectionId)
+        && !window.confirm("저장하지 않은 섹션 변경사항이 있습니다.\n변경사항을 버리고 이동할까요?")) return false;
+      clearSectionEditorDraft(sectionId);
+      return true;
     }
 
     function renderEditableItemRow(row) {
@@ -9780,6 +9864,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const section = sectionsFor(state.workTypeManagerSelectedId).find((row) => row.id === sectionId);
         if (!section) return false;
         const closing = state.openManageSectionId === sectionId;
+        if (closing) clearSectionEditorDraft(sectionId);
+        else beginSectionEditor(section);
         state.openManageSectionId = closing ? null : sectionId;
         state.editSectionId = closing ? null : sectionId;
         state.editItemId = null;
@@ -9862,6 +9948,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
       }
       if (button.dataset.action === "cancel-edit-section") {
+        clearSectionEditorDraft();
         state.editSectionId = null;
         if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
         render();
@@ -9874,9 +9961,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     document.addEventListener("click", (event) => {
-      if (handleDelegatedClick(event)) return;
-
       const button = event.target.closest("button");
+      if (button && !confirmSectionEditorDiscard(button)) {
+        event.preventDefault();
+        return;
+      }
+      if (handleDelegatedClick(event)) return;
       if (!button) return;
 
       if (handleSyncButtonClick(button)) return;
@@ -10121,6 +10211,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     document.addEventListener("input", (event) => {
+      if (event.target.matches("[data-section-editor-field]")) {
+        updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
+      }
       if (event.target.matches("[data-admin-push-field]")) {
         updateAdminPushDraftField(event.target.dataset.adminPushField, event.target.value);
       }
@@ -10223,13 +10316,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-section-editor-field]")) {
+        updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
+      }
       if (event.target.matches("[data-section-sign-preview]")) {
         const preview = document.getElementById(event.target.dataset.sectionSignPreview);
         const image = preview?.querySelector("img");
         const label = preview?.querySelector("span");
         const signCode = event.target.value;
         if (!preview || !image || !label) return;
-        if (/^[PMSW]-\d{2}$/.test(signCode)) {
+        if (/^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode)) {
           image.src = `assets/pictograms/signs/${signCode}.png`;
           label.textContent = signCode;
           preview.hidden = false;
@@ -10238,6 +10334,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           label.textContent = "";
           preview.hidden = true;
         }
+        return;
+      }
+      if (event.target.matches("[data-section-score-preview]")) {
+        const sectionId = event.target.dataset.sectionEditorId;
+        const draft = state.sectionEditorDraft?.sectionId === sectionId ? state.sectionEditorDraft : null;
+        const output = document.getElementById(event.target.dataset.sectionScorePreview);
+        const frequency = normalizeSectionEditorScore(draft?.frequency);
+        const severity = normalizeSectionEditorScore(draft?.severity);
+        if (output) output.textContent = frequency != null && severity != null ? String(frequency * severity) : "-";
         return;
       }
       if (event.target.matches("[data-pledge-view-date]")) {
@@ -10367,6 +10472,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         event.target.value = "";
       }
     });
+
+    document.addEventListener("error", (event) => {
+      const image = event.target;
+      if (!image?.matches?.("[data-section-sign-image]")) return;
+      const preview = image.closest(".section-sign-preview");
+      if (preview) preview.hidden = true;
+      else image.hidden = true;
+    }, true);
 
     async function submitInspection() {
       if (state.inspectionSubmitting) return toast("점검 제출 중입니다. 잠시만 기다려주세요.");
@@ -10730,6 +10843,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function setAdminMode(enabled, email = "", source = "password") {
       const wasAdmin = state.adminMode;
+      const preserveSectionEditor = !enabled && shouldPreserveSectionEditorOnAdminExit();
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
       state.adminAuthSource = enabled ? source : "";
@@ -10750,7 +10864,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.categoryAddOpen = false;
         state.editToolId = null;
         state.editCategoryId = null;
-        state.editSectionId = null;
+        if (!preserveSectionEditor) {
+          const sectionEditorId = state.editSectionId || state.sectionEditorDraft?.sectionId;
+          state.editSectionId = null;
+          clearSectionEditorDraft(sectionEditorId);
+        }
         state.editItemId = null;
         state.openAddItemSectionIds = [];
         state.categoryVisualOpen = false;
@@ -12003,29 +12121,52 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function editSection(id) {
       if (!requireAdminWrite()) return;
+      const section = state.sections.find((row) => row.id === id);
+      if (!section) return;
+      beginSectionEditor(section);
       state.editSectionId = id;
       state.editItemId = null;
       render();
     }
 
     async function saveSection(id) {
-      if (!requireAdminWrite()) return;
+      if (!requireAdminWrite()) {
+        if (state.sectionEditorDraft?.sectionId === id) render();
+        return;
+      }
+      if (state.sectionSaveSubmittingId) return toast("섹션 저장 중입니다. 잠시만 기다려주세요.");
       const section = state.sections.find((row) => row.id === id);
       if (!section) return;
-      const title = $(`editSectionTitle_${id}`).value.trim();
+      const draft = sectionEditorDraftFor(section);
+      const title = String(draft.title || "").trim();
       if (!title) return toast("섹션명을 입력하세요.");
       const duplicate = sectionsFor(section.categoryId).some((row) => row.id !== id && row.title === title);
       if (duplicate) return toast("같은 이름의 섹션이 이미 있습니다.");
-      const signRaw = String($(`editSectionSign_${id}`)?.value || "").trim();
-      const signCode = /^[PMSW]-\d{2}$/.test(signRaw) ? signRaw : "";
-      const freqRaw = parseInt($(`editSectionFrequency_${id}`)?.value, 10);
-      const sevRaw = parseInt($(`editSectionSeverity_${id}`)?.value, 10);
-      const frequency = Number.isInteger(freqRaw) && freqRaw >= 1 && freqRaw <= 5 ? freqRaw : null;
-      const severity = Number.isInteger(sevRaw) && sevRaw >= 1 && sevRaw <= 5 ? sevRaw : null;
+      const signCode = normalizeSectionEditorSign(draft.signCode);
+      const frequency = normalizeSectionEditorScore(draft.frequency);
+      const severity = normalizeSectionEditorScore(draft.severity);
       const totalScore = frequency != null && severity != null ? frequency * severity : null;
-      state.sections = state.sections.map((row) => row.id === id ? { ...row, title, signCode, frequency, severity, totalScore } : row);
+      const previousSection = { ...section };
+      const updatedSection = { ...section, title, signCode, frequency, severity, totalScore };
+      state.sections = state.sections.map((row) => row.id === id ? updatedSection : row);
+      state.sectionSaveSubmittingId = id;
+      render();
+      let saved = false;
+      try {
+        saved = await persistAndSync("sections");
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("저장 실패 — 권한과 연결 상태를 확인해주세요.");
+      }
+      state.sectionSaveSubmittingId = "";
+      if (!saved) {
+        state.sections = state.sections.map((row) => row.id === id ? previousSection : row);
+        render();
+        return;
+      }
       state.editSectionId = null;
-      if (!(await persistAndSync("sections"))) return;
+      clearSectionEditorDraft(id);
       if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
       render();
       toast("섹션명을 수정했습니다.");

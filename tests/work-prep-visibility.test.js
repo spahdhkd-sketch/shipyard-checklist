@@ -166,3 +166,5 @@ assert.match(app, /data-work-prep-date="\$\{esc\(prevDate\)\}"/);
 assert.match(app, /aria-label="이전 작업지시서 날짜"/);
 assert.match(app, /aria-label="다음 작업지시서 날짜"/);
 assert.match(app, /"select-work-prep-date": \(\) => selectWorkPrepDate\(event\.target\.closest\("\[data-work-prep-date\]"\)\?\.dataset\.workPrepDate \|\| ""\)/);
+assert.match(app, /선택한 공기구\/준비물에 해당하는 점검 항목이 없습니다\./);
+assert.doesNotMatch(app, /작업지시서 준비물에 해당하는 점검 항목이 없습니다\./);
