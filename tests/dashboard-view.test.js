@@ -153,6 +153,42 @@ assert(monthlyHtml.includes("대한민국 국경일/공휴일/대체공휴일 �
 assert(monthlyHtml.includes("05-05 · 어린이날"));
 assert(monthlyHtml.includes('data-delete-monthly-rest-day="2026-05-06"'));
 
+const monthlyLoadingHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
+  dataState: "loading",
+  monthText: "2026년 5월",
+  range: { start: "2026-05-01", end: "2026-05-31", canGoNext: false, isCurrentMonth: true },
+  workers: [{ key: "cached", name: "캐시 작업자", rate: 93, counts: { done: 40, target: 43 } }],
+  rate: 93,
+  totals: { done: 40, target: 43 },
+  dueMissing: 3,
+}, {
+  analyticsKpi: (label, value) => `<div class="analytics-kpi"><span>${label}</span><strong>${value}</strong></div>`,
+});
+assert(monthlyLoadingHtml.includes('data-monthly-worker-state="loading"'));
+assert(monthlyLoadingHtml.includes('aria-live="polite"'));
+assert(monthlyLoadingHtml.includes("월간 점검 데이터를 불러오는 중입니다."));
+assert(monthlyLoadingHtml.includes('data-export-records="monthly-worker-analytics" disabled'));
+assert(!monthlyLoadingHtml.includes("93%"), "loading view must not expose a plausible cached rate");
+assert(!monthlyLoadingHtml.includes("40/43"), "loading view must not expose cached completion totals");
+assert(!monthlyLoadingHtml.includes('data-monthly-worker-toggle="cached"'), "loading view must hide cached worker cards");
+
+const monthlyErrorHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
+  dataState: "error",
+  monthText: "2026년 5월",
+  range: { start: "2026-05-01", end: "2026-05-31", canGoNext: false, isCurrentMonth: true },
+  workers: [{ key: "cached", name: "캐시 작업자", rate: 93, counts: { done: 40, target: 43 } }],
+  rate: 93,
+  totals: { done: 40, target: 43 },
+}, {
+  analyticsKpi: (label, value) => `<div class="analytics-kpi"><span>${label}</span><strong>${value}</strong></div>`,
+});
+assert(monthlyErrorHtml.includes('data-monthly-worker-state="error"'));
+assert(monthlyErrorHtml.includes("월간 점검 데이터를 불러오지 못했습니다."));
+assert(monthlyErrorHtml.includes('data-action="retry-monthly-worker-analytics"'));
+assert(monthlyErrorHtml.includes('data-export-records="monthly-worker-analytics" disabled'));
+assert(!monthlyErrorHtml.includes("93%"), "error view must not present cached data as authoritative");
+assert(!monthlyErrorHtml.includes('data-monthly-worker-toggle="cached"'), "error view must hide cached worker cards");
+
 const manageHtml = dashboardView.renderManageShellView({
   pageHeadHtml: '<header data-test-page-head>관리</header>',
   readOnlyNoticeHtml: '<div class="notice">읽기 전용</div>',
@@ -356,6 +392,9 @@ const analyticsAppWrapper = extractFunction(app, "buildAnalyticsDashboardModel")
 assert(analyticsAppWrapper.includes("ANALYTICS_MODEL.buildAnalyticsDashboardModel("), "app-v2 delegates analytics model building to analytics-model module");
 assert(app.includes("window.ShipyardAnalyticsModel"), "app-v2 reads analytics model global");
 const analyticsRender = extractFunction(app, "renderAnalyticsDashboard");
+const monthlyAnalyticsModel = extractFunction(app, "buildMonthlyWorkerAnalyticsModel");
+const monthlyWorkerDataState = extractFunction(app, "monthlyWorkerInspectionDataState");
+const inspectionRangeLoader = extractFunction(app, "ensureInspectionRangeLoaded");
 assert(app.includes("window.ShipyardDashboardView"), "app-v2 reads dashboard view global");
 assert(app.includes("DASHBOARD_VIEW.renderDashboardView(dashboardModel(), { sectionHeading, navIcon })"), "renderDashboard delegates to dashboard view");
 assert(analyticsModel.includes("dateLabel: formatKoreanDate(now)"), "analytics model owns date label derivation");
@@ -366,6 +405,14 @@ assert(analyticsModel.includes("recent,"), "analytics model owns recent activity
 assert(dashboardView.renderAnalyticsDashboardView, "dashboard view exports analytics dashboard renderer");
 assert(analyticsRender.includes("DASHBOARD_VIEW.renderAnalyticsDashboardView(buildAnalyticsDashboardModel(), {"), "analytics render delegates markup to dashboard view");
 assert(analyticsRender.includes("monthlyWorkerAnalyticsHtml: renderMonthlyWorkerAnalytics()"), "analytics render passes monthly analytics markup into the view");
+assert(monthlyAnalyticsModel.includes("dataState: monthlyWorkerInspectionDataState(stats.range)"), "monthly analytics model exposes the selected range load state");
+assert(monthlyWorkerDataState.includes('if (!isSyncConfigured()) return "ready";'), "local-only monthly analytics remains immediately available");
+assert(monthlyWorkerDataState.includes('entry?.status === "loaded"'), "remote monthly analytics waits for an authoritative range load");
+assert(monthlyWorkerDataState.includes('entry?.status === "error"'), "remote monthly analytics exposes range load failures");
+assert(/status: "error"[\s\S]*?renderPreservingScroll\(\)/.test(inspectionRangeLoader), "range load failure re-renders the explicit error state");
+assert(inspectionRangeLoader.includes("force = false"), "range loader supports explicit error recovery");
+assert(app.includes('button.dataset.action === "retry-monthly-worker-analytics"'), "monthly analytics exposes an explicit retry action");
+assert(app.includes("ensureInspectionRangeLoaded(range.start, range.end, true)"), "monthly analytics retry bypasses the error cooldown");
 assert(!analyticsRender.includes("state."), "analytics render does not read application state directly");
 assert(!analyticsRender.includes("SHIP_WORKFLOW_STAGES"), "analytics render does not derive workflow stage counts directly");
 assert(!analyticsRender.includes("analytics-process-row"), "analytics process markup moved out of app-v2");

@@ -7917,6 +7917,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
+    function monthlyWorkerInspectionDataState(range) {
+      if (!isSyncConfigured()) return "ready";
+      const start = dateOnly(range?.start);
+      let end = dateOnly(range?.end);
+      const todayValue = today();
+      if (end && end > todayValue) end = todayValue;
+      if (!start || !end || start > end) return "error";
+      const entry = state.remoteLoadedInspectionRanges?.[`${start}~${end}`];
+      if (entry?.status === "loaded") return "ready";
+      if (entry?.status === "error") return "error";
+      return "loading";
+    }
+
     function buildMonthlyWorkerAnalyticsModel() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
@@ -7924,6 +7937,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const customRows = restState.customRestDays.filter((date) => monthKeyForDate(date) === stats.range.monthKey);
       const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
       return {
+        dataState: monthlyWorkerInspectionDataState(stats.range),
         monthText: `${stats.range.year}년 ${stats.range.month}월`,
         monthHighlight: state.monthlyWorkerMonthHighlight,
         restOpen: state.monthlyRestDayPanelOpen,
@@ -9484,6 +9498,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "toggle-monthly-rest-settings") {
         state.monthlyRestDayPanelOpen = !state.monthlyRestDayPanelOpen;
+        render();
+        return true;
+      }
+      if (button.dataset.action === "retry-monthly-worker-analytics") {
+        const range = currentMonthRange(selectedMonthlyWorkerMonth());
+        ensureInspectionRangeLoaded(range.start, range.end, true);
         render();
         return true;
       }
@@ -14213,8 +14233,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     // 최근 N건 윈도(state.inspections)와 별개인 읽기 전용 캐시(state.archivedInspections)에 병합하므로
     // 이후 pullRemote가 본 목록을 갱신해도 통계/서약 화면 데이터가 사라지지 않는다.
     // 같은 기간(키)은 세션당 1회만 조회하고, 실패 시 잠시 후에만 재시도해 무한 재조회를 막는다.
-    // 오프라인/차단 환경에서는 조용히 실패하고 로컬 데이터 기준 표시를 유지한다.
-    async function ensureInspectionRangeLoaded(startDate, endDate) {
+    async function ensureInspectionRangeLoaded(startDate, endDate, force = false) {
       const todayValue = today();
       const start = dateOnly(startDate);
       let end = dateOnly(endDate);
@@ -14226,11 +14245,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       const ranges = state.remoteLoadedInspectionRanges;
       const entry = ranges[key];
-      if (entry && ((entry.status === "loaded" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_CACHE_TTL_MS) || entry.status === "loading"
+      if (!force && entry && ((entry.status === "loaded" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_CACHE_TTL_MS) || entry.status === "loading"
         || (entry.status === "error" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_RETRY_MS))) return;
       const client = supabaseClient();
       const config = remoteConfigByKey("inspections");
-      if (!client || !config) return;
+      if (!client || !config) {
+        ranges[key] = { status: "error", at: Date.now() };
+        return;
+      }
       ranges[key] = { status: "loading", at: Date.now() };
       try {
         const data = await selectDetailRows(client, config, (query) => query
@@ -14248,6 +14270,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.warn("점검 이력 기간 로드 실패:", error);
         ranges[key] = { status: "error", at: Date.now() };
+        renderPreservingScroll();
       }
     }
 
