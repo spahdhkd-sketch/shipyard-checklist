@@ -1,14 +1,20 @@
 # Version
 
-Current version: `1.12.1-20260810`
+Current version: `1.12.3-20260810`
 
-Recorded at: `2026-08-10 (Light-theme-only release)`
+Recorded at: `2026-08-10 (Work-prep checklist section filtering release)`
 
-Baseline commit: `pending local release`
+Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Hides checklist sections when all of their items are excluded by the work-order supply selection.
+- Shows one page-level notice instead of rendering empty section titles with `0/0` counts.
+- Opens section editing directly below the selected section row without leaving the work-type manager.
+- Preserves danger-sign image proportions in the selection preview.
+- Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
+- Uses `20260810-empty-sections-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -40,5 +46,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260810-light-only-1` and service-worker version
-  `1.12.1-20260810-light-only` so installed clients refresh safely.
+- Issues asset token `20260810-empty-sections-1` and service-worker version
+  `1.12.3-20260810-empty-sections` so installed clients refresh safely.

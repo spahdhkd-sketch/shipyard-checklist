@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.12.1-20260810-light-only";
+    const APP_VERSION = "1.12.3-20260810-empty-sections";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -4550,7 +4550,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function moreToggle(attrs, expanded) {
-      return `<button class="more-toggle" ${attrs} type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "------접기------" : "------+더보기------"}</button>`;
+      return `<button class="more-toggle" ${attrs} type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "접기" : "+ 더보기"}</button>`;
     }
 
     function workAccent(id, fallback) {
@@ -5574,12 +5574,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const sections = sectionsFor(categoryId);
       const visibleItems = filteredChecklistItems(categoryId);
       if (!sections.length) return `<div class="empty empty-section-note">등록된 섹션이 없습니다.</div>`;
-      return sections.map((section) => {
-        const items = visibleItems.filter((row) => row.sectionId === section.id);
+      const visibleSections = sections
+        .map((section) => ({
+          section,
+          items: visibleItems.filter((row) => row.sectionId === section.id),
+        }))
+        .filter(({ items }) => items.length);
+      if (!visibleSections.length) return `<div class="empty empty-section-note">작업지시서 준비물에 해당하는 점검 항목이 없습니다.</div>`;
+      return visibleSections.map(({ section, items }) => {
         const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
-        return `<section class="check-section ${items.length ? "" : "check-section-empty"}" data-check-section="${esc(section.id)}">
+        return `<section class="check-section" data-check-section="${esc(section.id)}">
           <div class="check-section-hero">
-            ${items.length ? `<input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.length && items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />` : ""}
+            <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
             ${sectionSignImg(section.signCode)}
             <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
           </div>
@@ -5588,11 +5594,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
           </div>
           <div class="check-section-items">
-            ${items.length ? items.map((row) => `
+            ${items.map((row) => `
               <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
                 <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
                 <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
-              </label>`).join("") : `<div class="notice empty-section-note">이 섹션에는 항목이 없습니다.</div>`}
+              </label>`).join("")}
           </div>
         </section>`;
       }).join("");
@@ -8353,15 +8359,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderWorkTypeSectionsTab(cat, sections, items) {
-      return `<div class="work-type-section-list">
+      return `<p class="work-type-section-guide">편집할 섹션을 선택하세요.</p>
+        <div class="work-type-section-list">
           ${sections.map((section) => {
             const count = items.filter((item) => item.sectionId === section.id).length;
-            return `<div class="work-type-section-row"><span>${esc(section.title)}</span><em>${count}개 항목</em></div>`;
+            const open = state.openManageSectionId === section.id;
+            return `<div class="work-type-section-entry ${open ? "is-open" : ""}">
+              <button class="work-type-section-row ${open ? "is-open" : ""}" data-edit-work-type-section="${esc(section.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-expanded="${open ? "true" : "false"}" aria-label="${esc(`${section.title} 섹션 편집`)}"><span>${esc(section.title)}</span><em>${count}개 항목 <i aria-hidden="true">›</i></em></button>
+              ${open ? `<div class="work-type-section-inline-editor">${renderSectionManager(cat, section)}</div>` : ""}
+            </div>`;
           }).join("") || `<div class="empty compact-empty">등록된 섹션이 없습니다.</div>`}
-        </div>
-        <div class="work-type-sticky-actions">
-          <span>섹션과 점검 항목을 상세 화면에서 편집합니다.</span>
-          <button class="btn" data-manage-category="${esc(cat.id)}" type="button">섹션·항목 관리 열기</button>
         </div>`;
     }
 
@@ -9744,11 +9751,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workTypeManagerSelectedId = button.dataset.selectWorkType;
         state.workTypeManagerMobileDetailOpen = true;
         state.editCategoryId = null;
+        state.editSectionId = null;
+        state.editItemId = null;
+        state.openManageSectionId = null;
+        state.openAddItemSectionIds = [];
         state.categoryToolSearchQuery = "";
         render();
       }
       if (button.dataset.workTypeTab) {
         state.workTypeManagerTab = button.dataset.workTypeTab;
+        if (state.workTypeManagerTab !== "sections") {
+          state.editSectionId = null;
+          state.editItemId = null;
+          state.openManageSectionId = null;
+          state.openAddItemSectionIds = [];
+        }
         state.categoryToolSearchQuery = "";
         render();
       }
@@ -9757,9 +9774,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
       }
       if (button.dataset.copyCategoryTools) copyCategoryTools(button.dataset.copyCategoryTools);
+      if (button.dataset.editWorkTypeSection) {
+        if (!requireAdminWrite()) return false;
+        const sectionId = button.dataset.editWorkTypeSection;
+        const section = sectionsFor(state.workTypeManagerSelectedId).find((row) => row.id === sectionId);
+        if (!section) return false;
+        const closing = state.openManageSectionId === sectionId;
+        state.openManageSectionId = closing ? null : sectionId;
+        state.editSectionId = closing ? null : sectionId;
+        state.editItemId = null;
+        state.openAddItemSectionIds = [];
+        render();
+      }
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
         state.editCategoryId = null;
+        state.editSectionId = null;
         state.editItemId = null;
         state.categoryAddOpen = false;
         state.openAddItemSectionIds = [];
@@ -9833,6 +9863,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "cancel-edit-section") {
         state.editSectionId = null;
+        if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
         render();
       }
       if (button.dataset.action === "cancel-edit-item") {
@@ -10192,6 +10223,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-section-sign-preview]")) {
+        const preview = document.getElementById(event.target.dataset.sectionSignPreview);
+        const image = preview?.querySelector("img");
+        const label = preview?.querySelector("span");
+        const signCode = event.target.value;
+        if (!preview || !image || !label) return;
+        if (/^[PMSW]-\d{2}$/.test(signCode)) {
+          image.src = `assets/pictograms/signs/${signCode}.png`;
+          label.textContent = signCode;
+          preview.hidden = false;
+        } else {
+          image.removeAttribute("src");
+          label.textContent = "";
+          preview.hidden = true;
+        }
+        return;
+      }
       if (event.target.matches("[data-pledge-view-date]")) {
         setPledgeViewDate("pick", event.target.value);
         return;
@@ -11978,6 +12026,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.sections = state.sections.map((row) => row.id === id ? { ...row, title, signCode, frequency, severity, totalScore } : row);
       state.editSectionId = null;
       if (!(await persistAndSync("sections"))) return;
+      if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
       render();
       toast("섹션명을 수정했습니다.");
     }

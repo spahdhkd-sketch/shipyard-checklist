@@ -925,18 +925,19 @@
     const freq = Number(model.frequency);
     const sev = Number(model.severity);
     const totalInit = (Number.isInteger(freq) && freq >= 1 && freq <= 5 && Number.isInteger(sev) && sev >= 1 && sev <= 5) ? freq * sev : "-";
-    const signPreviewStyle = validSign ? "height:44px" : "height:44px;display:none";
     const signPreviewSrc = validSign ? `assets/pictograms/signs/${signCode}.png` : "";
-    const signOnchange = `var v=this.value,p=document.getElementById('editSectionSignPreview_${sid}');if(/^[PMSW]-\\d{2}$/.test(v)){p.src='assets/pictograms/signs/'+v+'.png';p.style.display='';}else{p.style.display='none';}`;
     const scoreOnchange = `var f=parseInt(document.getElementById('editSectionFrequency_${sid}').value,10),s=parseInt(document.getElementById('editSectionSeverity_${sid}').value,10),o=document.getElementById('editSectionTotal_${sid}');if(f>=1&&f<=5&&s>=1&&s<=5){o.textContent=f*s;}else{o.textContent='-';}`;
     return `
       <div class="field" style="margin-top:8px">
         <label for="editSectionSign_${sid}">위험 표지</label>
-        <select class="select" id="editSectionSign_${sid}" onchange="${signOnchange}">
+        <select class="select" id="editSectionSign_${sid}" data-section-sign-preview="editSectionSignPreview_${sid}">
           <option value="" ${!validSign ? "selected" : ""}>없음</option>
           ${signOptions}
         </select>
-        <img id="editSectionSignPreview_${sid}" alt="표지 미리보기" src="${signPreviewSrc}" style="${signPreviewStyle};margin-top:6px" onerror="this.style.display='none'" />
+        <div class="section-sign-preview" id="editSectionSignPreview_${sid}" ${validSign ? "" : "hidden"}>
+          <img alt="선택한 위험 표지 미리보기" src="${signPreviewSrc}" onerror="this.closest('.section-sign-preview').hidden=true" />
+          <span>${validSign ? signCode : ""}</span>
+        </div>
       </div>
       <div class="grid-2" style="margin-top:8px">
         <div class="field">

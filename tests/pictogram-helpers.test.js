@@ -5,7 +5,7 @@ const path = require("path");
 const helpers = require("../assets/js/pictogram-helpers.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260810-light-only-1";
+const ASSET_TOKEN = "20260810-empty-sections-1";
 const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
 const HELPER_SCRIPT = `assets/dist/js/pictogram-helpers.min.js?v=${ASSET_TOKEN}`;
 
