@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.12.1-20260810-light-only";
+    const APP_VERSION = "1.12.4-20260814-editor-safety";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -2728,6 +2728,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       categoryToolSearchQuery: "",
       editCategoryId: null,
       editSectionId: null,
+      sectionEditorDraft: null,
+      sectionSaveSubmittingId: "",
       editItemId: null,
       editToolId: null,
       toolAddOpen: false,
@@ -2977,6 +2979,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       window.addEventListener("storage", handleStorageSyncWake);
       window.addEventListener("popstate", restoreRouteState);
+      window.addEventListener("beforeunload", (event) => {
+        if (!state.sectionSaveSubmittingId && !isSectionEditorDirty()) return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
         await startRemoteSync();
@@ -4550,7 +4557,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function moreToggle(attrs, expanded) {
-      return `<button class="more-toggle" ${attrs} type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "------접기------" : "------+더보기------"}</button>`;
+      return `<button class="more-toggle" ${attrs} type="button" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "접기" : "+ 더보기"}</button>`;
     }
 
     function workAccent(id, fallback) {
@@ -5553,8 +5560,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function sectionSignImg(signCode) {
-      if (!/^[PMSW]-\d{2}$/.test(signCode)) return "";
-      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" onerror="this.style.display='none'" loading="lazy">`;
+      if (!/^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode)) return "";
+      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" data-section-sign-image loading="lazy">`;
     }
 
     function sectionRiskBadge(section) {
@@ -5574,12 +5581,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const sections = sectionsFor(categoryId);
       const visibleItems = filteredChecklistItems(categoryId);
       if (!sections.length) return `<div class="empty empty-section-note">등록된 섹션이 없습니다.</div>`;
-      return sections.map((section) => {
-        const items = visibleItems.filter((row) => row.sectionId === section.id);
+      const visibleSections = sections
+        .map((section) => ({
+          section,
+          items: visibleItems.filter((row) => row.sectionId === section.id),
+        }))
+        .filter(({ items }) => items.length);
+      if (!visibleSections.length) return `<div class="empty empty-section-note">선택한 공기구/준비물에 해당하는 점검 항목이 없습니다.</div>`;
+      return visibleSections.map(({ section, items }) => {
         const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
-        return `<section class="check-section ${items.length ? "" : "check-section-empty"}" data-check-section="${esc(section.id)}">
+        return `<section class="check-section" data-check-section="${esc(section.id)}">
           <div class="check-section-hero">
-            ${items.length ? `<input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.length && items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />` : ""}
+            <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
             ${sectionSignImg(section.signCode)}
             <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
           </div>
@@ -5588,11 +5601,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
           </div>
           <div class="check-section-items">
-            ${items.length ? items.map((row) => `
+            ${items.map((row) => `
               <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
                 <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
                 <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
-              </label>`).join("") : `<div class="notice empty-section-note">이 섹션에는 항목이 없습니다.</div>`}
+              </label>`).join("")}
           </div>
         </section>`;
       }).join("");
@@ -7904,6 +7917,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
+    function monthlyWorkerInspectionDataState(range) {
+      if (!isSyncConfigured()) return "ready";
+      const start = dateOnly(range?.start);
+      let end = dateOnly(range?.end);
+      const todayValue = today();
+      if (end && end > todayValue) end = todayValue;
+      if (!start || !end || start > end) return "error";
+      const entry = state.remoteLoadedInspectionRanges?.[`${start}~${end}`];
+      if (entry?.status === "loaded") return "ready";
+      if (entry?.status === "error") return "error";
+      return "loading";
+    }
+
     function buildMonthlyWorkerAnalyticsModel() {
       const stats = monthlyWorkerInspectionStats();
       const restState = monthlyWorkerRestDayState();
@@ -7911,6 +7937,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const customRows = restState.customRestDays.filter((date) => monthKeyForDate(date) === stats.range.monthKey);
       const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
       return {
+        dataState: monthlyWorkerInspectionDataState(stats.range),
         monthText: `${stats.range.year}년 ${stats.range.month}월`,
         monthHighlight: state.monthlyWorkerMonthHighlight,
         restOpen: state.monthlyRestDayPanelOpen,
@@ -8142,13 +8169,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const items = activeItems(cat.id).filter((row) => row.sectionId === section.id).sort(byOrder);
       const addOpen = state.openAddItemSectionIds.includes(section.id);
       const expanded = state.openManageSectionId === section.id;
+      const editing = state.editSectionId === section.id;
+      const editor = editing ? sectionEditorDraftFor(section) : section;
       return SCREEN_VIEWS.renderSectionManagerView({
         sectionId: section.id,
-        sectionTitle: section.title,
-        signCode: section.signCode || "",
-        frequency: section.frequency,
-        severity: section.severity,
-        editing: state.editSectionId === section.id,
+        sectionTitle: editor.title,
+        signCode: editor.signCode || "",
+        frequency: editor.frequency,
+        severity: editor.severity,
+        editing,
+        saving: state.sectionSaveSubmittingId === section.id,
         expanded,
         addOpen,
         adminMode: state.adminMode,
@@ -8163,6 +8193,80 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           badgeHtml: badge(row.risk),
         })),
       });
+    }
+
+    function normalizeSectionEditorScore(value) {
+      const score = parseInt(value, 10);
+      return Number.isInteger(score) && score >= 1 && score <= 5 ? score : null;
+    }
+
+    function normalizeSectionEditorSign(value) {
+      const signCode = String(value || "").trim();
+      return /^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode) ? signCode : "";
+    }
+
+    function createSectionEditorDraft(section) {
+      return {
+        sectionId: section.id,
+        title: String(section.title || ""),
+        signCode: normalizeSectionEditorSign(section.signCode),
+        frequency: normalizeSectionEditorScore(section.frequency),
+        severity: normalizeSectionEditorScore(section.severity),
+      };
+    }
+
+    function sectionEditorDraftFor(section) {
+      if (!section) return null;
+      if (state.sectionEditorDraft?.sectionId !== section.id) {
+        state.sectionEditorDraft = createSectionEditorDraft(section);
+      }
+      return state.sectionEditorDraft;
+    }
+
+    function beginSectionEditor(section) {
+      state.sectionEditorDraft = section ? createSectionEditorDraft(section) : null;
+    }
+
+    function updateSectionEditorDraft(sectionId, field, value) {
+      const section = state.sections.find((row) => row.id === sectionId);
+      if (!section || state.editSectionId !== sectionId || !["title", "signCode", "frequency", "severity"].includes(field)) return;
+      const draft = sectionEditorDraftFor(section);
+      state.sectionEditorDraft = { ...draft, [field]: value };
+    }
+
+    function clearSectionEditorDraft(sectionId = state.editSectionId) {
+      if (!sectionId || state.sectionEditorDraft?.sectionId === sectionId) state.sectionEditorDraft = null;
+    }
+
+    function isSectionEditorDirty(sectionId = state.editSectionId) {
+      const section = state.sections.find((row) => row.id === sectionId);
+      if (!section || !sectionId) return false;
+      const draft = sectionEditorDraftFor(section);
+      return String(draft.title || "").trim() !== String(section.title || "").trim()
+        || normalizeSectionEditorSign(draft.signCode) !== normalizeSectionEditorSign(section.signCode)
+        || normalizeSectionEditorScore(draft.frequency) !== normalizeSectionEditorScore(section.frequency)
+        || normalizeSectionEditorScore(draft.severity) !== normalizeSectionEditorScore(section.severity);
+    }
+
+    function shouldPreserveSectionEditorOnAdminExit() {
+      const sectionId = state.editSectionId || state.sectionSaveSubmittingId;
+      if (!sectionId) return false;
+      return state.sectionSaveSubmittingId === sectionId || isSectionEditorDirty(sectionId);
+    }
+
+    function confirmSectionEditorDiscard(button) {
+      const sectionId = state.editSectionId;
+      if (!sectionId) return true;
+      if (state.sectionSaveSubmittingId === sectionId) {
+        toast("섹션 저장 중입니다. 잠시만 기다려주세요.");
+        return false;
+      }
+      if (button?.dataset.action === "toggle-admin" && !state.adminMode) return true;
+      if (button?.dataset.saveSection === sectionId || button?.dataset.action === "cancel-edit-section") return true;
+      if (isSectionEditorDirty(sectionId)
+        && !window.confirm("저장하지 않은 섹션 변경사항이 있습니다.\n변경사항을 버리고 이동할까요?")) return false;
+      clearSectionEditorDraft(sectionId);
+      return true;
     }
 
     function renderEditableItemRow(row) {
@@ -8353,15 +8457,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderWorkTypeSectionsTab(cat, sections, items) {
-      return `<div class="work-type-section-list">
+      return `<p class="work-type-section-guide">편집할 섹션을 선택하세요.</p>
+        <div class="work-type-section-list">
           ${sections.map((section) => {
             const count = items.filter((item) => item.sectionId === section.id).length;
-            return `<div class="work-type-section-row"><span>${esc(section.title)}</span><em>${count}개 항목</em></div>`;
+            const open = state.openManageSectionId === section.id;
+            return `<div class="work-type-section-entry ${open ? "is-open" : ""}">
+              <button class="work-type-section-row ${open ? "is-open" : ""}" data-edit-work-type-section="${esc(section.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-expanded="${open ? "true" : "false"}" aria-label="${esc(`${section.title} 섹션 편집`)}"><span>${esc(section.title)}</span><em>${count}개 항목 <i aria-hidden="true">›</i></em></button>
+              ${open ? `<div class="work-type-section-inline-editor">${renderSectionManager(cat, section)}</div>` : ""}
+            </div>`;
           }).join("") || `<div class="empty compact-empty">등록된 섹션이 없습니다.</div>`}
-        </div>
-        <div class="work-type-sticky-actions">
-          <span>섹션과 점검 항목을 상세 화면에서 편집합니다.</span>
-          <button class="btn" data-manage-category="${esc(cat.id)}" type="button">섹션·항목 관리 열기</button>
         </div>`;
     }
 
@@ -9396,6 +9501,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
         return true;
       }
+      if (button.dataset.action === "retry-monthly-worker-analytics") {
+        const range = currentMonthRange(selectedMonthlyWorkerMonth());
+        ensureInspectionRangeLoaded(range.start, range.end, true);
+        render();
+        return true;
+      }
       if (button.dataset.action === "add-monthly-rest-day") {
         addCustomMonthlyRestDay(document.querySelector("[data-monthly-custom-rest-date]")?.value || "");
         return true;
@@ -9744,11 +9855,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workTypeManagerSelectedId = button.dataset.selectWorkType;
         state.workTypeManagerMobileDetailOpen = true;
         state.editCategoryId = null;
+        state.editSectionId = null;
+        state.editItemId = null;
+        state.openManageSectionId = null;
+        state.openAddItemSectionIds = [];
         state.categoryToolSearchQuery = "";
         render();
       }
       if (button.dataset.workTypeTab) {
         state.workTypeManagerTab = button.dataset.workTypeTab;
+        if (state.workTypeManagerTab !== "sections") {
+          state.editSectionId = null;
+          state.editItemId = null;
+          state.openManageSectionId = null;
+          state.openAddItemSectionIds = [];
+        }
         state.categoryToolSearchQuery = "";
         render();
       }
@@ -9757,9 +9878,24 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
       }
       if (button.dataset.copyCategoryTools) copyCategoryTools(button.dataset.copyCategoryTools);
+      if (button.dataset.editWorkTypeSection) {
+        if (!requireAdminWrite()) return false;
+        const sectionId = button.dataset.editWorkTypeSection;
+        const section = sectionsFor(state.workTypeManagerSelectedId).find((row) => row.id === sectionId);
+        if (!section) return false;
+        const closing = state.openManageSectionId === sectionId;
+        if (closing) clearSectionEditorDraft(sectionId);
+        else beginSectionEditor(section);
+        state.openManageSectionId = closing ? null : sectionId;
+        state.editSectionId = closing ? null : sectionId;
+        state.editItemId = null;
+        state.openAddItemSectionIds = [];
+        render();
+      }
       if (button.dataset.manageCategory) {
         state.manageCategoryId = button.dataset.manageCategory;
         state.editCategoryId = null;
+        state.editSectionId = null;
         state.editItemId = null;
         state.categoryAddOpen = false;
         state.openAddItemSectionIds = [];
@@ -9832,7 +9968,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
       }
       if (button.dataset.action === "cancel-edit-section") {
+        clearSectionEditorDraft();
         state.editSectionId = null;
+        if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
         render();
       }
       if (button.dataset.action === "cancel-edit-item") {
@@ -9843,9 +9981,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     document.addEventListener("click", (event) => {
-      if (handleDelegatedClick(event)) return;
-
       const button = event.target.closest("button");
+      if (button && !confirmSectionEditorDiscard(button)) {
+        event.preventDefault();
+        return;
+      }
+      if (handleDelegatedClick(event)) return;
       if (!button) return;
 
       if (handleSyncButtonClick(button)) return;
@@ -10090,6 +10231,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     document.addEventListener("input", (event) => {
+      if (event.target.matches("[data-section-editor-field]")) {
+        updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
+      }
       if (event.target.matches("[data-admin-push-field]")) {
         updateAdminPushDraftField(event.target.dataset.adminPushField, event.target.value);
       }
@@ -10192,6 +10336,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-section-editor-field]")) {
+        updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
+      }
+      if (event.target.matches("[data-section-sign-preview]")) {
+        const preview = document.getElementById(event.target.dataset.sectionSignPreview);
+        const image = preview?.querySelector("img");
+        const label = preview?.querySelector("span");
+        const signCode = event.target.value;
+        if (!preview || !image || !label) return;
+        if (/^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode)) {
+          image.src = `assets/pictograms/signs/${signCode}.png`;
+          label.textContent = signCode;
+          preview.hidden = false;
+        } else {
+          image.removeAttribute("src");
+          label.textContent = "";
+          preview.hidden = true;
+        }
+        return;
+      }
+      if (event.target.matches("[data-section-score-preview]")) {
+        const sectionId = event.target.dataset.sectionEditorId;
+        const draft = state.sectionEditorDraft?.sectionId === sectionId ? state.sectionEditorDraft : null;
+        const output = document.getElementById(event.target.dataset.sectionScorePreview);
+        const frequency = normalizeSectionEditorScore(draft?.frequency);
+        const severity = normalizeSectionEditorScore(draft?.severity);
+        if (output) output.textContent = frequency != null && severity != null ? String(frequency * severity) : "-";
+        return;
+      }
       if (event.target.matches("[data-pledge-view-date]")) {
         setPledgeViewDate("pick", event.target.value);
         return;
@@ -10319,6 +10492,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         event.target.value = "";
       }
     });
+
+    document.addEventListener("error", (event) => {
+      const image = event.target;
+      if (!image?.matches?.("[data-section-sign-image]")) return;
+      const preview = image.closest(".section-sign-preview");
+      if (preview) preview.hidden = true;
+      else image.hidden = true;
+    }, true);
 
     async function submitInspection() {
       if (state.inspectionSubmitting) return toast("점검 제출 중입니다. 잠시만 기다려주세요.");
@@ -10682,6 +10863,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function setAdminMode(enabled, email = "", source = "password") {
       const wasAdmin = state.adminMode;
+      const preserveSectionEditor = !enabled && shouldPreserveSectionEditorOnAdminExit();
       state.adminMode = Boolean(enabled);
       state.adminEmail = enabled ? email : "";
       state.adminAuthSource = enabled ? source : "";
@@ -10702,7 +10884,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.categoryAddOpen = false;
         state.editToolId = null;
         state.editCategoryId = null;
-        state.editSectionId = null;
+        if (!preserveSectionEditor) {
+          const sectionEditorId = state.editSectionId || state.sectionEditorDraft?.sectionId;
+          state.editSectionId = null;
+          clearSectionEditorDraft(sectionEditorId);
+        }
         state.editItemId = null;
         state.openAddItemSectionIds = [];
         state.categoryVisualOpen = false;
@@ -11955,29 +12141,53 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function editSection(id) {
       if (!requireAdminWrite()) return;
+      const section = state.sections.find((row) => row.id === id);
+      if (!section) return;
+      beginSectionEditor(section);
       state.editSectionId = id;
       state.editItemId = null;
       render();
     }
 
     async function saveSection(id) {
-      if (!requireAdminWrite()) return;
+      if (!requireAdminWrite()) {
+        if (state.sectionEditorDraft?.sectionId === id) render();
+        return;
+      }
+      if (state.sectionSaveSubmittingId) return toast("섹션 저장 중입니다. 잠시만 기다려주세요.");
       const section = state.sections.find((row) => row.id === id);
       if (!section) return;
-      const title = $(`editSectionTitle_${id}`).value.trim();
+      const draft = sectionEditorDraftFor(section);
+      const title = String(draft.title || "").trim();
       if (!title) return toast("섹션명을 입력하세요.");
       const duplicate = sectionsFor(section.categoryId).some((row) => row.id !== id && row.title === title);
       if (duplicate) return toast("같은 이름의 섹션이 이미 있습니다.");
-      const signRaw = String($(`editSectionSign_${id}`)?.value || "").trim();
-      const signCode = /^[PMSW]-\d{2}$/.test(signRaw) ? signRaw : "";
-      const freqRaw = parseInt($(`editSectionFrequency_${id}`)?.value, 10);
-      const sevRaw = parseInt($(`editSectionSeverity_${id}`)?.value, 10);
-      const frequency = Number.isInteger(freqRaw) && freqRaw >= 1 && freqRaw <= 5 ? freqRaw : null;
-      const severity = Number.isInteger(sevRaw) && sevRaw >= 1 && sevRaw <= 5 ? sevRaw : null;
+      const signCode = normalizeSectionEditorSign(draft.signCode);
+      const frequency = normalizeSectionEditorScore(draft.frequency);
+      const severity = normalizeSectionEditorScore(draft.severity);
       const totalScore = frequency != null && severity != null ? frequency * severity : null;
-      state.sections = state.sections.map((row) => row.id === id ? { ...row, title, signCode, frequency, severity, totalScore } : row);
+      const previousSection = { ...section };
+      const updatedSection = { ...section, title, signCode, frequency, severity, totalScore };
+      state.sections = state.sections.map((row) => row.id === id ? updatedSection : row);
+      state.sectionSaveSubmittingId = id;
+      render();
+      let saved = false;
+      try {
+        saved = await persistAndSync("sections");
+      } catch (error) {
+        console.error(error);
+        setSyncStatus("동기화 오류", "error");
+        toast("저장 실패 — 권한과 연결 상태를 확인해주세요.");
+      }
+      state.sectionSaveSubmittingId = "";
+      if (!saved) {
+        state.sections = state.sections.map((row) => row.id === id ? previousSection : row);
+        render();
+        return;
+      }
       state.editSectionId = null;
-      if (!(await persistAndSync("sections"))) return;
+      clearSectionEditorDraft(id);
+      if (!state.manageCategoryId && state.workTypeManagerTab === "sections") state.openManageSectionId = null;
       render();
       toast("섹션명을 수정했습니다.");
     }
@@ -14023,8 +14233,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     // 최근 N건 윈도(state.inspections)와 별개인 읽기 전용 캐시(state.archivedInspections)에 병합하므로
     // 이후 pullRemote가 본 목록을 갱신해도 통계/서약 화면 데이터가 사라지지 않는다.
     // 같은 기간(키)은 세션당 1회만 조회하고, 실패 시 잠시 후에만 재시도해 무한 재조회를 막는다.
-    // 오프라인/차단 환경에서는 조용히 실패하고 로컬 데이터 기준 표시를 유지한다.
-    async function ensureInspectionRangeLoaded(startDate, endDate) {
+    async function ensureInspectionRangeLoaded(startDate, endDate, force = false) {
       const todayValue = today();
       const start = dateOnly(startDate);
       let end = dateOnly(endDate);
@@ -14036,11 +14245,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       const ranges = state.remoteLoadedInspectionRanges;
       const entry = ranges[key];
-      if (entry && ((entry.status === "loaded" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_CACHE_TTL_MS) || entry.status === "loading"
+      if (!force && entry && ((entry.status === "loaded" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_CACHE_TTL_MS) || entry.status === "loading"
         || (entry.status === "error" && Date.now() - Number(entry.at || 0) < INSPECTION_RANGE_RETRY_MS))) return;
       const client = supabaseClient();
       const config = remoteConfigByKey("inspections");
-      if (!client || !config) return;
+      if (!client || !config) {
+        ranges[key] = { status: "error", at: Date.now() };
+        return;
+      }
       ranges[key] = { status: "loading", at: Date.now() };
       try {
         const data = await selectDetailRows(client, config, (query) => query
@@ -14058,6 +14270,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       } catch (error) {
         console.warn("점검 이력 기간 로드 실패:", error);
         ranges[key] = { status: "error", at: Date.now() };
+        renderPreservingScroll();
       }
     }
 

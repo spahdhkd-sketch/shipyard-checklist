@@ -348,6 +348,7 @@
   function renderMonthlyWorkerAnalyticsView(model = {}, deps = {}) {
     const analyticsKpi = typeof deps.analyticsKpi === "function" ? deps.analyticsKpi : defaultAnalyticsKpi;
     const {
+      dataState = "ready",
       monthText = "",
       monthHighlight = false,
       restOpen = false,
@@ -359,14 +360,31 @@
       dueMissing = 0,
       restPanel = {},
     } = model;
+    const dataReady = dataState === "ready";
     const meta = renderMonthlyWorkerMonthMeta(monthText, monthHighlight);
+    const retryButton = dataState === "error"
+      ? '\n              <button class="btn-light" data-action="retry-monthly-worker-analytics" type="button">다시 시도</button>'
+      : "";
     const toolbar = `<div class="monthly-worker-toolbar">
               <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
               <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
               <button class="btn-light" data-monthly-worker-month="next" ${range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
-              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>
-              <button class="btn" data-export-records="monthly-worker-analytics" type="button">월간 내보내기</button>
+              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>${retryButton}
+              <button class="btn" data-export-records="monthly-worker-analytics"${dataReady ? "" : " disabled"} type="button">월간 내보내기</button>
             </div>`;
+    if (!dataReady) {
+      const message = dataState === "error"
+        ? "월간 점검 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요."
+        : "월간 점검 데이터를 불러오는 중입니다.";
+      return `<section class="analytics-panel monthly-worker-analytics" data-monthly-worker-state="${esc(dataState)}">
+          <div class="monthly-worker-head">
+            <div><strong>월간 작업자 점검 현황</strong>${meta}</div>
+            ${toolbar}
+          </div>
+          <div class="empty monthly-worker-data-state" role="status" aria-live="polite">${esc(message)}</div>
+          ${restOpen ? renderMonthlyRestDaySettingsView(restPanel) : ""}
+        </section>`;
+    }
     if (!workers.length) {
       return `<section class="analytics-panel monthly-worker-analytics">
           <div class="monthly-worker-head">
