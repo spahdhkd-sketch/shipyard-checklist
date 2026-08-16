@@ -4712,7 +4712,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return `<div data-submit-blocker-anchor="ship">${renderPledgeFlowSummary({
           label: fromWorkPrepRecord ? "작업지시 호선" : "오늘 작업 호선",
           title: selectedShip.no,
-          meta: `${selectedShip.type || "선종 미지정"} · D/L ${shipDeliveryDate(selectedShip) || "-"}`,
+          meta: `${selectedShip.type || "선종 미지정"} · ${shipDeliveryMeta(selectedShip)}`,
           action: "expand-pledge-ship",
           stage,
           locked: fromWorkPrepRecord,
@@ -4726,7 +4726,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             const selected = state.draft.shipNo === ship.no;
             return `<button class="pledge-ship-row ${selected ? "active" : ""}" data-select-pledge-ship="${esc(ship.no)}" type="button" aria-pressed="${selected ? "true" : "false"}">
               <span class="pledge-radio"></span>
-              <span><strong>${esc(ship.no)}</strong><em>${esc(ship.type || "선종 미지정")} · D/L ${esc(shipDeliveryDate(ship) || "-")}</em></span>
+              <span><strong>${esc(ship.no)}</strong><em>${esc(ship.type || "선종 미지정")} · ${esc(shipDeliveryMeta(ship))}</em></span>
               <b style="--stage:${esc(stage.color)}">${esc(stage.label)}</b>
             </button>`;
           }).join("")}
@@ -8755,6 +8755,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (ship.dlDate) return "D/L";
       if (ship.clDate) return "C/L";
       return ship.deliveryType || "";
+    }
+
+    function shipDeliveryMeta(ship) {
+      const deliveryType = shipDeliveryType(ship);
+      const deliveryDate = shipDeliveryDate(ship);
+      return [deliveryType || (deliveryDate ? "" : "인도"), deliveryDate].filter(Boolean).join(" ");
     }
 
     function shipDeliveryDate(ship) {
