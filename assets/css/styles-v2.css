@@ -9050,6 +9050,160 @@
       font-weight: 900;
     }
 
+    .check-submit-flow {
+      padding-bottom: 244px;
+    }
+
+    .check-submit-fixed-bar {
+      position: fixed;
+      z-index: 60;
+      left: 50%;
+      bottom: 18px;
+      width: min(760px, calc(100vw - 36px));
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--surface) 96%, #fff);
+      box-shadow: 0 14px 34px rgba(11, 29, 58, .18);
+      transform: translateX(-50%);
+    }
+
+    .check-submit-fixed-summary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .check-submit-fixed-summary strong {
+      color: var(--ink-strong);
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .check-submit-fixed-summary span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .check-submit-fixed-bar .check-submit-blockers {
+      margin: 0;
+      padding: 10px;
+    }
+
+    .check-submit-fixed-bar .check-submit-blocker-list {
+      max-height: 98px;
+      overflow: auto;
+    }
+
+    .check-submit-fixed-bar .check-submit-blocker {
+      min-height: 44px;
+      font-size: 12px;
+    }
+
+    .check-submit-sheet-overlay {
+      position: fixed;
+      z-index: 1300;
+      inset: 0;
+      display: grid;
+      align-items: end;
+      justify-items: center;
+      padding: 20px;
+    }
+
+    .check-submit-sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      border: 0;
+      background: rgba(11, 29, 58, .54);
+    }
+
+    .check-submit-sheet-panel {
+      position: relative;
+      z-index: 1;
+      width: min(720px, 100%);
+      max-height: calc(100vh - 40px);
+      display: grid;
+      gap: 14px;
+      overflow: auto;
+      padding: 20px;
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: 0 -18px 50px rgba(11, 29, 58, .24);
+    }
+
+    .check-submit-sheet-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .check-submit-sheet-head span {
+      display: block;
+      color: var(--color-brand-secondary-text);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .check-submit-sheet-head h2 {
+      margin: 4px 0 0;
+      color: var(--ink-strong);
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    .check-submit-sheet-guide {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .check-submit-sheet-panel .check-submit-blockers {
+      margin: 0;
+    }
+
+    .check-submit-sheet-submit {
+      position: sticky;
+      bottom: 0;
+      width: 100%;
+      min-height: 56px;
+    }
+
+    @media (max-width: 720px) {
+      .check-submit-flow {
+        padding-bottom: calc(var(--bottom-nav-clearance) + 258px);
+      }
+
+      .check-submit-fixed-bar {
+        bottom: var(--bottom-nav-clearance);
+        width: min(430px, calc(100vw - 16px));
+        padding: 10px;
+      }
+
+      .check-submit-fixed-bar .check-submit-blockers {
+        padding: 8px;
+      }
+
+      .check-submit-fixed-bar .check-submit-blocker-list {
+        max-height: 86px;
+      }
+
+      .check-submit-sheet-overlay {
+        padding: 8px;
+      }
+
+      .check-submit-sheet-panel {
+        max-height: calc(100vh - 16px);
+        padding: 16px;
+        border-radius: 18px 18px 12px 12px;
+      }
+    }
+
     .check-item {
       display: grid;
       grid-template-columns: 22px minmax(0, 1fr);

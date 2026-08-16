@@ -565,23 +565,28 @@ function assertCheck(name, condition) {
     await click(client, '[data-action="continue-tool-prep"]');
     const checklistState = await evaluate(client, `(() => {
       const text = document.body.innerText;
-      const pledgeCard = Array.from(document.querySelectorAll(".pledge-flow-card"))
-        .find((node) => node.textContent.includes("작업 전 안전 서약서"));
       return {
         hasWireItem: text.includes("탑재용 와이어 / 샤클 안전핀 상태"),
         hasSlingItem: text.includes("슬링벨트 손상 상태"),
         hasCommonHousekeeping: text.includes("탑재 위치 정리정돈"),
         hasCommonUnderLoad: text.includes("권상물 하부 출입금지"),
-        hasInlinePledge: Boolean(pledgeCard),
-        pledgeRuleCount: pledgeCard ? pledgeCard.querySelectorAll("[data-pledge-rule]").length : 0,
+        hasSubmitBar: Boolean(document.querySelector("[data-check-submit-bar]")),
+        hasInlinePledge: Boolean(document.querySelector("[data-pledge-rule]")),
       };
     })()`);
     assertCheck("wire-specific item appears", checklistState.hasWireItem);
     assertCheck("unselected sling item is hidden", !checklistState.hasSlingItem);
     assertCheck("common housekeeping item appears", checklistState.hasCommonHousekeeping);
     assertCheck("common under-load item appears", checklistState.hasCommonUnderLoad);
-    assertCheck("inline safety pledge appears", checklistState.hasInlinePledge);
-    assertCheck("inline safety pledge has rules", checklistState.pledgeRuleCount > 0);
+    assertCheck("fixed submission bar appears", checklistState.hasSubmitBar);
+    assertCheck("safety pledge stays out of the checklist body", !checklistState.hasInlinePledge);
+    await click(client, '[data-action="open-check-submit-sheet"]');
+    const submitSheetState = await evaluate(client, `(() => ({
+      hasDialog: Boolean(document.querySelector("[data-check-submit-sheet][role='dialog']")),
+      pledgeRuleCount: document.querySelectorAll("[data-check-submit-sheet] [data-pledge-rule]").length,
+      hasFinalSubmit: Boolean(document.querySelector("[data-action='final-submit-inspection']")),
+    }))()`);
+    assertCheck("submission sheet contains pledge rules", submitSheetState.hasDialog && submitSheetState.pledgeRuleCount > 0 && submitSheetState.hasFinalSubmit);
     const checklistShot = await screenshot(client, "02-checklist-wire-desktop.png");
 
     await setViewport(client, 420, 844, true);

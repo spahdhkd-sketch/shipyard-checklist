@@ -117,6 +117,20 @@ async function checkAllBoxes(page) {
   }
 }
 
+async function checkSubmissionPledgeRules(page) {
+  for (let i = 0; i < 10; i += 1) {
+    const did = await page.evaluate(() => {
+      const checkbox = [...document.querySelectorAll("[data-check-submit-sheet] [data-pledge-rule]")]
+        .find((item) => !item.checked && !item.disabled);
+      if (!checkbox) return false;
+      checkbox.click();
+      return true;
+    });
+    if (!did) break;
+    await wait(180);
+  }
+}
+
 const bodyText = (page) => page.evaluate(() => document.body.innerText.replace(/\s+/g, " "));
 
 async function main() {
@@ -726,16 +740,24 @@ async function main() {
   check("점검: STEP 2 공기구 확인 진입", (await bodyText(page)).includes("공기구 확인"));
   check("점검: [다음 점검표로] 클릭", await clickBtn(page, "다음 점검표로")); await wait(1500);
   await checkAllBoxes(page);
-  await page.click("#pledgeSignatureText");
-  await page.keyboard.type("홍길동", { delay: 40 });
+  check("점검: [제출 전 확인] 클릭", await clickBtn(page, "제출 전 확인")); await wait(500);
+  check("점검: 제출 시트에 안전 서약 표시", (await bodyText(page)).includes("안전 서약과 서명을 확인하세요"));
+  await checkSubmissionPledgeRules(page);
   await page.evaluate(() => {
     const el = document.querySelector("#pledgeSignatureText");
+    el.value = "테스트서명";
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
     el.blur();
   });
   await wait(700);
-  check("점검: [제출하기] 클릭", await clickBtn(page, "제출하기")); await wait(2200);
+  const finalSubmitState = await page.evaluate(() => ({
+    disabled: Boolean(document.querySelector("[data-action='final-submit-inspection']")?.disabled),
+    pledgeChecked: [...document.querySelectorAll("[data-check-submit-sheet] [data-pledge-rule]")].filter((item) => item.checked).length,
+    signature: document.querySelector("#pledgeSignatureText")?.value || "",
+  }));
+  check("점검: 제출 시트 최종 제출 가능", !finalSubmitState.disabled && finalSubmitState.pledgeChecked > 0 && Boolean(finalSubmitState.signature));
+  check("점검: [최종 제출] 클릭", await clickBtn(page, "최종 제출")); await wait(2200);
   const inspectionCompletionText = await bodyText(page);
   check("점검: 제출 완료 화면", inspectionCompletionText.includes("점검이 제출되었습니다"));
   check("점검: 제출 즉시 홈·이력 반영 안내", inspectionCompletionText.includes("홈과 점검 이력에 즉시 반영되었습니다"));

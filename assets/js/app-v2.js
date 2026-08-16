@@ -865,6 +865,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     };
     const saveJson = (key, value) => {
       try {
+        if (key === "draft" && value && typeof value === "object") value.savedAt = new Date().toISOString();
         localStorage.setItem(storeKey(key), JSON.stringify(value));
         return true;
       } catch (error) {
@@ -1169,6 +1170,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         selectedToolIds: [],
         toolPrepComplete: false,
         directShipSelectionComplete: false,
+        savedAt: "",
         ...overrides,
       };
     }
@@ -2755,6 +2757,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workPrepAppearanceOpen: false,
       workPrepDraft: createWorkPrepDraft(loadJson("workPrepDraft", {})),
       draft: loadDraft(),
+      checkSubmitSheetOpen: false,
       historyScope: "all",
       historyFilter: "all",
       historyShipNo: "",
@@ -4809,15 +4812,55 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </section>`;
     }
 
+    function checkDraftSaveLabel() {
+      const savedAt = Date.parse(state.draft.savedAt || "");
+      if (!Number.isFinite(savedAt)) return "임시저장 대기";
+      return `임시저장 ${new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(savedAt))}`;
+    }
+
+    function renderCheckSubmitBar(items, checked, submitState) {
+      return `<aside class="check-submit-fixed-bar" data-check-submit-bar aria-label="점검 제출 상태">
+        <div class="check-submit-fixed-summary">
+          <strong data-check-submit-progress>확인 ${checked}/${items.length}</strong>
+          <span data-check-draft-saved-at>${esc(checkDraftSaveLabel())}</span>
+        </div>
+        ${renderCheckSubmitBlockers(submitState.blockers)}
+        <button class="material-flow-primary check-submit-btn" data-action="open-check-submit-sheet" type="button">제출 전 확인</button>
+      </aside>`;
+    }
+
+    function renderCheckSubmitSheet(submitState) {
+      if (!state.checkSubmitSheetOpen) return "";
+      return `<section class="check-submit-sheet-overlay" data-check-submit-sheet role="dialog" aria-modal="true" aria-label="점검 제출 확인">
+        <button class="check-submit-sheet-backdrop" data-action="close-check-submit-sheet" type="button" aria-label="제출 시트 닫기"></button>
+        <div class="check-submit-sheet-panel">
+          <div class="check-submit-sheet-head">
+            <div><span>점검 제출</span><h2>안전 서약과 서명을 확인하세요</h2></div>
+            <button class="btn-light" data-action="close-check-submit-sheet" type="button">나중에 제출</button>
+          </div>
+          <p class="check-submit-sheet-guide">점검 내용은 임시저장되어 있습니다. 서약과 서명을 완료한 뒤 최종 제출합니다.</p>
+          ${renderSafetyPledgeChecklist()}
+          ${renderCheckSubmitBlockers(submitState.blockers)}
+          <button class="material-flow-primary check-submit-sheet-submit" data-action="final-submit-inspection" ${submitState.canSubmit ? "" : "disabled"} title="${esc(submitState.disabledText)}" aria-label="${esc(submitState.disabledText)}" type="button">최종 제출</button>
+        </div>
+      </section>`;
+    }
+
     function refreshCheckSubmitBlockers(blockers) {
-      const panel = document.querySelector("[data-check-submit-blockers]");
-      if (!panel) return;
-      panel.hidden = !blockers.length;
-      const list = panel.querySelector(".check-submit-blocker-list");
-      if (list) list.innerHTML = submitBlockerButtonsHtml(blockers);
+      document.querySelectorAll("[data-check-submit-blockers]").forEach((panel) => {
+        panel.hidden = !blockers.length;
+        const list = panel.querySelector(".check-submit-blocker-list");
+        if (list) list.innerHTML = submitBlockerButtonsHtml(blockers);
+      });
     }
 
     function focusSubmitBlocker(target) {
+      if (["pledge", "signature"].includes(target) && !state.checkSubmitSheetOpen) {
+        state.checkSubmitSheetOpen = true;
+        renderPreservingScroll();
+        requestAnimationFrame(() => focusSubmitBlocker(target));
+        return;
+      }
       const selector = {
         worker: "[data-submit-blocker-anchor='worker']",
         ship: "[data-submit-blocker-anchor='ship']",
@@ -4836,35 +4879,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function refreshCheckSubmitControls() {
-      const button = document.querySelector("[data-action='submit-inspection']");
-      if (!button) return;
+      const buttons = Array.from(document.querySelectorAll("[data-action='final-submit-inspection']"));
+      if (!buttons.length) return;
       const cat = categoryById(state.selectedCategoryId);
       if (!cat) return;
       const items = filteredChecklistItems(cat.id);
       const highMissing = items.filter((row) => row.risk === "high" && !state.draft.checks[row.id]);
       const submitState = buildCheckSubmitState(cat, items, highMissing);
-      button.disabled = !submitState.canSubmit;
-      button.title = submitState.disabledText;
-      button.setAttribute("aria-label", submitState.disabledText);
+      buttons.forEach((button) => {
+        button.disabled = !submitState.canSubmit;
+        button.title = submitState.disabledText;
+        button.setAttribute("aria-label", submitState.disabledText);
+      });
+      const checked = items.filter((row) => state.draft.checks[row.id]).length;
+      document.querySelectorAll("[data-check-submit-progress]").forEach((element) => {
+        element.textContent = `확인 ${checked}/${items.length}`;
+      });
+      document.querySelectorAll("[data-check-draft-saved-at]").forEach((element) => {
+        element.textContent = checkDraftSaveLabel();
+      });
       refreshCheckSubmitBlockers(submitState.blockers);
-      const disabledWrap = button.closest("[data-disabled-reason]");
-      if (disabledWrap) {
-        if (submitState.canSubmit) {
-          disabledWrap.removeAttribute("data-disabled-reason");
-          disabledWrap.classList.remove("is-disabled");
-          disabledWrap.removeAttribute("aria-disabled");
-          disabledWrap.removeAttribute("aria-label");
-          disabledWrap.removeAttribute("role");
-          disabledWrap.removeAttribute("tabindex");
-        } else {
-          disabledWrap.setAttribute("data-disabled-reason", submitState.disabledText);
-          disabledWrap.classList.add("is-disabled");
-          disabledWrap.setAttribute("aria-disabled", "true");
-          disabledWrap.setAttribute("aria-label", submitState.disabledText);
-          disabledWrap.setAttribute("role", "button");
-          disabledWrap.setAttribute("tabindex", "0");
-        }
-      }
     }
 
     function currentCheckRenderState() {
@@ -5627,14 +5661,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       <div class="pledge-flow-grid">
         ${renderPledgeWorkerSelect(cat)}
-        ${renderSafetyPledgeChecklist()}
       </div>
       ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
       ${highMissing.length ? `<div class="notice danger" data-high-missing-notice>미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice>고위험 항목이 모두 확인되었습니다.</div>`}
-      <div data-submit-blocker-anchor="checks">${renderChecklistSections(cat.id)}</div>
-      ${renderCheckSubmitBlockers(submitState.blockers)}`;
-      const footer = disabledReasonWrap(`<button class="material-flow-primary check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit);
-      return checkFlowShell(3, cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", body, footer);
+      <div data-submit-blocker-anchor="checks">${renderChecklistSections(cat.id)}</div>`;
+      return `<div class="check-submit-flow">
+        ${checkFlowShell(3, cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", body)}
+        ${renderCheckSubmitBar(items, checked, submitState)}
+        ${renderCheckSubmitSheet(submitState)}
+      </div>`;
     }
 
     function renderToolPrep(cat) {
@@ -9395,6 +9430,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
+    function openCheckSubmitSheet() {
+      state.checkSubmitSheetOpen = true;
+      renderPreservingScroll();
+      requestAnimationFrame(() => document.querySelector("[data-check-submit-sheet] [data-pledge-rule]")?.focus());
+    }
+
+    function closeCheckSubmitSheet() {
+      state.checkSubmitSheetOpen = false;
+      renderPreservingScroll();
+      requestAnimationFrame(() => document.querySelector("[data-action='open-check-submit-sheet']")?.focus());
+    }
+
     function startNewUnsafeIssue() {
       state.lastUnsafeIssueId = "";
       state.unsafeDraft = createUnsafeDraft();
@@ -9548,6 +9595,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function dispatchInspectionAction(action, event) {
       return runActionMap({
         "submit-inspection": submitInspection,
+        "final-submit-inspection": submitInspection,
+        "open-check-submit-sheet": openCheckSubmitSheet,
+        "close-check-submit-sheet": closeCheckSubmitSheet,
         "submit-unsafe": submitUnsafeIssue,
         "submit-material": submitMissingMaterial,
         "new-unsafe": startNewUnsafeIssue,
@@ -10793,7 +10843,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       if (validationError) return toast(validationError);
       state.inspectionSubmitting = true;
-      const submitButton = document.querySelector("[data-action='submit-inspection']");
+      const submitButton = document.querySelector("[data-action='final-submit-inspection']");
       if (submitButton) {
         submitButton.disabled = true;
         submitButton.textContent = "제출 중";
