@@ -5680,6 +5680,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const fromWorkPrepRecord = Boolean(state.draft.workPrepRecordId);
       const displayTools = fromWorkPrepRecord ? tools.filter((tool) => selectedIds.has(tool.id)) : tools;
       const requireSelection = cat.requireToolCheck !== false;
+      const allToolsSelected = Boolean(tools.length) && selectedCount === tools.length;
       const continueDisabled = requireSelection && !selectedCount;
       const continueDisabledText = continueDisabled ? "다음 점검표로 이동할 수 없음: 공기구/준비물 선택 필요" : "다음 점검표로";
       const selectionRequiredMessage = fromWorkPrepRecord
@@ -5689,9 +5690,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ${renderPledgeWorkerSelect(cat)}
       </div>
       <div class="tool-prep-panel ${fromWorkPrepRecord ? "work-prep-tool-lock" : ""}">
-        <div class="section-title">
-          <span>${esc(cat.label)}</span>
-          <span class="small muted">${esc(normalizeToolNature(cat.toolNature))} 기준 · ${fromWorkPrepRecord ? "작업지시 등록" : "선택"} ${selectedCount}개</span>
+        <div class="tool-prep-head">
+          <div class="section-title">
+            <span>${esc(cat.label)}</span>
+            <span class="small muted">${esc(normalizeToolNature(cat.toolNature))} 기준 · ${fromWorkPrepRecord ? "작업지시 등록" : "선택"} ${selectedCount}개</span>
+          </div>
+          ${fromWorkPrepRecord ? "" : `<button class="btn-light tool-prep-select-all" data-action="toggle-all-tool-prep" type="button">${allToolsSelected ? "전체 해제" : "전체 선택"}</button>`}
         </div>
         <div class="tool-prep-coverage ${coverage.independent ? "is-independent" : ""}" data-tool-prep-coverage>
           <strong>${esc(coverage.title)}</strong>
@@ -10284,6 +10288,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         if (selected.has(button.dataset.toolPrepToggle)) selected.delete(button.dataset.toolPrepToggle);
         else selected.add(button.dataset.toolPrepToggle);
         state.draft.selectedToolIds = [...selected];
+        saveJson("draft", state.draft);
+        render();
+      }
+      if (button.dataset.action === "toggle-all-tool-prep") {
+        const category = categoryById(state.selectedCategoryId);
+        if (!category || state.draft.workPrepRecordId) return;
+        const tools = visibleToolsForCategory(category.id);
+        const toolIds = tools.map((tool) => tool.id);
+        const selected = new Set(sanitizeToolIds(state.draft.selectedToolIds));
+        const allSelected = toolIds.length > 0 && toolIds.every((toolId) => selected.has(toolId));
+        toolIds.forEach((toolId) => {
+          if (allSelected) selected.delete(toolId);
+          else selected.add(toolId);
+        });
+        state.draft.selectedToolIds = [...selected];
+        saveJson("draft", state.draft);
         render();
       }
       if (button.dataset.action === "cancel-edit-section") {

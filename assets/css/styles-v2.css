@@ -6343,6 +6343,23 @@
       box-shadow: 0 12px 26px rgba(20, 33, 43, .07);
     }
 
+    .tool-prep-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .tool-prep-head .section-title {
+      min-width: 0;
+    }
+
+    .tool-prep-select-all {
+      flex: 0 0 auto;
+      min-width: 96px;
+      min-height: 44px;
+    }
+
     .history-card .badge {
       border-color: rgba(255, 255, 255, .3);
       background: rgba(255, 255, 255, .16);
