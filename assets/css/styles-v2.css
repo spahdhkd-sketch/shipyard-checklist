@@ -7086,7 +7086,10 @@
     .btn-light,
     .btn-danger,
     .btn-plain,
+    .btn-icon,
     .seg-btn {
+      min-width: 44px;
+      min-height: 44px;
       border-radius: var(--radius);
       border: 1px solid transparent;
       cursor: pointer;
@@ -7247,7 +7250,7 @@
       background: var(--surface);
       color: var(--ink);
       padding: 11px 12px;
-      min-height: 42px;
+      min-height: 44px;
       outline: none;
     }
 
@@ -8549,6 +8552,7 @@
 
     .item-tool-option {
       min-width: 0;
+      min-height: 44px;
       display: grid;
       grid-template-columns: 18px minmax(0, 1fr) auto;
       gap: 8px;
@@ -8656,12 +8660,52 @@
     }
 
     .check-section-master {
-      width: 22px;
-      height: 22px;
+      width: 44px;
+      height: 44px;
+      display: inline-grid;
+      place-items: center;
       flex: none;
-      accent-color: #f59e0b;
       cursor: pointer;
       margin: 0;
+    }
+
+    .check-section-master input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
+    }
+
+    .check-section-master span {
+      width: 20px;
+      height: 20px;
+      position: relative;
+      border: 2px solid #d18a16;
+      border-radius: 5px;
+      background: var(--surface);
+    }
+
+    .check-section-master input:checked + span {
+      border-color: #d18a16;
+      background: #f59e0b;
+    }
+
+    .check-section-master input:checked + span::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 4px;
+      top: 5px;
+      left: 4px;
+      border: solid #fff;
+      border-width: 0 0 2px 2px;
+      transform: rotate(-45deg);
+    }
+
+    .check-section-master input:focus-visible + span {
+      outline: 3px solid var(--color-brand-focus-outline);
+      outline-offset: 3px;
     }
 
     .check-section-titlebar {
@@ -9116,8 +9160,8 @@
     }
 
     .history-detail-btn {
-      width: 26px;
-      height: 26px;
+      width: 44px;
+      height: 44px;
       display: inline-flex;
       align-items: center;
       justify-content: center;

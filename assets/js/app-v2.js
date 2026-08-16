@@ -5668,7 +5668,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const completedItems = items.filter((row) => state.draft.checks[row.id]);
         return `<section class="check-section" data-check-section="${esc(section.id)}">
           <div class="check-section-hero">
-            <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
+            <label class="check-section-master">
+              <input type="checkbox" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
+              <span aria-hidden="true"></span>
+            </label>
             ${sectionSignImg(section.signCode)}
             <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
           </div>
