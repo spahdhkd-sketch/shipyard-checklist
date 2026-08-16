@@ -41,6 +41,8 @@
       --shadow: 0 16px 38px rgba(23, 32, 51, .08);
       --radius: 10px;
       --nav-width: 236px;
+      --bottom-nav-h: 84.5px;
+      --bottom-nav-clearance: calc(var(--bottom-nav-h) + var(--safe-area-bottom) + 16px);
       --safe-area-top: env(safe-area-inset-top, 0px);
       --safe-area-right: env(safe-area-inset-right, 0px);
       --safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -12764,5 +12766,18 @@
       .unchecked-item-unsafe-btn {
         width: 100%;
         min-height: 44px;
+      }
+
+      .bottom-nav {
+        min-height: var(--bottom-nav-h);
+      }
+
+      .main {
+        padding-bottom: var(--bottom-nav-clearance) !important;
+      }
+
+      body.screen-mobile .main,
+      body.preview-mobile .main {
+        padding-bottom: var(--bottom-nav-clearance) !important;
       }
     }
