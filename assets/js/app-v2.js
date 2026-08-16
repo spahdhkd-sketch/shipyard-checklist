@@ -5731,12 +5731,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           const time = historyTimeParts(row.time);
           const ship = state.ships.find((item) => sameShipNo(item.no, row.shipNo));
           const stage = ship ? effectiveShipStage(ship) : stageForCategory(cat);
+          const riskBadgeHtml = historyRiskBadgeHtml(risk);
           return {
             id: row.id,
             accent: categoryAccent(cat),
             stageColor: stage?.color || categoryAccent(cat),
             stageBg: stage?.bg || "#fff",
-            ariaLabel: `${cat.label} 점검 상세내역 보기`,
+            ariaLabel: `${cat.label} ${risk.label === "정상" ? "완료" : risk.label} 점검 상세내역 보기`,
             categoryVisualHtml: categoryVisual(cat),
             canSelect,
             selected: state.selectedHistoryIds.includes(row.id),
@@ -5750,7 +5751,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             timeText: time.text,
             statusLabel: historyStatusLabel(row.status || (completion >= 100 ? "완료" : "확인 필요")),
             completion,
-            riskBadgeHtml: risk.label === "정상" ? "" : badge(risk.tone, risk.label),
+            riskBadgeHtml,
           };
         }),
       });
@@ -5798,6 +5799,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (warnings > 0) return { tone: "medium", label: `주의 ${warnings}건` };
       if (completion >= 100 && row.status === "완료") return { tone: "low", label: "정상" };
       return { tone: "medium", label: "확인 필요" };
+    }
+
+    function historyRiskBadgeHtml(risk) {
+      const completed = risk.label === "정상";
+      const label = completed ? "완료" : risk.label;
+      return `<span class="history-risk-badge ${completed ? "is-complete" : "is-caution"}"><span aria-hidden="true">${completed ? "✓" : "▲"}</span><span>${esc(label)}</span></span>`;
     }
 
     function shortHistoryDate(row) {

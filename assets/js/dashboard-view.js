@@ -619,6 +619,7 @@
                 </div>
                 <div class="history-list-status-stack">
                   <button class="history-status-btn" data-history-detail="${esc(row.id)}" type="button">${esc(row.statusLabel || "점검 완료")}</button>
+                  ${row.riskBadgeHtml || ""}
                   <div class="history-list-time">
                     <strong>${row.timePeriod ? `${esc(row.timePeriod)} ` : ""}${esc(row.timeText || "시간 미기록")}</strong>
                     <span>${esc(row.dateText || "-")}</span>
