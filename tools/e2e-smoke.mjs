@@ -584,6 +584,8 @@ async function main() {
       mockAdminMutationDelayMs: 800,
     });
     try {
+      // 모바일 관리 화면은 조회 전용이다. 이 쓰기·동기화 경로는 PC 관리 화면에서 검증한다.
+      await workPrepPage.setViewport({ width: 1366, height: 900 });
       await workPrepPage.evaluateOnNewDocument((storagePrefix) => {
         sessionStorage.setItem(storagePrefix + "adminMode", "true");
         sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");

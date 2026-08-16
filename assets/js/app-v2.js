@@ -2836,6 +2836,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       materialFilters: loadJson("materialFilters", { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" }),
       workPrepFilters: loadJson("workPrepFilters", { shipNo: "", status: "", sort: "latest" }),
       manageTab: loadJson("manageTab", "workers"),
+      manageMobileFilterOpen: false,
+      manageMobileFilterDraft: null,
       adminPushDraft: createAdminPushDraft(loadJson("adminPushDraft", {})),
       adminPushSending: false,
       unsafeDetailId: "",
@@ -3415,8 +3417,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function effectiveScreenMode() {
+      if (isNarrowViewport()) return "mobile";
       if (state.adminMode) return state.screenMode === "mobile" ? "mobile" : "desktop";
-      return isNarrowViewport() ? "mobile" : "desktop";
+      return "desktop";
     }
 
     function applyScreenMode() {
@@ -6855,6 +6858,118 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (worker) state.materialDraft.workerId = worker.value;
     }
 
+    function isMobileManageReadOnly() {
+      return state.view === "manage"
+        && typeof window !== "undefined"
+        && typeof window.matchMedia === "function"
+        && window.matchMedia("(max-width: 720px)").matches;
+    }
+
+    function manageMobileFilterKind() {
+      return ["unsafe", "materials", "workPrep"].includes(state.manageTab) ? state.manageTab : "";
+    }
+
+    function manageMobileFiltersFor(kind = manageMobileFilterKind()) {
+      if (kind === "unsafe") return state.unsafeFilters;
+      if (kind === "materials") return state.materialFilters;
+      if (kind === "workPrep") return state.workPrepFilters;
+      return null;
+    }
+
+    function manageMobileFilterCount(kind, filters) {
+      if (kind === "unsafe") return ISSUE_MATERIAL_RULES.filterRecords(state.unsafeIssues, filters).length;
+      if (kind === "materials") return ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, filters).length;
+      if (kind === "workPrep") return filterWorkPrepRecords(state.workPrepRecords, filters).length;
+      return 0;
+    }
+
+    function manageMobileFilterTitle(kind) {
+      return kind === "unsafe" ? "불안전요소" : kind === "materials" ? "자재누락" : "작업지시서";
+    }
+
+    function manageMobileStatusOptions(kind) {
+      if (kind === "unsafe") return ISSUE_MATERIAL_RULES.UNSAFE_STATUSES.map((status) => [status, status]);
+      if (kind === "materials") return ISSUE_MATERIAL_RULES.MATERIAL_STATUSES.map((status) => [status, status]);
+      return workPrepStatusOptions().map((status) => [status, WORK_PREP_STATUS_LABELS[status] || status]);
+    }
+
+    function renderManageMobileToolbar() {
+      const kind = manageMobileFilterKind();
+      const count = kind ? manageMobileFilterCount(kind, manageMobileFiltersFor(kind)) : 0;
+      return `<section class="manage-mobile-mode" aria-label="모바일 관리 모드">
+        <p><strong>조회 모드</strong><span>수정과 승인은 PC에서</span></p>
+        <div>
+          ${kind ? `<button class="btn-light" data-action="open-manage-mobile-filter" type="button">필터 <span>${esc(count)}건</span></button>` : ""}
+          ${state.manageTab === "push" ? "" : `<button class="btn" data-manage-tab="push" type="button">담당자에게 알림 보내기</button>`}
+        </div>
+      </section>`;
+    }
+
+    function renderManageMobileFilterSheet() {
+      const kind = manageMobileFilterKind();
+      if (!isMobileManageReadOnly() || !state.manageMobileFilterOpen || !kind) return "";
+      const filters = state.manageMobileFilterDraft || { ...manageMobileFiltersFor(kind) };
+      const count = manageMobileFilterCount(kind, filters);
+      const ships = kind === "workPrep" ? visibleWorkerShips() : issueSelectableShips();
+      const statuses = manageMobileStatusOptions(kind);
+      return `<section class="manage-mobile-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="manageMobileFilterTitle">
+        <div class="manage-mobile-filter-sheet-head">
+          <div><span>조회 필터</span><h2 id="manageMobileFilterTitle">${esc(manageMobileFilterTitle(kind))}</h2></div>
+          <button class="btn-light" data-action="cancel-manage-mobile-filter" type="button">닫기</button>
+        </div>
+        <div class="manage-mobile-filter-fields">
+          <label>호선
+            <select class="select" data-manage-mobile-filter="shipNo">
+              <option value="">전체 호선</option>
+              ${ships.map((ship) => `<option value="${esc(ship.no)}" ${filters.shipNo === ship.no ? "selected" : ""}>${esc(ship.no)}</option>`).join("")}
+            </select>
+          </label>
+          <label>상태
+            <select class="select" data-manage-mobile-filter="status">
+              <option value="">전체 상태</option>
+              ${statuses.map(([value, label]) => `<option value="${esc(value)}" ${filters.status === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+            </select>
+          </label>
+          ${kind === "materials" ? `<label>자재명
+            <input class="input" data-manage-mobile-filter="materialName" value="${esc(filters.materialName || "")}" placeholder="자재명으로 찾기" />
+          </label>` : ""}
+        </div>
+        <div class="manage-mobile-filter-sheet-actions">
+          <button class="btn-light" data-action="cancel-manage-mobile-filter" type="button">취소</button>
+          <button class="btn" data-action="apply-manage-mobile-filter" type="button">${esc(count)}건 보기</button>
+        </div>
+      </section>`;
+    }
+
+    function openManageMobileFilter() {
+      const kind = manageMobileFilterKind();
+      if (!isMobileManageReadOnly() || !kind) return;
+      state.manageMobileFilterDraft = { ...manageMobileFiltersFor(kind) };
+      state.manageMobileFilterOpen = true;
+      render();
+    }
+
+    function closeManageMobileFilter() {
+      state.manageMobileFilterOpen = false;
+      state.manageMobileFilterDraft = null;
+      render();
+    }
+
+    function applyManageMobileFilter() {
+      const kind = manageMobileFilterKind();
+      const filters = state.manageMobileFilterDraft;
+      if (!kind || !filters) return closeManageMobileFilter();
+      const target = manageMobileFiltersFor(kind);
+      Object.assign(target, filters);
+      saveJson(kind === "unsafe" ? "unsafeFilters" : kind === "materials" ? "materialFilters" : "workPrepFilters", target);
+      if (kind === "unsafe") state.unsafeDetailId = "";
+      if (kind === "materials") state.materialDetailId = "";
+      if (kind === "workPrep") state.workPrepDetailId = "";
+      state.manageMobileFilterOpen = false;
+      state.manageMobileFilterDraft = null;
+      renderPreservingScroll();
+    }
+
     function renderManage() {
       const tabs = [
         ["workers", "작업자"],
@@ -6882,9 +6997,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         workPrep: state.workPrepRecords.length,
       };
       const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "접수 현황을 확인합니다.";
+      const mobileReadOnly = isMobileManageReadOnly();
       return DASHBOARD_VIEW.renderManageShellView({
         pageHeadHtml: pageHead("관리", lead, adminToggleButton()),
         readOnlyNoticeHtml: state.adminMode || previewAdmin ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`,
+        mobileReadOnly,
+        mobileToolbarHtml: mobileReadOnly ? renderManageMobileToolbar() : "",
+        mobileFilterSheetHtml: mobileReadOnly ? renderManageMobileFilterSheet() : "",
         tabs: visibleTabs.map(([id, label]) => ({
           id,
           label,
@@ -7187,6 +7306,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderPushManager() {
+      if (isMobileManageReadOnly()) {
+        return `<section class="panel panel-pad manage-mobile-notify-panel">
+          <div class="section-title">담당자 알림</div>
+          <p>모바일에서는 대상과 발송 이력을 조회합니다. 알림 문구 작성·대상 변경·최종 발송은 PC의 확인 절차에서 진행합니다.</p>
+          <button class="btn" data-action="manage-mobile-notify" type="button">담당자에게 알림 보내기</button>
+        </section>`;
+      }
       const workers = adminPushWorkers();
       const subscribedWorkers = adminPushSubscribedWorkers();
       const targetWorkers = adminPushTargetWorkers();
@@ -9631,9 +9757,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }, action, event);
     }
 
+    function dispatchManageMobileAction(action) {
+      return runActionMap({
+        "open-manage-mobile-filter": openManageMobileFilter,
+        "cancel-manage-mobile-filter": closeManageMobileFilter,
+        "apply-manage-mobile-filter": applyManageMobileFilter,
+        "manage-mobile-notify": () => toast("담당자 알림 발송은 PC에서 문구·대상·최종 확인 후 진행합니다."),
+      }, action);
+    }
+
     function dispatchAction(action, event) {
       if (ADMIN_ACTIONS.has(action)) return dispatchAdminAction(action, event);
       return (
+        dispatchManageMobileAction(action, event) ||
         dispatchWorkerSessionAction(action, event) ||
         dispatchPushAction(action, event) ||
         dispatchWorkPrepAction(action, event) ||
@@ -10067,6 +10203,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (button.dataset.action === "toggle-admin") toggleAdminMode();
       if (button.dataset.manageTab) {
         state.manageTab = button.dataset.manageTab;
+        state.manageMobileFilterOpen = false;
+        state.manageMobileFilterDraft = null;
         state.unsafeDetailId = "";
         state.materialDetailId = "";
         state.workPrepDetailId = "";
@@ -10679,6 +10817,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-manage-mobile-filter]")) {
+        const key = event.target.dataset.manageMobileFilter;
+        if (state.manageMobileFilterOpen && state.manageMobileFilterDraft && key) {
+          state.manageMobileFilterDraft[key] = event.target.value;
+          renderPreservingScroll();
+        }
+        return;
+      }
       if (event.target.matches("[data-section-editor-field]")) {
         updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
       }

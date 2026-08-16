@@ -13196,3 +13196,184 @@
         padding-bottom: var(--bottom-nav-clearance) !important;
       }
     }
+
+    @media (max-width: 720px) {
+      .manage-mobile-readonly .manage-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: visible;
+      }
+
+      .manage-mobile-readonly .manage-tabs .seg-btn {
+        min-width: 0;
+        min-height: 44px;
+      }
+
+      .manage-mobile-mode {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 12px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--surface-soft);
+      }
+
+      .manage-mobile-mode p,
+      .manage-mobile-mode p strong,
+      .manage-mobile-mode p span {
+        display: block;
+        margin: 0;
+      }
+
+      .manage-mobile-mode p span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .manage-mobile-mode > div {
+        display: grid;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
+
+      .manage-mobile-mode .btn,
+      .manage-mobile-mode .btn-light {
+        min-height: 44px;
+        white-space: nowrap;
+      }
+
+      .manage-mobile-readonly [data-action],
+      .manage-mobile-readonly [data-save-worker],
+      .manage-mobile-readonly [data-delete-worker],
+      .manage-mobile-readonly [data-save-record],
+      .manage-mobile-readonly [data-save-record-status],
+      .manage-mobile-readonly [data-delete-record] {
+        display: none !important;
+      }
+
+      .manage-mobile-readonly .manage-mobile-mode [data-action],
+      .manage-mobile-readonly .manage-mobile-filter-sheet [data-action],
+      .manage-mobile-readonly .manage-mobile-notify-panel [data-action] {
+        display: inline-flex !important;
+      }
+
+      .manage-mobile-readonly .worker-form,
+      .manage-mobile-readonly .worker-edit-panel,
+      .manage-mobile-readonly .admin-board-actions,
+      .manage-mobile-readonly .material-filter-panel,
+      .manage-mobile-readonly .material-table-actions,
+      .manage-mobile-readonly .unsafe-detail-actions,
+      .manage-mobile-readonly .unsafe-memo-row,
+      .manage-mobile-readonly .photo-retry-panel,
+      .manage-mobile-readonly .work-prep-admin-card-side,
+      .manage-mobile-readonly .work-prep-detail-actions,
+      .manage-mobile-readonly .material-row > span:first-child,
+      .manage-mobile-readonly .material-row > span:nth-child(7),
+      .manage-mobile-readonly .material-row-actions {
+        display: none !important;
+      }
+
+      .manage-mobile-readonly .worker-list {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .manage-mobile-readonly .material-row {
+        grid-template-areas:
+          "ship ship"
+          "material material"
+          "quantity quantity"
+          "worker worker"
+          "time time";
+      }
+
+      .manage-mobile-readonly .work-prep-admin-row,
+      .manage-mobile-readonly .unsafe-list-row,
+      .manage-mobile-readonly .material-row {
+        cursor: pointer;
+      }
+
+      .manage-mobile-filter-sheet {
+        position: fixed;
+        z-index: 100;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+        background: var(--surface);
+        overflow-y: auto;
+      }
+
+      .manage-mobile-filter-sheet-head,
+      .manage-mobile-filter-sheet-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .manage-mobile-filter-sheet-head > div > span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .manage-mobile-filter-sheet-head h2 {
+        margin: 2px 0 0;
+      }
+
+      .manage-mobile-filter-fields {
+        display: grid;
+        gap: 14px;
+        margin-top: 28px;
+      }
+
+      .manage-mobile-filter-fields label {
+        display: grid;
+        gap: 7px;
+        color: var(--ink-strong);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .manage-mobile-filter-fields .select,
+      .manage-mobile-filter-fields .input {
+        min-height: 48px;
+      }
+
+      .manage-mobile-filter-sheet-actions {
+        margin-top: auto;
+        padding-top: 24px;
+      }
+
+      .manage-mobile-filter-sheet-actions .btn,
+      .manage-mobile-filter-sheet-actions .btn-light {
+        flex: 1 1 0;
+        min-height: 52px;
+      }
+
+      .manage-mobile-notify-panel p {
+        margin: 8px 0 16px;
+        line-height: 1.5;
+      }
+    }
+
+    @media (max-width: 720px) {
+      body.screen-mobile .manage-mobile-readonly .admin-board-actions,
+      body.preview-mobile .manage-mobile-readonly .admin-board-actions,
+      body.screen-mobile .manage-mobile-readonly .material-filter-panel,
+      body.preview-mobile .manage-mobile-readonly .material-filter-panel,
+      body.screen-mobile .manage-mobile-readonly .material-table-actions,
+      body.preview-mobile .manage-mobile-readonly .material-table-actions,
+      body.screen-mobile .manage-mobile-readonly .unsafe-detail-actions,
+      body.preview-mobile .manage-mobile-readonly .unsafe-detail-actions,
+      body.screen-mobile .manage-mobile-readonly .unsafe-memo-row,
+      body.preview-mobile .manage-mobile-readonly .unsafe-memo-row {
+        display: none !important;
+      }
+    }

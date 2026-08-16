@@ -424,11 +424,16 @@
       tabs = [],
       panels = {},
       activeTab = "",
+      mobileReadOnly = false,
+      mobileToolbarHtml = "",
+      mobileFilterSheetHtml = "",
     } = model;
-    return `${pageHeadHtml}
+    return `<section class="manage-shell ${mobileReadOnly ? "manage-mobile-readonly" : ""}">
+      ${pageHeadHtml}
+      ${mobileToolbarHtml}
       ${readOnlyNoticeHtml}
       <div class="manage-tabs" role="tablist" aria-label="관리 탭">
-        ${tabs.map(({ id, label, count, active }) => `<button class="seg-btn ${active ? "active" : ""}" data-manage-tab="${esc(id)}" type="button">${esc(label)} <span>${esc(count || 0)}</span></button>`).join("")}
+        ${tabs.map(({ id, label, count, active }) => `<button class="seg-btn ${active ? "active" : ""}" data-manage-tab="${esc(id)}" aria-pressed="${active ? "true" : "false"}" type="button">${esc(label)} <span>${esc(count || 0)}</span></button>`).join("")}
       </div>
       <div class="manage-workspace">
         ${activeTab === "workers" ? panels.workers || "" : ""}
@@ -436,7 +441,9 @@
         ${activeTab === "unsafe" ? panels.unsafe || "" : ""}
         ${activeTab === "materials" ? panels.materials || "" : ""}
         ${activeTab === "workPrep" ? panels.workPrep || "" : ""}
-      </div>`;
+      </div>
+      ${mobileFilterSheetHtml}
+    </section>`;
   }
 
   function renderUnsafeRecordCardView(model = {}) {
