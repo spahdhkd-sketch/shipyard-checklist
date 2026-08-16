@@ -8027,6 +8027,35 @@
 
     .tool-prep-coverage.is-independent strong { color: #2e5da6; }
 
+    .tool-filter-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #efc77d;
+      border-radius: var(--radius);
+      background: #fff8e9;
+    }
+
+    .tool-filter-summary > div {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .tool-filter-summary strong {
+      color: #7a5215;
+      font-size: 14px;
+    }
+
+    .tool-filter-summary span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
     .tool-prep-card {
       min-height: 82px;
       display: grid;
@@ -11616,6 +11645,15 @@
     body.screen-mobile .tool-prep-linked-count {
       grid-column: 2;
       font-size: 11px;
+    }
+
+    body.screen-mobile .tool-filter-summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    body.screen-mobile .tool-filter-summary .btn-light {
+      width: 100%;
     }
 
     body.screen-mobile .check-item {

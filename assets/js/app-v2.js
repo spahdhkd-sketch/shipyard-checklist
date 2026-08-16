@@ -5499,6 +5499,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </section>`;
     }
 
+    function renderToolFilterSummary(category, visibleItems) {
+      const allItems = activeItems(category.id);
+      const visibleIds = new Set(visibleItems.map((item) => item.id));
+      const excludedItems = allItems.filter((item) => !visibleIds.has(item.id));
+      if (!excludedItems.length) return "";
+      const relatedTools = [...new Set(excludedItems
+        .flatMap((item) => linkedToolsForItem(item).map((tool) => tool.name)))]
+        .slice(0, 3);
+      const hiddenNames = relatedTools.length
+        ? `${relatedTools.join(" · ")}${excludedItems.length > relatedTools.length ? ` 외 ${excludedItems.length - relatedTools.length}건` : ""}`
+        : `${excludedItems.slice(0, 2).map((item) => item.text).join(" · ")}${excludedItems.length > 2 ? ` 외 ${excludedItems.length - 2}건` : ""}`;
+      return `<section class="tool-filter-summary" data-tool-filter-summary>
+        <div>
+          <strong>안전대책 ${visibleItems.length}건 점검 · ${excludedItems.length}건은 미선택 공기구라 제외됨</strong>
+          <span>제외된 대책: ${esc(hiddenNames)}</span>
+        </div>
+        <button class="btn-light" data-action="back-tool-prep" type="button">공기구 다시 고르기</button>
+      </section>`;
+    }
+
     function renderCheck() {
       if (state.workPrepRegisterOpen) return renderWorkPrepRegister();
       if (!state.selectedCategoryId) {
@@ -5535,7 +5555,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const canSubmit = submitState.canSubmit;
       const submitDisabledText = submitState.disabledText;
 
-      const body = `${renderUncheckedChecklistItems(cat.id, items)}
+      const body = `${renderToolFilterSummary(cat, items)}
+      ${renderUncheckedChecklistItems(cat.id, items)}
       <div class="check-flow-status-card" aria-label="점검 작성 상태">
         <div class="section-title">작성 상태 <span class="small muted" data-check-count>${checked}/${items.length} 항목 확인됨</span></div>
         ${progress(pct, categoryAccent(cat), "data-check-progress")}
@@ -9853,6 +9874,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
         scrollScreenTop();
         pushRouteState();
+      }
+      if (button.dataset.action === "back-tool-prep") {
+        state.draft.toolPrepComplete = false;
+        render();
+        scrollScreenTop();
       }
       if (button.dataset.action === "continue-tool-prep") {
         state.draft.toolPrepComplete = true;
