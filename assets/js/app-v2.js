@@ -4684,7 +4684,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderPledgeWorkerSelect(category = null) {
       const workers = state.workers;
       if (!workers.length) {
-        return `<section class="pledge-flow-card">
+        return `<section class="pledge-flow-card" data-submit-blocker-anchor="worker">
           <div class="pledge-flow-title">작업자 선택</div>
           <label class="field">
             <span>작업자명</span>
@@ -4695,13 +4695,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const worker = currentWorkerSessionWorker();
       const nature = normalizeToolNature(category?.toolNature || defaultToolNatureForCategory(category));
       const fromWorkPrepRecord = Boolean(state.draft.workPrepRecordId);
-      return renderPledgeFlowSummary({
+      return `<div data-submit-blocker-anchor="worker">${renderPledgeFlowSummary({
         label: fromWorkPrepRecord ? "점검 작업자" : "담당 작업자",
         title: worker?.name || currentWorkerSessionLabel(),
         metaHtml: `<span class="pledge-summary-meta-row">${worker ? workerBadgeRow(worker) : `<span class="worker-team-badge is-empty">로그인 작업자</span>`}<em>${esc(nature)} 기준</em></span>`,
         action: "expand-pledge-worker",
         locked: fromWorkPrepRecord,
-      });
+      })}</div>`;
     }
 
     function renderPledgeShipSelect(ships) {
@@ -4709,16 +4709,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const fromWorkPrepRecord = Boolean(state.draft.workPrepRecordId);
       if ((state.pledgeShipCollapsed || fromWorkPrepRecord) && selectedShip) {
         const stage = effectiveShipStage(selectedShip);
-        return renderPledgeFlowSummary({
+        return `<div data-submit-blocker-anchor="ship">${renderPledgeFlowSummary({
           label: fromWorkPrepRecord ? "작업지시 호선" : "오늘 작업 호선",
           title: selectedShip.no,
           meta: `${selectedShip.type || "선종 미지정"} · D/L ${shipDeliveryDate(selectedShip) || "-"}`,
           action: "expand-pledge-ship",
           stage,
           locked: fromWorkPrepRecord,
-        });
+        })}</div>`;
       }
-      return `<section class="pledge-flow-card">
+      return `<section class="pledge-flow-card" data-submit-blocker-anchor="ship">
         <div class="pledge-flow-title">오늘 작업 호선</div>
         <div class="pledge-ship-list">
           ${ships.map((ship) => {
@@ -4740,7 +4740,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const complete = checked === rules.length;
       const signature = state.draft.pledgeSignature || "";
       const drawnSignature = isSignatureImage(signature);
-      return `<section class="pledge-flow-card">
+      return `<section class="pledge-flow-card" data-submit-blocker-anchor="pledge">
         <div class="pledge-flow-title">작업 전 안전 서약서</div>
         <div class="pledge-flow-meta">${esc(state.draft.worker || "작업자 미선택")} 님 · ${esc(state.draft.shipNo || "호선 미선택")} · ${esc(today())}</div>
         <div class="pledge-rule-count">서약 항목 (${checked}/${rules.length})</div>
@@ -4753,7 +4753,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             </label>`;
           }).join("")}
         </div>
-        ${complete ? `<div class="pledge-sign-panel">
+        ${complete ? `<div class="pledge-sign-panel" data-submit-blocker-anchor="signature">
           <div class="pledge-sign-head">
             <label for="pledgeSignaturePad">서명란</label>
             <button class="btn-light signature-clear-btn" data-action="clear-pledge-signature" type="button">지우기</button>
@@ -4782,18 +4782,56 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         && items.length
         && missingHighItems.length === 0
       );
-      const submitMissingReasons = [
-        state.draft.worker.trim() ? "" : "담당자명 미입력",
-        state.draft.shipNo ? "" : "호선 미선택",
-        pledgeChecked === pledgeRulesCount ? "" : `안전 서약 ${pledgeRulesCount - pledgeChecked}건 미확인`,
-        signatureLabel() ? "" : "서명 미입력",
-        items.length ? "" : "등록된 점검 항목 없음",
-        missingHighItems.length ? `고위험 항목 ${missingHighItems.length}건 미확인` : "",
-      ].filter(Boolean);
+      const blockers = [
+        { target: "worker", label: "담당자명 미입력", required: !state.draft.worker.trim() },
+        { target: "ship", label: "호선 미선택", required: !state.draft.shipNo },
+        { target: "pledge", label: `안전 서약 ${pledgeRulesCount - pledgeChecked}건 미확인`, required: pledgeChecked !== pledgeRulesCount },
+        { target: "signature", label: "서명 미입력", required: !signatureLabel() },
+        { target: "checks", label: "등록된 점검 항목 없음", required: !items.length },
+        { target: "high-risk", label: `고위험 항목 ${missingHighItems.length}건 미확인`, required: Boolean(missingHighItems.length) },
+      ].filter((blocker) => blocker.required);
       return {
         canSubmit,
-        disabledText: submitMissingReasons.length ? `제출할 수 없음: ${submitMissingReasons.join(", ")}` : "제출하기",
+        blockers,
+        disabledText: blockers.length ? `제출할 수 없음: ${blockers.map((blocker) => blocker.label).join(", ")}` : "제출하기",
       };
+    }
+
+    function submitBlockerButtonsHtml(blockers) {
+      return blockers.map((blocker) => `<button class="check-submit-blocker" data-submit-blocker="${esc(blocker.target)}" type="button">${esc(blocker.label)}</button>`).join("");
+    }
+
+    function renderCheckSubmitBlockers(blockers) {
+      return `<section class="check-submit-blockers" data-check-submit-blockers role="status" aria-live="polite" ${blockers.length ? "" : "hidden"}>
+        <strong>제출 전 확인</strong>
+        <div class="check-submit-blocker-list">${submitBlockerButtonsHtml(blockers)}</div>
+      </section>`;
+    }
+
+    function refreshCheckSubmitBlockers(blockers) {
+      const panel = document.querySelector("[data-check-submit-blockers]");
+      if (!panel) return;
+      panel.hidden = !blockers.length;
+      const list = panel.querySelector(".check-submit-blocker-list");
+      if (list) list.innerHTML = submitBlockerButtonsHtml(blockers);
+    }
+
+    function focusSubmitBlocker(target) {
+      const selector = {
+        worker: "[data-submit-blocker-anchor='worker']",
+        ship: "[data-submit-blocker-anchor='ship']",
+        pledge: "[data-submit-blocker-anchor='pledge']",
+        signature: "[data-submit-blocker-anchor='signature'], [data-submit-blocker-anchor='pledge']",
+        checks: "[data-submit-blocker-anchor='checks']",
+        "high-risk": "[data-check-item-risk='high']:not(:checked)",
+      }[target];
+      const element = selector ? document.querySelector(selector) : null;
+      if (!element) return;
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focusable = element.matches("button, input, select, textarea")
+        ? element
+        : element.querySelector("button, input, select, textarea");
+      focusable?.focus({ preventScroll: true });
     }
 
     function refreshCheckSubmitControls() {
@@ -4807,6 +4845,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       button.disabled = !submitState.canSubmit;
       button.title = submitState.disabledText;
       button.setAttribute("aria-label", submitState.disabledText);
+      refreshCheckSubmitBlockers(submitState.blockers);
       const disabledWrap = button.closest("[data-disabled-reason]");
       if (disabledWrap) {
         if (submitState.canSubmit) {
@@ -5482,7 +5521,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
       ${highMissing.length ? `<div class="notice danger" data-high-missing-notice>미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice>고위험 항목이 모두 확인되었습니다.</div>`}
-      ${renderChecklistSections(cat.id)}`;
+      <div data-submit-blocker-anchor="checks">${renderChecklistSections(cat.id)}</div>
+      ${renderCheckSubmitBlockers(submitState.blockers)}`;
       const footer = disabledReasonWrap(`<button class="material-flow-primary check-submit-btn" data-action="submit-inspection" ${canSubmit ? "" : "disabled"} title="${esc(submitDisabledText)}" aria-label="${esc(submitDisabledText)}" type="button">제출하기</button>`, submitDisabledText, !canSubmit);
       return checkFlowShell(3, cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", body, footer);
     }
@@ -5603,7 +5643,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div class="check-section-items">
             ${items.map((row) => `
               <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
-                <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
+                <input type="checkbox" data-check-item="${esc(row.id)}" data-check-item-risk="${esc(row.risk)}" ${state.draft.checks[row.id] ? "checked" : ""} />
                 <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
               </label>`).join("")}
           </div>
@@ -9995,6 +10035,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (handlePledgeButtonClick(button)) return;
       if (handleUnsafeDraftButtonClick(button)) return;
       if (handleMaterialDraftButtonClick(button)) return;
+      if (button.dataset.submitBlocker) {
+        focusSubmitBlocker(button.dataset.submitBlocker);
+        return;
+      }
       if (button.dataset.recordFilter) {
         updateRecordFilter(button.dataset.recordFilter, button.value || "");
         return;
