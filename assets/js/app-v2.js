@@ -5536,6 +5536,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const requireSelection = cat.requireToolCheck !== false;
       const continueDisabled = requireSelection && !selectedCount;
       const continueDisabledText = continueDisabled ? "다음 점검표로 이동할 수 없음: 공기구/준비물 선택 필요" : "다음 점검표로";
+      const selectionRequiredMessage = fromWorkPrepRecord
+        ? "최소 1개의 공기구/준비물이 작업지시서에 등록되어야 다음 점검표로 이동할 수 있습니다."
+        : "공기구/준비물을 1개 이상 선택해야 점검표로 이동할 수 있습니다.";
       const body = `<div class="pledge-flow-grid">
         ${renderPledgeWorkerSelect(cat)}
       </div>
@@ -5561,7 +5564,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             </button>`;
           }).join("")}
         </div>
-        ${requireSelection && !selectedCount ? `<div class="notice danger">최소 1개의 공기구/준비물이 작업지시서에 등록되어야 다음 점검표로 이동할 수 있습니다.</div>` : (fromWorkPrepRecord ? `<div class="notice good">작업지시서에 등록된 공기구/준비물입니다. 변경 없이 준비 여부만 확인하세요.</div>` : `<div class="notice good">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`)}
+        ${requireSelection && !selectedCount ? `<div class="notice danger">${selectionRequiredMessage}</div>` : (fromWorkPrepRecord ? `<div class="notice good">작업지시서에 등록된 공기구/준비물입니다. 변경 없이 준비 여부만 확인하세요.</div>` : `<div class="notice good">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`)}
       </div>`;
       const footer = `<button class="btn-light material-flow-secondary" data-action="back-check-types" type="button">작업 유형</button>
         ${disabledReasonWrap(`<button class="material-flow-primary" data-action="continue-tool-prep" ${continueDisabled ? "disabled" : ""} title="${esc(continueDisabledText)}" aria-label="${esc(continueDisabledText)}" type="button">다음 점검표로</button>`, continueDisabledText, continueDisabled)}`;
