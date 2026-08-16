@@ -4925,6 +4925,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           : "고위험 항목이 모두 확인되었습니다.";
       });
 
+      if (state.view === "check") {
+        renderPreservingScroll();
+        return true;
+      }
       refreshCheckSubmitControls();
       return true;
     }
@@ -5469,6 +5473,32 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function renderUncheckedChecklistItems(categoryId, items) {
+      const uncheckedItems = items.filter((row) => !state.draft.checks[row.id]);
+      if (!uncheckedItems.length) return "";
+      const sections = new Map(sectionsFor(categoryId).map((section) => [section.id, section]));
+      const completedCount = items.length - uncheckedItems.length;
+      return `<section class="unchecked-items-panel" data-unchecked-items-panel>
+        <div class="unchecked-items-panel-head">
+          <div><strong>미확인 항목 ${uncheckedItems.length}건</strong><span>확인 완료 ${completedCount}건은 접어 두었습니다.</span></div>
+        </div>
+        <div class="unchecked-items-list">
+          ${uncheckedItems.map((row) => {
+            const section = sections.get(row.sectionId);
+            const riskLabel = row.risk === "high" ? "고위험" : row.risk === "medium" ? "주의" : "일반";
+            return `<article class="unchecked-item-card">
+              <div>
+                <span class="unchecked-item-risk is-${esc(row.risk || "low")}">${esc(riskLabel)}</span>
+                <strong>${esc(section?.title || "위험요인 미지정")}</strong>
+                <p>${esc(row.text)}</p>
+              </div>
+              <button class="btn-light unchecked-item-unsafe-btn" data-action="open-unsafe-from-check" data-check-unsafe-item="${esc(row.id)}" type="button">불안전요소로 접수</button>
+            </article>`;
+          }).join("")}
+        </div>
+      </section>`;
+    }
+
     function renderCheck() {
       if (state.workPrepRegisterOpen) return renderWorkPrepRegister();
       if (!state.selectedCategoryId) {
@@ -5505,7 +5535,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const canSubmit = submitState.canSubmit;
       const submitDisabledText = submitState.disabledText;
 
-      const body = `<div class="check-flow-status-card" aria-label="점검 작성 상태">
+      const body = `${renderUncheckedChecklistItems(cat.id, items)}
+      <div class="check-flow-status-card" aria-label="점검 작성 상태">
         <div class="section-title">작성 상태 <span class="small muted" data-check-count>${checked}/${items.length} 항목 확인됨</span></div>
         ${progress(pct, categoryAccent(cat), "data-check-progress")}
         <div class="check-flow-status-badges">
@@ -5633,6 +5664,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!visibleSections.length) return `<div class="empty empty-section-note">선택한 공기구/준비물에 해당하는 점검 항목이 없습니다.</div>`;
       return visibleSections.map(({ section, items }) => {
         const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
+        const uncheckedItems = items.filter((row) => !state.draft.checks[row.id]);
+        const completedItems = items.filter((row) => state.draft.checks[row.id]);
         return `<section class="check-section" data-check-section="${esc(section.id)}">
           <div class="check-section-hero">
             <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
@@ -5644,14 +5677,21 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
           </div>
           <div class="check-section-items">
-            ${items.map((row) => `
-              <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
-                <input type="checkbox" data-check-item="${esc(row.id)}" data-check-item-risk="${esc(row.risk)}" ${state.draft.checks[row.id] ? "checked" : ""} />
-                <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
-              </label>`).join("")}
+            ${uncheckedItems.map(renderChecklistItem).join("")}
+            ${completedItems.length ? `<details class="check-section-completed">
+              <summary>확인 완료 ${completedItems.length}건 펼치기</summary>
+              <div class="check-section-completed-list">${completedItems.map(renderChecklistItem).join("")}</div>
+            </details>` : ""}
           </div>
         </section>`;
       }).join("");
+    }
+
+    function renderChecklistItem(row) {
+      return `<label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
+        <input type="checkbox" data-check-item="${esc(row.id)}" data-check-item-risk="${esc(row.risk)}" ${state.draft.checks[row.id] ? "checked" : ""} />
+        <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
+      </label>`;
     }
 
     function renderHistory() {
@@ -9243,6 +9283,28 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       scrollScreenTop();
     }
 
+    function openUnsafeDraftFromCheck(itemId) {
+      const model = currentCheckRenderState();
+      const item = model?.items.find((row) => row.id === itemId);
+      if (!model || !item) return;
+      const section = sectionsFor(model.cat.id).find((row) => row.id === item.sectionId);
+      const prefilledContent = `[점검 미확인] ${section?.title || "위험요인"}: ${item.text}`;
+      const currentContent = String(state.unsafeDraft.content || "").trim();
+      state.lastUnsafeIssueId = "";
+      state.unsafeDraft = createUnsafeDraft({
+        ...state.unsafeDraft,
+        step: 2,
+        shipNo: state.draft.shipNo || state.unsafeDraft.shipNo,
+        content: currentContent.includes(prefilledContent)
+          ? currentContent
+          : [currentContent, prefilledContent].filter(Boolean).join("\n"),
+        workerId: state.unsafeDraft.workerId || currentWorkerSessionWorker()?.id || "",
+      });
+      saveUnsafeDraft();
+      changeView("unsafe");
+      scrollScreenTop();
+    }
+
     function startNewMissingMaterial() {
       state.lastMaterialId = "";
       state.materialDraft = createMaterialDraft();
@@ -9368,6 +9430,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "submit-unsafe": submitUnsafeIssue,
         "submit-material": submitMissingMaterial,
         "new-unsafe": startNewUnsafeIssue,
+        "open-unsafe-from-check": (event) => openUnsafeDraftFromCheck(event.target.closest("[data-check-unsafe-item]")?.dataset.checkUnsafeItem),
         "new-material": startNewMissingMaterial,
       }, action, event);
     }

@@ -2577,6 +2577,58 @@
       width: 100%;
     }
 
+    .unchecked-items-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid #efb0aa;
+      border-radius: var(--radius);
+      background: #fff7f5;
+    }
+
+    .unchecked-items-panel-head strong,
+    .unchecked-items-panel-head span {
+      display: block;
+    }
+
+    .unchecked-items-panel-head strong { color: var(--red); }
+    .unchecked-items-panel-head span { margin-top: 3px; color: var(--ink-muted); font-size: 12px; }
+
+    .unchecked-items-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .unchecked-item-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #f0d3cf;
+      border-radius: 12px;
+      background: var(--surface);
+    }
+
+    .unchecked-item-card > div { min-width: 0; }
+    .unchecked-item-card strong { display: block; margin-top: 5px; color: var(--ink-strong); font-size: 13px; }
+    .unchecked-item-card p { margin: 4px 0 0; color: var(--ink); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+
+    .unchecked-item-risk {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #5a6b82;
+      background: #eef2f8;
+    }
+
+    .unchecked-item-risk.is-high { color: var(--red); background: #fff1f2; }
+    .unchecked-item-risk.is-medium { color: var(--amber); background: #fff8e8; }
+    .unchecked-item-unsafe-btn { min-height: 40px; white-space: nowrap; }
+
     .check-flow-status-badges {
       display: flex;
       flex-wrap: wrap;
@@ -8639,6 +8691,24 @@
       gap: 8px;
     }
 
+    .check-section-completed {
+      border-top: 1px solid var(--line-faint);
+      padding-top: 8px;
+    }
+
+    .check-section-completed summary {
+      cursor: pointer;
+      color: var(--ink-muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .check-section-completed-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
     .check-section-title {
       min-width: 0;
       overflow-wrap: anywhere;
@@ -12641,5 +12711,14 @@
       .edit-item-row > .item-actions.manage-actions button {
         width: 100%;
         min-width: 0;
+      }
+
+      .unchecked-item-card {
+        grid-template-columns: 1fr;
+      }
+
+      .unchecked-item-unsafe-btn {
+        width: 100%;
+        min-height: 44px;
       }
     }
