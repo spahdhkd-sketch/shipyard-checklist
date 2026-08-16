@@ -5562,6 +5562,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const tools = visibleToolsForCategory(cat.id);
       const selectedIds = new Set(sanitizeToolIds(state.draft.selectedToolIds));
       const selectedCount = tools.filter((tool) => selectedIds.has(tool.id)).length;
+      const coverage = toolPrepCoverage(cat, tools, [...selectedIds]);
       const fromWorkPrepRecord = Boolean(state.draft.workPrepRecordId);
       const displayTools = fromWorkPrepRecord ? tools.filter((tool) => selectedIds.has(tool.id)) : tools;
       const requireSelection = cat.requireToolCheck !== false;
@@ -5578,20 +5579,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <span>${esc(cat.label)}</span>
           <span class="small muted">${esc(normalizeToolNature(cat.toolNature))} 기준 · ${fromWorkPrepRecord ? "작업지시 등록" : "선택"} ${selectedCount}개</span>
         </div>
+        <div class="tool-prep-coverage ${coverage.independent ? "is-independent" : ""}" data-tool-prep-coverage>
+          <strong>${esc(coverage.title)}</strong>
+          <span>${esc(coverage.description)}</span>
+        </div>
         <div class="tool-prep-grid">
           ${displayTools.map((tool) => {
             const checked = selectedIds.has(tool.id);
+            const linkedCount = coverage.toolCounts.get(tool.id) || 0;
+            const countLabel = linkedCount
+              ? (checked ? `대책 ${linkedCount}건` : `대책 ${linkedCount}건 제외`)
+              : "연결 대책 없음";
             if (fromWorkPrepRecord) {
               return `<div class="tool-prep-card checked locked" role="listitem" aria-label="${esc(`${tool.name} 작업지시 등록 공기구`)}">
               <span class="tool-prep-check">✓</span>
               <span class="tool-prep-name">${esc(tool.name)}</span>
               ${natureBadge(tool.nature)}
+              <span class="tool-prep-linked-count">${esc(countLabel)}</span>
             </div>`;
             }
             return `<button class="tool-prep-card ${checked ? "checked" : ""}" data-tool-prep-toggle="${esc(tool.id)}" type="button" aria-pressed="${checked ? "true" : "false"}">
               <span class="tool-prep-check">${checked ? "✓" : ""}</span>
               <span class="tool-prep-name">${esc(tool.name)}</span>
               ${natureBadge(tool.nature)}
+              <span class="tool-prep-linked-count ${checked ? "" : "is-excluded"}">${esc(countLabel)}</span>
             </button>`;
           }).join("")}
         </div>
@@ -9198,14 +9209,42 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
-    function filteredChecklistItems(categoryId) {
+    function checklistItemsForSelectedTools(categoryId, selectedToolIds) {
       const cat = categoryById(categoryId);
       return CHECKLIST_RULES.filterChecklistItems({
         items: activeItems(categoryId),
         tools: activeTools(),
-        selectedToolIds: state.draft.selectedToolIds,
+        selectedToolIds,
         categoryNature: cat?.toolNature || defaultToolNatureForCategory(cat),
       });
+    }
+
+    function filteredChecklistItems(categoryId) {
+      return checklistItemsForSelectedTools(categoryId, state.draft.selectedToolIds);
+    }
+
+    function toolPrepCoverage(category, tools, selectedToolIds) {
+      const items = activeItems(category.id);
+      const visibleItems = checklistItemsForSelectedTools(category.id, selectedToolIds);
+      const toolCounts = new Map(tools.map((tool) => [
+        tool.id,
+        items.filter((item) => linkedToolsForItem(item).some((linked) => linked.id === tool.id)).length,
+      ]));
+      const hasLinkedItems = [...toolCounts.values()].some(Boolean);
+      if (!hasLinkedItems) {
+        return {
+          independent: true,
+          title: `이 작업은 공기구와 무관하게 안전대책 ${items.length}건을 모두 점검합니다.`,
+          description: "공기구 선택은 준비 확인에만 사용됩니다.",
+          toolCounts,
+        };
+      }
+      return {
+        independent: false,
+        title: `이 선택으로 점검할 안전대책 ${visibleItems.length} / ${items.length}건`,
+        description: "공기구를 더 고르면 관련 대책이 함께 열립니다.",
+        toolCounts,
+      };
     }
 
     function selectedItemToolIds(groupId) {
