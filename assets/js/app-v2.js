@@ -1168,6 +1168,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         checks: {},
         selectedToolIds: [],
         toolPrepComplete: false,
+        directShipSelectionComplete: false,
         ...overrides,
       };
     }
@@ -5499,6 +5500,63 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </section>`;
     }
 
+    function recentCheckFlowShips(ships) {
+      const availableShips = new Map(ships.map((ship) => [ship.no, ship]));
+      const recentRecords = [...state.inspections, ...state.workPrepRecords]
+        .sort((left, right) => String(right.createdAt || right.date || "").localeCompare(String(left.createdAt || left.date || "")));
+      const seen = new Set();
+      return recentRecords
+        .map((record) => availableShips.get(record.shipNo))
+        .filter((ship) => ship && !seen.has(ship.no) && seen.add(ship.no))
+        .slice(0, 3);
+    }
+
+    function checkFlowShipSearchText(ship) {
+      const stage = effectiveShipStage(ship);
+      return normalizeSearchQuery([ship.no, ship.type, stage.label, shipDeliveryMeta(ship)].filter(Boolean).join(" "));
+    }
+
+    function renderDirectCheckShipSelect(category) {
+      const ships = checkFlowShipsForDraft();
+      const selectedShip = ships.find((ship) => ship.no === state.draft.shipNo);
+      const recentShips = recentCheckFlowShips(ships);
+      const shipRows = ships.map((ship) => {
+        const stage = effectiveShipStage(ship);
+        const selected = state.draft.shipNo === ship.no;
+        return `<button class="check-flow-ship-row ${selected ? "active" : ""}" data-select-check-ship="${esc(ship.no)}" data-ship-search-item data-ship-search-text="${esc(checkFlowShipSearchText(ship))}" type="button" aria-pressed="${selected ? "true" : "false"}">
+          <strong>${esc(ship.no)}</strong>
+          <span>${esc([ship.type || "선종 미지정", stage.label, shipDeliveryMeta(ship)].filter(Boolean).join(" · "))}</span>
+        </button>`;
+      }).join("");
+      const body = `<section class="check-flow-selection-card">
+        <div class="check-flow-selection-head">
+          <span>작업 선택</span>
+          <strong>${esc(workLabel(category))}</strong>
+          <button class="btn-light" data-action="back-check-types" type="button">변경</button>
+        </div>
+      </section>
+      <section class="check-flow-ship-picker" data-submit-blocker-anchor="ship">
+        <div class="check-flow-ship-picker-head">
+          <div><strong>오늘 작업 호선</strong><span>호선번호, 선종, 공정 또는 인도 일정으로 찾을 수 있습니다.</span></div>
+          ${selectedShip ? `<span class="check-flow-selected-ship">선택됨 · ${esc(selectedShip.no)}</span>` : ""}
+        </div>
+        <label class="check-flow-ship-search">
+          <span class="sr-only">호선 검색</span>
+          <input class="input" data-ship-search value="${esc(state.shipSearchQuery)}" placeholder="호선 검색" autocomplete="off">
+        </label>
+        ${recentShips.length ? `<div class="check-flow-recent-ships" aria-label="최근 사용 호선">
+          <span>최근 사용</span>
+          ${recentShips.map((ship) => `<button class="check-flow-ship-chip ${state.draft.shipNo === ship.no ? "active" : ""}" data-select-check-ship="${esc(ship.no)}" type="button">${esc(ship.no)}</button>`).join("")}
+        </div>` : ""}
+        <div class="check-flow-ship-list" aria-label="호선 목록">${shipRows}</div>
+        <p class="empty compact-empty" data-ship-search-empty hidden>검색 조건에 맞는 호선이 없습니다.</p>
+        ${ships.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
+      </section>`;
+      const footer = `<button class="btn-light material-flow-secondary" data-action="back-check-types" type="button">작업 유형</button>
+        ${disabledReasonWrap(`<button class="material-flow-primary" data-action="continue-check-ship" ${selectedShip ? "" : "disabled"} type="button">다음 단계로</button>`, "다음 단계로 이동하려면 작업 호선을 선택하세요.", !selectedShip)}`;
+      return checkFlowShell(1, "작업과 호선 선택", "작업 유형과 오늘 작업 호선을 모두 선택하세요.", body, footer);
+    }
+
     function renderToolFilterSummary(category, visibleItems) {
       const allItems = activeItems(category.id);
       const visibleIds = new Set(visibleItems.map((item) => item.id));
@@ -5544,6 +5602,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.selectedCategoryId = null;
         return renderCheck();
       }
+      if (!state.draft.workPrepRecordId && !state.draft.directShipSelectionComplete) return renderDirectCheckShipSelect(cat);
       if (visibleToolsForCategory(cat.id).length && !state.draft.toolPrepComplete) return renderToolPrep(cat);
       const items = filteredChecklistItems(cat.id);
       const checked = items.filter((row) => state.draft.checks[row.id]).length;
@@ -5568,7 +5627,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       <div class="pledge-flow-grid">
         ${renderPledgeWorkerSelect(cat)}
-        ${renderPledgeShipSelect(selectableShips)}
         ${renderSafetyPledgeChecklist()}
       </div>
       ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
@@ -5629,7 +5687,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         </div>
         ${requireSelection && !selectedCount ? `<div class="notice danger">${selectionRequiredMessage}</div>` : (fromWorkPrepRecord ? `<div class="notice good">작업지시서에 등록된 공기구/준비물입니다. 변경 없이 준비 여부만 확인하세요.</div>` : `<div class="notice good">선택한 공기구에 맞는 점검 항목만 다음 화면에 표시됩니다.</div>`)}
       </div>`;
-      const footer = `<button class="btn-light material-flow-secondary" data-action="back-check-types" type="button">작업 유형</button>
+      const footer = `<button class="btn-light material-flow-secondary" data-action="${fromWorkPrepRecord ? "back-check-types" : "back-check-ship"}" type="button">${fromWorkPrepRecord ? "작업 유형" : "작업과 호선"}</button>
         ${disabledReasonWrap(`<button class="material-flow-primary" data-action="continue-tool-prep" ${continueDisabled ? "disabled" : ""} title="${esc(continueDisabledText)}" aria-label="${esc(continueDisabledText)}" type="button">다음 점검표로</button>`, continueDisabledText, continueDisabled)}`;
       return checkFlowShell(2, "공기구 확인", fromWorkPrepRecord ? "작업지시서에 등록된 공기구와 준비물을 확인하세요" : "사용할 공기구와 준비물을 선택하세요", body, footer);
     }
@@ -9861,6 +9919,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.pledgeWorkerCollapsed = false;
         state.pledgeShipCollapsed = false;
         resetToolPrepDraft();
+        state.draft.shipNo = "";
+        state.draft.directShipSelectionComplete = false;
+        state.shipSearchQuery = "";
+        saveJson("draft", state.draft);
         render();
         scrollScreenTop();
         pushRouteState();
@@ -9874,6 +9936,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
         scrollScreenTop();
         pushRouteState();
+      }
+      if (button.dataset.selectCheckShip) {
+        state.draft.shipNo = button.dataset.selectCheckShip;
+        saveJson("draft", state.draft);
+        renderPreservingScroll();
+      }
+      if (button.dataset.action === "continue-check-ship") {
+        if (!state.draft.shipNo) return toast("다음 단계로 이동하려면 작업 호선을 선택하세요.");
+        state.draft.directShipSelectionComplete = true;
+        saveJson("draft", state.draft);
+        render();
+        scrollScreenTop();
+      }
+      if (button.dataset.action === "back-check-ship") {
+        state.draft.toolPrepComplete = false;
+        state.draft.directShipSelectionComplete = false;
+        saveJson("draft", state.draft);
+        render();
+        scrollScreenTop();
+        return;
       }
       if (button.dataset.action === "back-tool-prep") {
         state.draft.toolPrepComplete = false;

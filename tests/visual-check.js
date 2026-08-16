@@ -540,6 +540,15 @@ function assertCheck(name, condition) {
     await navigate(client, `${baseUrl}/check.html`);
     await click(client, '[data-action="toggle-work-prep-direct"]');
     await click(client, '[data-select-category="mounting"]');
+    const shipStepState = await evaluate(client, `(() => ({
+      hasStepTitle: document.body.innerText.includes("작업과 호선 선택"),
+      hasShipSearch: Boolean(document.querySelector("[data-ship-search]")),
+      hasCompactShip: Boolean(document.querySelector("[data-select-check-ship='H-101']")),
+      nextDisabled: Boolean(document.querySelector("[data-action='continue-check-ship']")?.disabled),
+    }))()`);
+    assertCheck("direct check requires ship selection in STEP 1", shipStepState.hasStepTitle && shipStepState.hasShipSearch && shipStepState.hasCompactShip && shipStepState.nextDisabled);
+    await click(client, '[data-select-check-ship="H-101"]');
+    await click(client, '[data-action="continue-check-ship"]');
     const prepState = await evaluate(client, `(() => {
       const text = document.body.innerText;
       return {
