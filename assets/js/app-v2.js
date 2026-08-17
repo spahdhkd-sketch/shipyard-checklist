@@ -2845,6 +2845,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workPrepDetailId: "",
       lastUnsafeIssueId: "",
       lastMaterialId: "",
+      lastMaterialNotificationState: "",
       lastInspectionId: "",
       inspectionSubmitting: false,
       unsafeSubmitting: false,
@@ -6756,7 +6757,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div><dt>비고</dt><dd>${esc(state.materialDraft.detail || "-")}</dd></div>
         </dl>
       </article>
-      <div class="notice material-submit-note">제출 후 관리자에게 자동 알림이 전송됩니다. 처리 결과는 호선자재 누락 탭에서 확인하세요.</div>`;
+      <div class="notice material-submit-note">등록 정보가 서버에 저장되면 관리자에게 알림을 전송합니다. 전송 상태는 완료 화면에서 확인하세요.</div>`;
       const footer = `<button class="btn-light material-flow-secondary" data-material-edit-step="2" type="button">수정하기</button>
         <button class="material-flow-primary ${ready ? "" : "is-disabled"}" data-action="submit-material" type="button" ${ready ? "" : "disabled"}>${navIcon("board")} 누락 자재 등록</button>`;
       return materialFlowShell(4, "최종 확인", "등록 내용을 확인하고 제출하세요", body, footer);
@@ -8021,10 +8022,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function refreshVisiblePendingSyncStatus() {
       const inspectionVisible = state.view === "pledgeComplete" && state.lastInspectionId;
+      const materialVisible = state.view === "materials" && state.lastMaterialId;
       const workPrepVisible = state.view === "manage"
         && state.manageTab === "workPrep"
         && !state.workPrepRegisterOpen;
-      if (!inspectionVisible && !workPrepVisible) return;
+      if (!inspectionVisible && !materialVisible && !workPrepVisible) return;
       renderPreservingScroll();
     }
 
@@ -8494,12 +8496,51 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function materialNotificationPresentation(row) {
+      const materialId = String(row?.id || "");
+      const pending = state.pendingMissingMaterialNotifications.find((entry) => entry.materialId === materialId);
+      if (!pending) {
+        return {
+          state: "delivered",
+          label: "관리자 알림 전송 완료",
+          detail: "등록 정보와 브라우저 알림이 관리자에게 전달되었습니다.",
+        };
+      }
+      if (state.lastMaterialNotificationState === "retry" || Number(pending.attempts || 0) > 0) {
+        return {
+          state: "retry",
+          label: "관리자 알림 재전송 대기",
+          detail: "등록 정보는 저장되었습니다. 연결이 회복되면 알림을 자동으로 다시 전송합니다.",
+        };
+      }
+      return {
+        state: "sending",
+        label: "관리자 알림 전송 중",
+        detail: "등록 정보를 서버에 저장한 뒤 관리자 대상 알림을 전송하고 있습니다.",
+      };
+    }
+
+    function renderMaterialNotificationStatus(row) {
+      const notification = materialNotificationPresentation(row);
+      return `<div class="inspection-submit-status state-${esc(notification.state)}" role="status" aria-live="polite" data-material-notification-state="${esc(notification.state)}">
+        <div class="inspection-submit-status-row inspection-submit-status-local">
+          <span class="inspection-submit-status-check" aria-hidden="true">✓</span>
+          <span><strong>자재 누락 등록 완료</strong><small>관리센터 목록에 즉시 반영되었습니다.</small></span>
+        </div>
+        <div class="inspection-submit-status-row inspection-submit-status-server">
+          <span class="inspection-submit-status-dot" aria-hidden="true"></span>
+          <span><strong>${esc(notification.label)}</strong><small>${esc(notification.detail)}</small></span>
+        </div>
+      </div>`;
+    }
+
     function renderMaterialComplete(row) {
       return renderCompletionScreen({
         type: "material",
         icon: "box",
         title: "자재 누락이 등록되었습니다",
-        message: `${row.shipNo || "-"} · ${row.materialName || "-"} 누락 신청이 관리자에게 전달됐습니다.`,
+        message: `${row.shipNo || "-"} · ${row.materialName || "-"} 누락 신청이 등록되었습니다.`,
+        statusHtml: renderMaterialNotificationStatus(row),
         stats: [
           { value: row.shipNo || "-", label: "호선", tone: "orange" },
           { value: materialQuantity(row), label: "수량" },
@@ -9605,6 +9646,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function startNewMissingMaterial() {
       state.lastMaterialId = "";
+      state.lastMaterialNotificationState = "";
       state.materialDraft = createMaterialDraft();
       persist();
       render();
@@ -11170,13 +11212,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       row.statusHistory = ISSUE_MATERIAL_RULES.buildRecordTimeline(row, { initialStatus: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[0] });
       state.missingMaterials.unshift(row);
       state.lastMaterialId = id;
+      state.lastMaterialNotificationState = "sending";
       state.materialDraft = createMaterialDraft();
       persist();
+      const notificationPromise = syncMissingMaterial(row);
       render();
       scrollScreenTop();
       replaceRouteState();
       toast("호선자재 누락이 접수되었습니다.");
-      await syncMissingMaterial(row);
+      const notificationDelivered = await notificationPromise;
+      state.lastMaterialNotificationState = notificationDelivered ? "delivered" : "retry";
+      if (state.lastMaterialId === id) renderPreservingScroll();
     }
 
     async function verifyWorkerLogin(workerId, employeeNo) {
@@ -13252,6 +13298,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         setSyncStatus("누락자재 알림 재시도 대기", "pending");
         scheduleSyncRetry();
       }
+      refreshVisiblePendingSyncStatus();
       return allDelivered;
     }
 
@@ -13260,8 +13307,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       enqueueSyncRows("missingMaterials", [row]);
       enqueueMissingMaterialNotification(row);
       await flushPendingSyncQueue();
-      await flushPendingMissingMaterialNotifications();
-      return row;
+      const delivered = await flushPendingMissingMaterialNotifications();
+      const stillPending = state.pendingMissingMaterialNotifications.some((entry) => entry.materialId === String(row?.id || ""));
+      return delivered && !stillPending;
     }
 
     async function deleteUnsafePhotos(id) {

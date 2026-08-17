@@ -72,9 +72,11 @@ expectMatch(workerPush, /missingMaterialTargetWorkerIds[\s\S]*?\.eq\("unsafe_pus
 expectMatch(app, /data-worker-edit-field="unsafePushTarget"[\s\S]*불안전·누락자재 알림 대상/, "admins should be able to manage the database push target flag");
 expectMatch(app, /worker\.unsafePushTarget = workerEditFieldChecked\(id, "unsafePushTarget"\)/, "worker edits should persist the push target flag");
 expectMatch(workerPush, /sendKind[\s\S]*?=== "missingMaterial"[\s\S]*?workerIds = \[\.\.\.await missingMaterialTargetWorkerIds\(\)\]/, "missing material sends should resolve all recipients on the server");
-expectMatch(app, /toast\("호선자재 누락이 접수되었습니다\."\);\s*await syncMissingMaterial\(row\);/, "missing material submission should enter the durable save-then-notify flow");
+expectMatch(app, /const notificationPromise = syncMissingMaterial\(row\);[\s\S]*?toast\("호선자재 누락이 접수되었습니다\."\);[\s\S]*?await notificationPromise;/, "missing material submission should enter the durable save-then-notify flow before rendering completion");
 expectMatch(app, /pendingMissingMaterialNotifications/, "missing material notification retries should be persisted");
 expectMatch(app, /missing_material_push_incomplete/, "incomplete missing material sends should remain queued");
+expectMatch(app, /data-material-notification-state="\$\{esc\(notification\.state\)\}"/, "missing material completion should expose its notification delivery state");
+expectMatch(app, /관리자 알림 전송 완료[\s\S]*관리자 알림 재전송 대기[\s\S]*관리자 알림 전송 중/, "missing material completion should distinguish delivered, retry, and sending states");
 expectMatch(workerPush, /subscribedWorkers/, "push results should report recipient subscription coverage");
 
 console.log("worker security static tests passed");

@@ -816,7 +816,9 @@ async function main() {
     await page.keyboard.type("5", { delay: 20 }); await wait(400);
     if (!await clickBtn(page, "다음 → 최종 확인")) return false; await wait(1300);
     if (!await clickBtn(page, "누락 자재 등록")) return false; await wait(1800);
-    return (await bodyText(page)).includes("자재 누락이 등록되었습니다");
+    const notificationState = await page.$eval("[data-material-notification-state]", (element) => element.dataset.materialNotificationState);
+    return (await bodyText(page)).includes("자재 누락이 등록되었습니다")
+      && notificationState === "retry";
   };
   let materialsOk = false;
   for (let attempt = 0; attempt < 2 && !materialsOk; attempt += 1) {
