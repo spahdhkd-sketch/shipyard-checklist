@@ -5768,7 +5768,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function sectionSignImg(signCode) {
       if (!/^[PMSW]-(?:0[1-9]|1[0-2])$/.test(signCode)) return "";
-      return `<img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" data-section-sign-image loading="lazy">`;
+      return `<div class="check-section-sign-wrap">
+        <button class="check-section-sign-trigger" type="button" data-section-sign-open aria-haspopup="dialog" aria-label="안전표지 ${esc(signCode)} 확대 보기">
+          <img class="check-section-sign" src="assets/pictograms/signs/${signCode}.png" alt="" data-section-sign-image loading="lazy">
+          <span class="check-section-sign-zoom" aria-hidden="true">확대</span>
+        </button>
+        <dialog class="check-section-sign-dialog" data-section-sign-dialog aria-label="안전표지 ${esc(signCode)} 확대 보기">
+          <div class="check-section-sign-dialog-body">
+            <img src="assets/pictograms/signs/${signCode}.png" alt="안전표지 ${esc(signCode)}">
+            <strong>${esc(signCode)}</strong>
+            <button class="btn-light" type="button" data-section-sign-close>닫기</button>
+          </div>
+        </dialog>
+      </div>`;
     }
 
     function sectionRiskBadge(section) {
@@ -10499,6 +10511,25 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return false;
     }
 
+    function handleSectionSignButtonClick(button) {
+      if (button.matches("[data-section-sign-open]")) {
+        const dialog = button.closest(".check-section-sign-wrap")?.querySelector("[data-section-sign-dialog]");
+        if (!dialog?.showModal) return false;
+        dialog.addEventListener("close", () => button.focus(), { once: true });
+        dialog.showModal();
+        dialog.querySelector("[data-section-sign-close]")?.focus();
+        return true;
+      }
+      if (button.matches("[data-section-sign-close]")) {
+        const dialog = button.closest("[data-section-sign-dialog]");
+        const opener = dialog?.closest(".check-section-sign-wrap")?.querySelector("[data-section-sign-open]");
+        dialog?.close();
+        opener?.focus();
+        return true;
+      }
+      return false;
+    }
+
     document.addEventListener("click", (event) => {
       const button = event.target.closest("button");
       if (button && !confirmSectionEditorDiscard(button)) {
@@ -10514,6 +10545,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (handlePledgeButtonClick(button)) return;
       if (handleUnsafeDraftButtonClick(button)) return;
       if (handleMaterialDraftButtonClick(button)) return;
+      if (handleSectionSignButtonClick(button)) return;
       if (button.dataset.submitBlocker) {
         focusSubmitBlocker(button.dataset.submitBlocker);
         return;

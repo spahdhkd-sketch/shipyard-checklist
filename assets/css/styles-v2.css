@@ -8892,12 +8892,75 @@
       padding: 14px 12px 10px;
     }
 
+    .check-section-sign-wrap {
+      position: relative;
+      margin: 0 auto;
+    }
+
+    .check-section-sign-trigger {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: var(--surface);
+      cursor: zoom-in;
+    }
+
     .check-section-sign {
-      width: 96px;
-      height: auto;
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
       border-radius: 8px;
       display: block;
-      margin: 0 auto;
+    }
+
+    .check-section-sign-zoom {
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      padding: 2px 4px;
+      border-radius: 999px;
+      background: var(--ink-strong);
+      color: var(--surface);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .check-section-sign-dialog {
+      width: min(420px, calc(100vw - 32px));
+      max-width: none;
+      padding: 0;
+      border: 0;
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    .check-section-sign-dialog::backdrop {
+      background: rgba(7, 22, 47, .72);
+    }
+
+    .check-section-sign-dialog-body {
+      display: grid;
+      gap: 16px;
+      justify-items: center;
+      padding: 24px;
+    }
+
+    .check-section-sign-dialog-body img {
+      width: min(320px, 72vw);
+      max-height: 60vh;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+
+    .check-section-sign-dialog-body .btn-light {
+      width: 100%;
+      min-height: 48px;
     }
 
     .check-section-badges {

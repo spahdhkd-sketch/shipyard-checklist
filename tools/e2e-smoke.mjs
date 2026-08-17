@@ -736,11 +736,57 @@ async function main() {
 
 
   // 2. 작업 전 점검 제출 플로우
+  await page.evaluate((storagePrefix) => {
+    const sections = JSON.parse(localStorage.getItem(storagePrefix + "sections") || "[]");
+    const target = sections.find((section) => section.categoryId === "welding");
+    if (target) target.signCode = "W-03";
+    localStorage.setItem(storagePrefix + "sections", JSON.stringify(sections));
+  }, PRE);
   await goto("check.html");
   check("점검: 작업지시서 카드 표시", (await bodyText(page)).includes("작업지시서"));
   check("점검: [점검 시작] 클릭", await clickBtn(page, "점검 시작")); await wait(1500);
   check("점검: STEP 2 공기구 확인 진입", (await bodyText(page)).includes("공기구 확인"));
   check("점검: [다음 점검표로] 클릭", await clickBtn(page, "다음 점검표로")); await wait(1500);
+  const pictogramZoom = await page.evaluate(() => {
+    const trigger = document.querySelector("[data-section-sign-open]");
+    const thumbnail = trigger?.querySelector("[data-section-sign-image]");
+    if (!trigger || !thumbnail) return { found: false };
+    const thumbnailWidth = Math.round(thumbnail.getBoundingClientRect().width);
+    trigger.click();
+    const dialog = trigger.closest(".check-section-sign-wrap")?.querySelector("[data-section-sign-dialog]");
+    const enlargedImage = dialog?.querySelector(".check-section-sign-dialog-body img");
+    const result = {
+      found: true,
+      thumbnailWidth,
+      modalOpen: Boolean(dialog?.open && dialog.matches(":modal")),
+      enlargedWidth: Math.round(enlargedImage?.getBoundingClientRect().width || 0),
+      closeFocused: document.activeElement?.matches("[data-section-sign-close]") || false,
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+    };
+    dialog?.querySelector("[data-section-sign-close]")?.click();
+    result.focusRestored = document.activeElement === trigger;
+    return result;
+  });
+  check("점검: 안전표지 56px 썸네일", pictogramZoom.found && pictogramZoom.thumbnailWidth === 56);
+  check(`점검: 안전표지 탭 확대·포커스 복귀 (${JSON.stringify(pictogramZoom)})`, pictogramZoom.modalOpen && pictogramZoom.enlargedWidth > 56 && pictogramZoom.closeFocused && pictogramZoom.focusRestored);
+  check("점검: 안전표지 확대 후 390px 가로 넘침 없음", pictogramZoom.noHorizontalOverflow);
+  await page.setViewport({ width: 1366, height: 900 });
+  const desktopPictogramZoom = await page.evaluate(() => {
+    const trigger = document.querySelector("[data-section-sign-open]");
+    const thumbnail = trigger?.querySelector("[data-section-sign-image]");
+    trigger?.click();
+    const dialog = trigger?.closest(".check-section-sign-wrap")?.querySelector("[data-section-sign-dialog]");
+    const result = {
+      thumbnailWidth: Math.round(thumbnail?.getBoundingClientRect().width || 0),
+      modalOpen: Boolean(dialog?.open && dialog.matches(":modal")),
+      enlargedWidth: Math.round(dialog?.querySelector(".check-section-sign-dialog-body img")?.getBoundingClientRect().width || 0),
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+    };
+    dialog?.querySelector("[data-section-sign-close]")?.click();
+    return result;
+  });
+  check("점검: 데스크톱 안전표지 썸네일·확대", desktopPictogramZoom.thumbnailWidth === 56 && desktopPictogramZoom.modalOpen && desktopPictogramZoom.enlargedWidth > 56 && desktopPictogramZoom.noHorizontalOverflow);
+  await page.setViewport({ width: 390, height: 844 });
   await checkAllBoxes(page);
   check("점검: [제출 전 확인] 클릭", await clickBtn(page, "제출 전 확인")); await wait(500);
   check("점검: 제출 시트에 안전 서약 표시", (await bodyText(page)).includes("안전 서약과 서명을 확인하세요"));
