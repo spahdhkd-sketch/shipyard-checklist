@@ -8972,13 +8972,18 @@
     }
 
     .check-section-master {
-      width: 44px;
-      height: 44px;
-      display: inline-grid;
-      place-items: center;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       flex: none;
       cursor: pointer;
       margin: 0;
+      padding: 0 10px;
+      border: 1px solid var(--amber);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--ink-strong);
     }
 
     .check-section-master input {
@@ -8989,21 +8994,29 @@
       opacity: 0;
     }
 
-    .check-section-master span {
+    .check-section-master-box {
       width: 20px;
       height: 20px;
+      flex: none;
       position: relative;
       border: 2px solid #d18a16;
       border-radius: 5px;
       background: var(--surface);
     }
 
-    .check-section-master input:checked + span {
+    .check-section-master strong {
+      max-width: 76px;
+      font-size: 12px;
+      line-height: 1.25;
+      text-align: left;
+    }
+
+    .check-section-master input:checked + .check-section-master-box {
       border-color: #d18a16;
       background: #f59e0b;
     }
 
-    .check-section-master input:checked + span::after {
+    .check-section-master input:checked + .check-section-master-box::after {
       content: "";
       position: absolute;
       width: 8px;
@@ -9015,7 +9028,7 @@
       transform: rotate(-45deg);
     }
 
-    .check-section-master input:focus-visible + span {
+    .check-section-master input:focus-visible + .check-section-master-box {
       outline: 3px solid var(--color-brand-focus-outline);
       outline-offset: 3px;
     }

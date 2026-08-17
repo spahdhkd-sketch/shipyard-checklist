@@ -131,6 +131,8 @@ assert.doesNotMatch(styles, /color-scheme:\s*dark/, "site should not opt native 
 assert.match(app, /data-section-sign-open[\s\S]*?<dialog class="check-section-sign-dialog" data-section-sign-dialog/, "risk pictograms should expose a native enlargement dialog");
 assert.match(app, /dialog\.showModal\(\)[\s\S]*?data-section-sign-close/, "risk pictogram enlargement should open modally and provide a close action");
 assert.match(styles, /\.check-section-sign-trigger\s*\{[\s\S]*?width:\s*56px;[\s\S]*?height:\s*56px;/, "risk pictogram thumbnails should remain 56px square");
+assert.match(app, /data-check-section-master="\$\{esc\(section\.id\)\}"[\s\S]*?<strong>이 위험요인 전체 확인<\/strong>/, "section master checkbox should expose its action as visible text");
+assert.match(styles, /\.check-section-master\s*\{[\s\S]*?min-height:\s*44px;[\s\S]*?display:\s*inline-flex;/, "section master action should remain a full touch target");
 const notFoundStyles = read("assets/css/30-feature-not-found.css");
 const tableStyles = read("assets/css/20-component-table.css");
 const signatureStyles = read("assets/css/30-feature-signature.css");

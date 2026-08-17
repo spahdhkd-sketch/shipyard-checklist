@@ -787,6 +787,25 @@ async function main() {
   });
   check("점검: 데스크톱 안전표지 썸네일·확대", desktopPictogramZoom.thumbnailWidth === 56 && desktopPictogramZoom.modalOpen && desktopPictogramZoom.enlargedWidth > 56 && desktopPictogramZoom.noHorizontalOverflow);
   await page.setViewport({ width: 390, height: 844 });
+  const masterCheckAction = await page.evaluate(() => {
+    const label = document.querySelector("[data-check-section-master]")?.closest(".check-section-master");
+    const rect = label?.getBoundingClientRect();
+    return {
+      text: label?.innerText.replace(/\s+/g, " ").trim() || "",
+      height: Math.round(rect?.height || 0),
+      visible: Boolean(rect?.width && rect?.height),
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+    };
+  });
+  check("점검: '이 위험요인 전체 확인' 라벨 노출", masterCheckAction.visible && masterCheckAction.text === "이 위험요인 전체 확인" && masterCheckAction.height >= 44);
+  check("점검: 전체 확인 라벨 390px 가로 넘침 없음", masterCheckAction.noHorizontalOverflow);
+  await page.setViewport({ width: 360, height: 800 });
+  const narrowMasterCheckFits = await page.evaluate(() => (
+    document.body.innerText.includes("이 위험요인 전체 확인")
+    && document.documentElement.scrollWidth <= window.innerWidth + 1
+  ));
+  check("점검: 전체 확인 라벨 360px 가로 넘침 없음", narrowMasterCheckFits);
+  await page.setViewport({ width: 390, height: 844 });
   await checkAllBoxes(page);
   check("점검: [제출 전 확인] 클릭", await clickBtn(page, "제출 전 확인")); await wait(500);
   check("점검: 제출 시트에 안전 서약 표시", (await bodyText(page)).includes("안전 서약과 서명을 확인하세요"));

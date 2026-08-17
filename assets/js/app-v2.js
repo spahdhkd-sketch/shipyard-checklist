@@ -5815,7 +5815,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div class="check-section-hero">
             <label class="check-section-master">
               <input type="checkbox" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
-              <span aria-hidden="true"></span>
+              <span class="check-section-master-box" aria-hidden="true"></span>
+              <strong>이 위험요인 전체 확인</strong>
             </label>
             ${sectionSignImg(section.signCode)}
             <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
