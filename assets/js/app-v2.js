@@ -5668,6 +5668,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>
       ${selectableShips.length ? "" : `<div class="notice danger">작업자에게 공개된 호선이 없습니다. 호선 관리에서 공개 기준일을 입력한 호선만 점검 목록에 표시됩니다.</div>`}
       ${highMissing.length ? `<div class="notice danger" data-high-missing-notice>미확인 위험 항목 ${highMissing.length}건이 있습니다. 위험 항목은 모두 확인해야 제출할 수 있습니다.</div>` : `<div class="notice good" data-high-missing-notice>고위험 항목이 모두 확인되었습니다.</div>`}
+      ${canSubmit ? "" : `<div class="notice danger check-submit-blockers">${esc(submitDisabledText)}</div>`}
       <div data-submit-blocker-anchor="checks">${renderChecklistSections(cat.id)}</div>`;
       return `<div class="check-submit-flow">
         ${checkFlowShell(3, cat.label, "섹션별로 점검하고, 고위험 항목은 모두 확인해야 제출됩니다.", body)}
