@@ -5688,8 +5688,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const continueDisabled = requireSelection && !selectedCount;
       const continueDisabledText = continueDisabled ? "다음 점검표로 이동할 수 없음: 공기구/준비물 선택 필요" : "다음 점검표로";
       const selectionRequiredMessage = fromWorkPrepRecord
-        ? "최소 1개의 공기구/준비물이 작업지시서에 등록되어야 다음 점검표로 이동할 수 있습니다."
-        : "공기구/준비물을 1개 이상 선택해야 점검표로 이동할 수 있습니다.";
+        ? "작업지시서에 공기구/준비물이 1개 이상 등록되어야 다음 점검표로 이동할 수 있습니다."
+        : "공기구/준비물을 1개 이상 선택해야 다음 점검표로 이동할 수 있습니다.";
       const body = `<div class="pledge-flow-grid">
         ${renderPledgeWorkerSelect(cat)}
       </div>
