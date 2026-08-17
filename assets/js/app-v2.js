@@ -4720,7 +4720,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return `<div data-submit-blocker-anchor="ship">${renderPledgeFlowSummary({
           label: fromWorkPrepRecord ? "작업지시 호선" : "오늘 작업 호선",
           title: selectedShip.no,
-          meta: `${selectedShip.type || "선종 미지정"} · ${shipDeliveryMeta(selectedShip)}`,
+          meta: `${selectedShip.type || "선종 미지정"} · ${shipDeliveryType(selectedShip) || "인도"} ${shipDeliveryDate(selectedShip) || "-"}`,
           action: "expand-pledge-ship",
           stage,
           locked: fromWorkPrepRecord,
@@ -4734,7 +4734,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             const selected = state.draft.shipNo === ship.no;
             return `<button class="pledge-ship-row ${selected ? "active" : ""}" data-select-pledge-ship="${esc(ship.no)}" type="button" aria-pressed="${selected ? "true" : "false"}">
               <span class="pledge-radio"></span>
-              <span><strong>${esc(ship.no)}</strong><em>${esc(ship.type || "선종 미지정")} · ${esc(shipDeliveryMeta(ship))}</em></span>
+              <span><strong>${esc(ship.no)}</strong><em>${esc(ship.type || "선종 미지정")} · ${esc(shipDeliveryType(ship) || "인도")} ${esc(shipDeliveryDate(ship) || "-")}</em></span>
               <b style="--stage:${esc(stage.color)}">${esc(stage.label)}</b>
             </button>`;
           }).join("")}
