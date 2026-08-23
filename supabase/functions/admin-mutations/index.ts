@@ -1680,6 +1680,273 @@ async function deleteIssuePhotos(payload: Record<string, unknown>) {
   return jsonResponse({ ok: true, mutated: rowIds.length });
 }
 
+const SAFETY_SETTING_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+const SAFETY_SETTING_STATUSES = new Set(["draft", "review", "published"]);
+const SAFETY_SETTING_COLUMNS = [
+  "config_version",
+  "lifecycle_status",
+  "effective_at",
+  "change_summary",
+  "settings",
+  "authored_by",
+  "authored_at",
+  "reviewed_by",
+  "reviewed_at",
+  "published_by",
+  "published_at",
+  "base_version",
+  "rollback_target_version",
+  "created_at",
+  "updated_at",
+].join(",");
+
+function safetySettingVersion(value: unknown) {
+  const version = cleanText(value, 80);
+  return SAFETY_SETTING_VERSION_PATTERN.test(version) ? version : "";
+}
+
+function safetySettingTimestamp(value: unknown) {
+  const time = Date.parse(cleanText(value, 80));
+  return Number.isFinite(time) ? new Date(time).toISOString() : "";
+}
+
+function safetySettingPayload(value: unknown) {
+  const settings = rowObject(value);
+  return settings
+    && rowObject(settings.pledgeRules)
+    && rowObject(settings.pushCopy)
+    && rowObject(settings.restDayCalendar)
+    ? settings
+    : null;
+}
+
+function safetySettingResponse(row: Record<string, unknown>, includeSettings = false) {
+  const response: Record<string, unknown> = {
+    configVersion: cleanText(row.config_version, 80),
+    lifecycleStatus: cleanText(row.lifecycle_status, 20),
+    effectiveAt: cleanText(row.effective_at, 80),
+    changeSummary: cleanText(row.change_summary, 1000),
+    metadata: {
+      authored: {
+        actorKey: cleanText(row.authored_by, 80),
+        at: cleanText(row.authored_at, 80),
+      },
+      reviewed: row.reviewed_by
+        ? { actorKey: cleanText(row.reviewed_by, 80), at: cleanText(row.reviewed_at, 80) }
+        : null,
+      published: row.published_by
+        ? { actorKey: cleanText(row.published_by, 80), at: cleanText(row.published_at, 80) }
+        : null,
+      baseVersion: cleanText(row.base_version, 80) || null,
+      rollbackTargetVersion: cleanText(row.rollback_target_version, 80) || null,
+      createdAt: cleanText(row.created_at, 80),
+      updatedAt: cleanText(row.updated_at, 80),
+    },
+  };
+  if (includeSettings) response.settings = rowObject(row.settings) || {};
+  return response;
+}
+
+async function safetySettingActorKey(authorization: AuthorizedMutationSession) {
+  const workerId = cleanText(authorization.worker.id, 120);
+  return `actor:v1:${await sha256(workerId)}`;
+}
+
+function safetySettingError(label: string, error: { code?: unknown } | null) {
+  console.error(label, { code: cleanText(error?.code, 20) });
+}
+
+async function listSafetySettingVersions(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+
+  const limit = Math.max(1, Math.min(100, Math.trunc(Number(payload.limit) || 50)));
+  const offset = Math.max(0, Math.trunc(Number(payload.offset) || 0));
+  const status = cleanText(payload.lifecycleStatus, 20);
+  if (status && !SAFETY_SETTING_STATUSES.has(status)) {
+    return jsonResponse({ error: "safety_setting_status_invalid" }, 400);
+  }
+
+  let query = supabase
+    .from("safety_setting_versions")
+    .select(SAFETY_SETTING_COLUMNS, { count: "exact" })
+    .order("effective_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (status) query = query.eq("lifecycle_status", status);
+  const { data, error, count } = await query;
+  if (error) {
+    safetySettingError("safety setting list failed", error);
+    return jsonResponse({ error: "safety_setting_list_failed" }, 500);
+  }
+  return jsonResponse({
+    ok: true,
+    versions: (data || []).map((row) => safetySettingResponse(row as Record<string, unknown>)),
+    page: { offset, limit, total: Number(count || 0) },
+  });
+}
+
+async function readSafetySettingVersion(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+  const configVersion = safetySettingVersion(payload.configVersion);
+  if (!configVersion) return jsonResponse({ error: "safety_setting_version_invalid" }, 400);
+
+  const { data, error } = await supabase
+    .from("safety_setting_versions")
+    .select(SAFETY_SETTING_COLUMNS)
+    .eq("config_version", configVersion)
+    .maybeSingle();
+  if (error) {
+    safetySettingError("safety setting read failed", error);
+    return jsonResponse({ error: "safety_setting_read_failed" }, 500);
+  }
+  if (!data) return jsonResponse({ error: "safety_setting_not_found" }, 404);
+  return jsonResponse({ ok: true, version: safetySettingResponse(data as Record<string, unknown>, true) });
+}
+
+async function createSafetySettingDraft(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+  const configVersion = safetySettingVersion(payload.configVersion);
+  const effectiveAt = safetySettingTimestamp(payload.effectiveAt);
+  const changeSummary = cleanText(payload.changeSummary, 1000);
+  const settings = safetySettingPayload(payload.settings);
+  const baseVersion = payload.baseVersion === undefined || payload.baseVersion === null
+    ? null
+    : safetySettingVersion(payload.baseVersion);
+  if (!configVersion || !effectiveAt || !changeSummary || !settings || (payload.baseVersion && !baseVersion)) {
+    return jsonResponse({ error: "safety_setting_draft_invalid" }, 400);
+  }
+
+  const actorKey = await safetySettingActorKey(authorization as AuthorizedMutationSession);
+  const { data, error } = await supabase
+    .from("safety_setting_versions")
+    .insert({
+      config_version: configVersion,
+      lifecycle_status: "draft",
+      effective_at: effectiveAt,
+      change_summary: changeSummary,
+      settings,
+      authored_by: actorKey,
+      base_version: baseVersion,
+    })
+    .select(SAFETY_SETTING_COLUMNS)
+    .single();
+  if (error) {
+    safetySettingError("safety setting draft create failed", error);
+    if (cleanText(error.code, 20) === "23505") {
+      return jsonResponse({ error: "safety_setting_version_exists" }, 409);
+    }
+    return jsonResponse({ error: "safety_setting_draft_create_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, version: safetySettingResponse(data as Record<string, unknown>, true) }, 201);
+}
+
+async function requestSafetySettingReview(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+  const configVersion = safetySettingVersion(payload.configVersion);
+  if (!configVersion) return jsonResponse({ error: "safety_setting_version_invalid" }, 400);
+  const actorKey = await safetySettingActorKey(authorization as AuthorizedMutationSession);
+  const { data, error } = await supabase
+    .from("safety_setting_versions")
+    .update({ lifecycle_status: "review", reviewed_by: actorKey, reviewed_at: new Date().toISOString() })
+    .eq("config_version", configVersion)
+    .eq("lifecycle_status", "draft")
+    .select(SAFETY_SETTING_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    safetySettingError("safety setting review request failed", error);
+    return jsonResponse({ error: "safety_setting_review_failed" }, 500);
+  }
+  if (!data) return jsonResponse({ error: "safety_setting_not_draft" }, 409);
+  return jsonResponse({ ok: true, version: safetySettingResponse(data as Record<string, unknown>, true) });
+}
+
+async function publishSafetySettingVersion(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+  const configVersion = safetySettingVersion(payload.configVersion);
+  if (!configVersion) return jsonResponse({ error: "safety_setting_version_invalid" }, 400);
+  const actorKey = await safetySettingActorKey(authorization as AuthorizedMutationSession);
+  const { data, error } = await supabase
+    .from("safety_setting_versions")
+    .update({ lifecycle_status: "published", published_by: actorKey, published_at: new Date().toISOString() })
+    .eq("config_version", configVersion)
+    .eq("lifecycle_status", "review")
+    .select(SAFETY_SETTING_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    safetySettingError("safety setting publish failed", error);
+    return jsonResponse({ error: "safety_setting_publish_failed" }, 500);
+  }
+  if (!data) return jsonResponse({ error: "safety_setting_not_in_review" }, 409);
+  return jsonResponse({ ok: true, version: safetySettingResponse(data as Record<string, unknown>, true) });
+}
+
+async function createSafetySettingRollbackDraft(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "admin");
+  if (authorization.error) return authorization.error;
+  const configVersion = safetySettingVersion(payload.configVersion);
+  const rollbackTargetVersion = safetySettingVersion(payload.rollbackTargetVersion);
+  const effectiveAt = safetySettingTimestamp(payload.effectiveAt);
+  const changeSummary = cleanText(payload.changeSummary, 1000);
+  if (!configVersion || !rollbackTargetVersion || !effectiveAt || !changeSummary) {
+    return jsonResponse({ error: "safety_setting_rollback_invalid" }, 400);
+  }
+
+  const { data: target, error: targetError } = await supabase
+    .from("safety_setting_versions")
+    .select("config_version,settings")
+    .eq("config_version", rollbackTargetVersion)
+    .eq("lifecycle_status", "published")
+    .maybeSingle();
+  if (targetError) {
+    safetySettingError("safety setting rollback target lookup failed", targetError);
+    return jsonResponse({ error: "safety_setting_rollback_lookup_failed" }, 500);
+  }
+  if (!target) return jsonResponse({ error: "safety_setting_rollback_target_not_published" }, 409);
+
+  const { data: current, error: currentError } = await supabase
+    .from("safety_setting_versions")
+    .select("config_version")
+    .eq("lifecycle_status", "published")
+    .lte("effective_at", new Date().toISOString())
+    .order("effective_at", { ascending: false })
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (currentError) {
+    safetySettingError("safety setting current version lookup failed", currentError);
+    return jsonResponse({ error: "safety_setting_rollback_lookup_failed" }, 500);
+  }
+
+  const actorKey = await safetySettingActorKey(authorization as AuthorizedMutationSession);
+  const { data, error } = await supabase
+    .from("safety_setting_versions")
+    .insert({
+      config_version: configVersion,
+      lifecycle_status: "draft",
+      effective_at: effectiveAt,
+      change_summary: changeSummary,
+      settings: target.settings,
+      authored_by: actorKey,
+      base_version: cleanText(current?.config_version, 80) || rollbackTargetVersion,
+      rollback_target_version: rollbackTargetVersion,
+    })
+    .select(SAFETY_SETTING_COLUMNS)
+    .single();
+  if (error) {
+    safetySettingError("safety setting rollback draft create failed", error);
+    if (cleanText(error.code, 20) === "23505") {
+      return jsonResponse({ error: "safety_setting_version_exists" }, 409);
+    }
+    return jsonResponse({ error: "safety_setting_rollback_create_failed" }, 500);
+  }
+  return jsonResponse({ ok: true, version: safetySettingResponse(data as Record<string, unknown>, true) }, 201);
+}
+
 async function uploadPictogramImage(payload: Record<string, unknown>) {
   const pictogramId = cleanText(payload.pictogramId, 120);
   if (!/^[a-zA-Z0-9_-]+$/.test(pictogramId)) return jsonResponse({ error: "invalid_pictogram_id" }, 400);
@@ -1816,6 +2083,12 @@ Deno.serve(async (req) => {
   if (action === "deleteCategoryCascade") return deleteCategoryCascade(payload);
   if (action === "deleteSectionCascade") return deleteSectionCascade(payload);
   if (action === "deleteIssuePhotos") return deleteIssuePhotos(payload);
+  if (action === "listSafetySettingVersions") return listSafetySettingVersions(payload);
+  if (action === "readSafetySettingVersion") return readSafetySettingVersion(payload);
+  if (action === "createSafetySettingDraft") return createSafetySettingDraft(payload);
+  if (action === "requestSafetySettingReview") return requestSafetySettingReview(payload);
+  if (action === "publishSafetySettingVersion") return publishSafetySettingVersion(payload);
+  if (action === "createSafetySettingRollbackDraft") return createSafetySettingRollbackDraft(payload);
   if (action === "uploadPictogramImage") return uploadPictogramImage(payload);
   if (action === "deletePictogram") return deletePictogram(payload);
   if (action === "ping") return jsonResponse({ ok: true });

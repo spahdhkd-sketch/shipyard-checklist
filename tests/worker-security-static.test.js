@@ -71,7 +71,7 @@ expectNoMatch(workerPush, /MISSING_MATERIAL_PUSH_TARGET_NAMES/, "missing materia
 expectMatch(workerPush, /missingMaterialTargetWorkerIds[\s\S]*?\.eq\("unsafe_push_target", true\)/, "missing material recipients should come from the database target flag");
 expectMatch(app, /data-worker-edit-field="unsafePushTarget"[\s\S]*불안전·누락자재 알림 대상/, "admins should be able to manage the database push target flag");
 expectMatch(app, /worker\.unsafePushTarget = workerEditFieldChecked\(id, "unsafePushTarget"\)/, "worker edits should persist the push target flag");
-expectMatch(workerPush, /sendKind[\s\S]*?=== "missingMaterial"[\s\S]*?workerIds = \[\.\.\.await missingMaterialTargetWorkerIds\(\)\]/, "missing material sends should resolve all recipients on the server");
+expectMatch(workerPush, /resolveSendWorkerIds[\s\S]*?sendKind === "missingMaterial"[\s\S]*?await missingMaterialTargetWorkerIds\(\)/, "missing material sends should resolve all recipients on the server");
 expectMatch(app, /toast\("호선자재 누락이 접수되었습니다\."\);\s*await syncMissingMaterial\(row\);/, "missing material submission should enter the durable save-then-notify flow");
 expectMatch(app, /pendingMissingMaterialNotifications/, "missing material notification retries should be persisted");
 expectMatch(app, /missing_material_push_incomplete/, "incomplete missing material sends should remain queued");
