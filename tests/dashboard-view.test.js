@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260814-editor-safety-1";
+const ASSET_TOKEN = "20260818-fix-1";
 const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`;
@@ -56,6 +56,7 @@ const analyticsHtml = dashboardView.renderAnalyticsDashboardView({
   dateLabel: "2026년 5월 28일",
   syncText: "동기화 완료",
   todayDone: 7,
+  todayPending: 2,
   todayDeltaText: "어제 대비 +2건",
   unsafeOpen: 3,
   unsafeSummary: "1건 접수 · 2건 조치중",
@@ -86,6 +87,16 @@ const analyticsHtml = dashboardView.renderAnalyticsDashboardView({
 assert(analyticsHtml.includes('<section class="admin-board analytics-board">'));
 assert(analyticsHtml.includes("2026년 5월 28일 · 동기화 완료"));
 assert(analyticsHtml.includes('data-export-records="analytics"'));
+assert(analyticsHtml.includes("오늘의 안전 브리핑"));
+assert(analyticsHtml.includes('class="analytics-action-grid"'));
+assert(analyticsHtml.includes("오늘 미점검"));
+assert(analyticsHtml.includes("미조치 불안전요소"));
+assert(analyticsHtml.includes("미처리 자재"));
+assert(analyticsHtml.includes("<strong>2</strong>"));
+assert(analyticsHtml.includes('data-analytics-priority'));
+assert(analyticsHtml.includes("우선 조치 대상"));
+assert(analyticsHtml.includes("지표 기준 보기"));
+assert(analyticsHtml.includes('class="analytics-utilities"'));
 assert(analyticsHtml.includes("어제 대비 +2건"));
 assert(analyticsHtml.includes("<section data-test-monthly-worker>월간 작업자</section>"));
 assert(analyticsHtml.includes('aria-valuenow="25"'));
@@ -97,6 +108,104 @@ assert(analyticsHtml.includes('data-analytics-record-kind="unsafe"'));
 assert(analyticsHtml.includes('data-analytics-record-id="unsafe-1"'));
 assert(analyticsHtml.includes("요약:긴 제목"));
 assert(analyticsHtml.includes('<i data-status="접수">접수</i>'));
+assert(analyticsHtml.indexOf('class="analytics-action-grid"') < analyticsHtml.indexOf('data-analytics-priority'));
+assert(analyticsHtml.indexOf('data-analytics-priority') < analyticsHtml.indexOf('<section data-test-monthly-worker>'));
+assert(analyticsHtml.indexOf('<section data-test-monthly-worker>') < analyticsHtml.indexOf("현장 진행 현황"));
+assert(analyticsHtml.indexOf('class="analytics-utilities"') > analyticsHtml.indexOf("최근 안전 신호"));
+
+const analyticsUnknownPendingHtml = dashboardView.renderAnalyticsDashboardView({
+  unsafeOpen: 0,
+  materialOpen: 0,
+}, {
+  analyticsKpi: (label, value, note, tone) => `<div class="analytics-kpi ${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`,
+});
+assert(analyticsUnknownPendingHtml.includes("오늘 미점검"));
+assert(analyticsUnknownPendingHtml.includes("<strong>—</strong>"), "missing pending count stays explicitly unknown instead of using a synthetic value");
+
+const analyticsContextCalls = [];
+const analyticsStateCalls = [];
+const analyticsContextHtml = dashboardView.renderAnalyticsDashboardView({
+  context: { source: "inspection-cache" },
+  dataState: "ready",
+}, {
+  renderDataContext: (context) => {
+    analyticsContextCalls.push(context);
+    return `<aside data-test-analytics-context="${context.source}"></aside>`;
+  },
+  renderDataState: (dataStateModel) => {
+    analyticsStateCalls.push(dataStateModel);
+    return `<aside data-test-analytics-state="${dataStateModel.state}"></aside>`;
+  },
+});
+assert.deepStrictEqual(analyticsContextCalls, [{ source: "inspection-cache" }], "analytics forwards model context to the injected renderer");
+assert.deepStrictEqual(analyticsStateCalls, [{
+  state: "ready",
+  loadingLabel: "분석 데이터를 불러오는 중입니다.",
+  errorLabel: "분석 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.",
+  emptyLabel: "표시할 분석 데이터가 없습니다.",
+  staleLabel: "최신 데이터를 확인하지 못해 마지막으로 저장된 내용을 표시합니다.",
+  offlineLabel: "오프라인 상태입니다. 마지막으로 저장된 내용을 읽기 전용으로 표시합니다.",
+  retryAction: "retry-analytics-data",
+  retryLabel: "다시 시도",
+}], "analytics forwards the shared data-state options model to the injected renderer");
+assert(analyticsContextHtml.includes('data-test-analytics-context="inspection-cache"'));
+assert(analyticsContextHtml.includes('data-test-analytics-state="ready"'));
+
+for (const dataState of ["loading", "error", "empty", "offline-empty"]) {
+  const blockedAnalyticsHtml = dashboardView.renderAnalyticsDashboardView({
+    dataState,
+    todayDone: 40,
+    todayPending: 43,
+    unsafeOpen: 93,
+    materialOpen: 88,
+    processRows: [{ info: { label: "비공개 공정" }, count: 7, percent: 93 }],
+    risk: { ng: { count: 93, percent: 93 } },
+    recent: [{ id: "cached-record", kind: "unsafe", type: "비공개", content: "캐시 기록" }],
+  }, {
+    monthlyWorkerAnalyticsHtml: '<section data-test-monthly-worker>캐시 월간</section>',
+    renderDataState: (dataStateModel) => `<aside data-test-analytics-state="${dataStateModel.state}"></aside>`,
+  });
+  assert(blockedAnalyticsHtml.includes(`data-test-analytics-state="${dataState}"`));
+  assert(!blockedAnalyticsHtml.includes('class="analytics-action-grid"'), `${dataState} state hides action KPIs`);
+  assert(!blockedAnalyticsHtml.includes('data-export-records="analytics"'), `${dataState} state hides exports`);
+  assert(!blockedAnalyticsHtml.includes("93%"), `${dataState} state hides plausible cached rates`);
+  assert(!blockedAnalyticsHtml.includes("캐시 기록"), `${dataState} state hides cached record lists`);
+  assert(!blockedAnalyticsHtml.includes("캐시 월간"), `${dataState} state hides monthly cached content`);
+}
+
+for (const dataState of ["stale", "offline"]) {
+  const cachedAnalyticsHtml = dashboardView.renderAnalyticsDashboardView({
+    dataState,
+    actionsDisabled: true,
+    todayDone: 7,
+    todayPending: 2,
+    unsafeOpen: 3,
+    materialOpen: 4,
+    processRows: [{ info: { label: "탑재", stage: "mounting" }, count: 2, percent: 93 }],
+    risk: { ng: { count: 5, percent: 20 }, warn: { count: 3, percent: 30 }, ok: { count: 8, percent: 50 } },
+  }, {
+    renderDataState: (dataStateModel) => `<aside data-test-analytics-state="${dataStateModel.state}"></aside>`,
+  });
+  assert(cachedAnalyticsHtml.includes(`data-test-analytics-state="${dataState}"`), `${dataState} state shows its data banner`);
+  assert(cachedAnalyticsHtml.includes("93%"), `${dataState} state keeps cached read-only metrics visible`);
+  assert(cachedAnalyticsHtml.includes('data-export-records="analytics"'), `${dataState} state keeps cached export access visible`);
+  assert(cachedAnalyticsHtml.includes('data-view="check" type="button" disabled'), `${dataState} state disables the fresh inspection action`);
+  assert(cachedAnalyticsHtml.includes('data-view="ships" type="button">자세히 →</button>'), `${dataState} state keeps navigation-only detail usable`);
+}
+
+const actionKpis = [];
+dashboardView.renderAnalyticsDashboardView({
+  todayDone: 7,
+  todayPending: 2,
+}, {
+  analyticsKpi: (label, value, note, tone) => {
+    actionKpis.push({ label, value, note, tone });
+    return "";
+  },
+});
+assert.strictEqual(actionKpis.length, 4, "analytics action grid exposes four KPI items for a mobile 2x2 layout");
+assert.deepStrictEqual(actionKpis.map((item) => item.label), ["오늘 미점검", "미조치 불안전요소", "미처리 자재", "오늘 완료"]);
+assert.strictEqual(actionKpis[3].value, 7);
 
 const monthlyHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
   monthText: "2026년 5월",
@@ -188,6 +297,33 @@ assert(monthlyErrorHtml.includes('data-action="retry-monthly-worker-analytics"')
 assert(monthlyErrorHtml.includes('data-export-records="monthly-worker-analytics" disabled'));
 assert(!monthlyErrorHtml.includes("93%"), "error view must not present cached data as authoritative");
 assert(!monthlyErrorHtml.includes('data-monthly-worker-toggle="cached"'), "error view must hide cached worker cards");
+
+const monthlyDataStateModels = [];
+dashboardView.renderMonthlyWorkerAnalyticsView({
+  dataState: "loading",
+  range: { canGoNext: false },
+}, {
+  renderDataState: (dataStateModel) => {
+    monthlyDataStateModels.push(dataStateModel);
+    return `<aside data-test-monthly-state="${dataStateModel.state}"></aside>`;
+  },
+});
+assert.deepStrictEqual(monthlyDataStateModels, [{
+  state: "loading",
+  loadingLabel: "월간 점검 데이터를 불러오는 중입니다.",
+  errorLabel: "월간 점검 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.",
+  emptyLabel: "표시할 월간 점검 데이터가 없습니다.",
+  staleLabel: "최신 월간 점검 데이터를 확인하지 못해 마지막으로 저장된 내용을 표시합니다.",
+  offlineLabel: "오프라인 상태입니다. 마지막으로 저장된 월간 점검 내용을 읽기 전용으로 표시합니다.",
+  retryAction: "retry-monthly-worker-analytics",
+  retryLabel: "다시 시도",
+}], "monthly analytics forwards the shared data-state options model");
+
+const monthlyActionsDisabledHtml = dashboardView.renderMonthlyWorkerAnalyticsView({
+  actionsDisabled: true,
+  range: { canGoNext: false },
+});
+assert(monthlyActionsDisabledHtml.includes('data-export-records="monthly-worker-analytics" disabled'), "monthly export disables when fresh-only actions are unavailable");
 
 const manageHtml = dashboardView.renderManageShellView({
   pageHeadHtml: '<header data-test-page-head>관리</header>',
@@ -394,6 +530,7 @@ assert(app.includes("window.ShipyardAnalyticsModel"), "app-v2 reads analytics mo
 const analyticsRender = extractFunction(app, "renderAnalyticsDashboard");
 const monthlyAnalyticsModel = extractFunction(app, "buildMonthlyWorkerAnalyticsModel");
 const monthlyWorkerDataState = extractFunction(app, "monthlyWorkerInspectionDataState");
+const inspectionRangeLoadEntry = extractFunction(app, "inspectionRangeLoadEntry");
 const inspectionRangeLoader = extractFunction(app, "ensureInspectionRangeLoaded");
 assert(app.includes("window.ShipyardDashboardView"), "app-v2 reads dashboard view global");
 assert(app.includes("DASHBOARD_VIEW.renderDashboardView(dashboardModel(), { sectionHeading, navIcon })"), "renderDashboard delegates to dashboard view");
@@ -405,10 +542,13 @@ assert(analyticsModel.includes("recent,"), "analytics model owns recent activity
 assert(dashboardView.renderAnalyticsDashboardView, "dashboard view exports analytics dashboard renderer");
 assert(analyticsRender.includes("DASHBOARD_VIEW.renderAnalyticsDashboardView(buildAnalyticsDashboardModel(), {"), "analytics render delegates markup to dashboard view");
 assert(analyticsRender.includes("monthlyWorkerAnalyticsHtml: renderMonthlyWorkerAnalytics()"), "analytics render passes monthly analytics markup into the view");
-assert(monthlyAnalyticsModel.includes("dataState: monthlyWorkerInspectionDataState(stats.range)"), "monthly analytics model exposes the selected range load state");
+assert(monthlyAnalyticsModel.includes("const dataState = monthlyWorkerInspectionDataState(stats.range);"), "monthly analytics derives the selected range load state once");
+assert(monthlyAnalyticsModel.includes("dataState,"), "monthly analytics exposes the selected range load state");
+assert(monthlyAnalyticsModel.includes('actionsDisabled: dataState !== "ready"'), "monthly analytics disables fresh-only actions outside a ready state");
 assert(monthlyWorkerDataState.includes('if (!isSyncConfigured()) return "ready";'), "local-only monthly analytics remains immediately available");
-assert(monthlyWorkerDataState.includes('entry?.status === "loaded"'), "remote monthly analytics waits for an authoritative range load");
-assert(monthlyWorkerDataState.includes('entry?.status === "error"'), "remote monthly analytics exposes range load failures");
+assert(monthlyWorkerDataState.includes("dataSurfaceState({"), "remote monthly analytics derives a shared data-surface state");
+assert(monthlyWorkerDataState.includes("range: inspectionRangeLoadEntry(range)"), "remote monthly analytics waits for an authoritative range load");
+assert(inspectionRangeLoadEntry.includes('{ status: "error", at: Date.now() }'), "remote monthly analytics exposes invalid range failures");
 assert(/status: "error"[\s\S]*?renderPreservingScroll\(\)/.test(inspectionRangeLoader), "range load failure re-renders the explicit error state");
 assert(inspectionRangeLoader.includes("force = false"), "range loader supports explicit error recovery");
 assert(app.includes('button.dataset.action === "retry-monthly-worker-analytics"'), "monthly analytics exposes an explicit retry action");

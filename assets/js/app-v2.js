@@ -90,6 +90,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const ANALYTICS_MODEL = typeof window !== "undefined" && window.ShipyardAnalyticsModel
       ? window.ShipyardAnalyticsModel
       : {};
+    const OPERATIONAL_COHORT = typeof window !== "undefined" && window.ShipyardOperationalCohort
+      ? window.ShipyardOperationalCohort
+      : {};
+    const NOTIFICATION_PREFLIGHT = typeof window !== "undefined" && window.NotificationPreflight
+      ? window.NotificationPreflight
+      : {};
+    const PLEDGE_ACTION_VIEW = typeof window !== "undefined" && window.ShipyardPledgeActionView
+      ? window.ShipyardPledgeActionView
+      : {};
+    const MATERIAL_BULK_SELECTION = typeof window !== "undefined" && window.MaterialBulkSelection
+      ? window.MaterialBulkSelection
+      : {};
+    const PAGED_COLLECTION = typeof window !== "undefined" && window.ShipyardPagedCollection
+      ? window.ShipyardPagedCollection
+      : {};
+    const SAFETY_SETTINGS = typeof window !== "undefined" && window.SafetySettings
+      ? window.SafetySettings
+      : {};
+    const NAVIGATION_MODEL = typeof window !== "undefined" && window.ShipyardNavigationModel
+      ? window.ShipyardNavigationModel
+      : {};
+    const MANAGE_CENTER_VIEW = typeof window !== "undefined" && window.ShipyardManageCenterView
+      ? window.ShipyardManageCenterView
+      : {};
     const SHIP_IMPORT_RULES = typeof window !== "undefined" && window.ShipyardShipImportRules
       ? window.ShipyardShipImportRules
       : {};
@@ -104,7 +128,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       medium: { label: "주의", className: "risk-medium" },
       low: { label: "정상", className: "risk-low" },
     };
-    const NAV = [
+    const LEGACY_NAV = [
       { id: "dashboard", label: "홈", icon: "home" },
       { id: "check", label: "작업 전 점검", icon: "noteCheck" },
       { id: "ships", label: "호선", icon: "ship" },
@@ -113,8 +137,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       { id: "pledge", label: "서약", icon: "noteCheck" },
       { id: "analytics", label: "통계", icon: "board" },
     ];
-    const MOBILE_NAV_IDS = new Set(["dashboard", "check", "ships", "history", "items"]);
-    const ADMIN_NAV_ITEM = { id: "manage", label: "관리", icon: "settings" };
+    const NAV = Array.isArray(NAVIGATION_MODEL.ROUTES)
+      ? NAVIGATION_MODEL.ROUTES.filter((route) => !["unsafe", "materials", "pledgeComplete"].includes(route.id)).map((route) => ({
+        id: route.id,
+        label: route.label,
+        icon: route.id === "dashboard" ? "home" : route.id === "ships" ? "ship" : route.id === "history" ? "book" : route.id === "analytics" ? "board" : route.id === "manage" ? "settings" : route.id === "items" ? "menu" : "noteCheck",
+      }))
+      : LEGACY_NAV;
+    const MOBILE_NAV_ROUTE_IDS = Object.freeze({ today: "dashboard", inspection: "check", status: "history", report: "unsafe", more: "items" });
+    const ADMIN_NAV_ITEM = NAV.find((item) => item.id === "manage") || { id: "manage", label: "관리", icon: "settings" };
     const PREVIEW_NAV_ITEMS = [];
     const PICTOGRAMS = [
       { key: "blockAssembly", label: "블록 조립" },
@@ -1671,13 +1702,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       toast("작업지시서 상태를 변경했습니다.");
     }
 
-    async function deleteWorkPrepRecord(recordId) {
+    async function archiveWorkPrepRecord(recordId) {
       const record = workPrepRecordById(recordId);
-      if (!record) return toast("삭제할 작업지시서를 찾을 수 없습니다.");
-      if (!canOpenWorkPrepRegister()) return toast("작업지시서를 삭제할 권한이 없습니다.");
+      if (!record) return toast("보관할 작업지시서를 찾을 수 없습니다.");
+      if (!canOpenWorkPrepRegister()) return toast("작업지시서를 보관할 권한이 없습니다.");
       const category = categoryById(record.categoryId);
       const title = `${record.shipNo || "-"} ${category ? workLabel(category) : "작업지시서"}`;
-      if (!window.confirm(`${title} 작업지시서를 삭제할까요?\n삭제 후 복구할 수 없습니다.`)) return;
+      if (!window.confirm(`${title} 작업지시서를 보관할까요?\n활성 목록에서 숨겨지며 서버의 soft-delete 경계로 처리됩니다.`)) return;
       if (isSyncConfigured() && !(await deleteRemoteRows("workPrepRecords", [record.id]))) return;
       rememberDeletedWorkPrepRecordId(record.id);
       state.workPrepRecords = state.workPrepRecords.filter((row) => row.id !== record.id);
@@ -1686,8 +1717,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       saveWorkPrepRecords();
       renderPreservingScroll();
-      toast("작업지시서를 삭제했습니다.");
+      toast("작업지시서를 보관했습니다.");
     }
+
+    const deleteWorkPrepRecord = archiveWorkPrepRecord;
 
     function workPrepParticipantWorkerIds(record) {
       const ids = new Set([
@@ -2020,6 +2053,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
               action: "status",
               workerIds: ids,
               ...sender,
+              adminSession: adminMutationAuthPayload(),
             },
           });
           if (!error && !data?.error) {
@@ -2120,6 +2154,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         body: {
           ...body,
           ...sender,
+          adminSession: adminMutationAuthPayload(),
         },
       });
       if (error || data?.error) throw new Error(error?.message || data.error);
@@ -2376,6 +2411,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             workerIds: ids,
             notification,
             sendKind: options.kind || "",
+            idempotencyKey: options.idempotencyKey || notification?.tag || "",
+            sourceRecordId: options.sourceRecordId || "",
             ...pushSenderPayload(),
           },
         });
@@ -2566,12 +2603,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return canWorkerPerformLeaderActions(worker);
     }
 
-    async function notifyPledgePendingWorkers() {
+    async function notifyPledgePendingWorkers(targetWorkerIds = null, options = {}) {
       if (!canSendPledgeNotifications()) {
         toast("조장 또는 관리 담당자만 미완료자 알림을 발송할 수 있습니다.");
         return;
       }
-      const pendingRows = pledgePendingRows();
+      const allowedIds = Array.isArray(targetWorkerIds) ? new Set(targetWorkerIds.map(String)) : null;
+      const pendingRows = pledgePendingRows().filter((row) => !allowedIds || allowedIds.has(String(row.workerId || "")));
       if (!pendingRows.length) {
         toast("서약 미완료자가 없습니다.");
         return;
@@ -2586,10 +2624,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ...notification,
         tag: `pledge-pending-${today()}`,
         url: "/pledge.html",
-      }, { kind: "pledgePending" });
-      if (!result) return;
+      }, { kind: "pledgePending", idempotencyKey: options.idempotencyKey || "" });
+      if (!result) return null;
       const targetText = result.sent ? `${result.sent}대 휴대폰` : `${names.length}명`;
       toast(result.sent ? `미완료자 알림을 ${targetText}으로 보냈습니다.` : "등록된 브라우저 알림 구독이 없습니다.");
+      return result;
     }
 
     async function notifyUnsafeIssueRegistered(row) {
@@ -2599,11 +2638,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         등록자: row.workerNameSnapshot || "작업자",
         내용: shortUnsafeTitle(row.content || "불안전요소"),
       });
-      await sendWorkerPushNotification(unsafePushTargetWorkerIds(), {
+      await sendWorkerPushNotification([], {
         ...notification,
         tag: `unsafe-${row.id || Date.now()}`,
         url: "/unsafe.html",
-      }, { silent: true, kind: "unsafeIssue" });
+      }, {
+        silent: true,
+        kind: "unsafeIssue",
+        serverResolvedTargets: true,
+        sourceRecordId: row.id || "",
+        idempotencyKey: `unsafe:${row.id || "unknown"}`,
+      });
     }
 
     async function notifyMissingMaterialRegistered(row) {
@@ -2618,7 +2663,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ...notification,
         tag: `material-${row.id || Date.now()}`,
         url: "/materials.html",
-      }, { silent: true, kind: "missingMaterial", serverResolvedTargets: true });
+      }, {
+        silent: true,
+        kind: "missingMaterial",
+        serverResolvedTargets: true,
+        sourceRecordId: row.id || "",
+        idempotencyKey: `material:${row.id || "unknown"}`,
+      });
       return Boolean(
         result
         && Number(result.sent || 0) > 0
@@ -2744,6 +2795,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       pledgeWorkerCollapsed: false,
       pledgeShipCollapsed: false,
       pledgeViewDate: "",
+      pledgeActionFilter: "all",
+      pledgePreflightOpen: false,
+      pledgePreflightAcknowledged: false,
+      pledgePreflightSending: false,
+      pledgePreflightIdempotencyKey: "",
+      pledgePreflightSnapshot: "",
       workPrepRegisterOpen: false,
       workPrepRecords: loadWorkPrepRecords(),
       deletedWorkPrepRecordIds: loadJson("deletedWorkPrepRecordIds", []),
@@ -2831,6 +2888,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       unsafeFilters: loadJson("unsafeFilters", { shipNo: "", status: "", workerId: "", sort: "status" }),
       materialFilters: loadJson("materialFilters", { shipNo: "", status: "", workerId: "", materialName: "", sort: "status" }),
       workPrepFilters: loadJson("workPrepFilters", { shipNo: "", status: "", sort: "latest" }),
+      materialBulkSelection: typeof MATERIAL_BULK_SELECTION.createMaterialBulkSelectionState === "function"
+        ? MATERIAL_BULK_SELECTION.createMaterialBulkSelectionState()
+        : { selectedById: {} },
+      materialBulkReviewOpen: false,
+      materialBulkTargetStatus: "",
+      materialBulkMemo: "",
+      shipCollectionState: { filters: { status: "" }, cursor: null, selectedRecordId: null, editingRecordId: null },
+      workPrepCollectionState: { filters: { status: "" }, cursor: null, selectedRecordId: null, editingRecordId: null },
       manageTab: loadJson("manageTab", "workers"),
       adminPushDraft: createAdminPushDraft(loadJson("adminPushDraft", {})),
       adminPushSending: false,
@@ -3415,6 +3480,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return isNarrowViewport() ? "mobile" : "desktop";
     }
 
+    function syncManageMobileDetailBodyClass() {
+      const selected = {
+        unsafe: [state.unsafeDetailId, state.unsafeIssues],
+        materials: [state.materialDetailId, state.missingMaterials],
+        workPrep: [state.workPrepDetailId, state.workPrepRecords],
+      }[state.manageTab];
+      const selectedId = selected?.[0];
+      const selectedRows = selected?.[1];
+      const detailOpen = state.view === "manage"
+        && isNarrowViewport()
+        && Boolean(selectedId)
+        && Array.isArray(selectedRows)
+        && selectedRows.some((row) => row.id === selectedId);
+      document.body.classList.toggle("manage-mobile-detail-open", detailOpen);
+    }
+
+    function enforceManageReadOnlyControls() {
+      document.querySelectorAll('[data-manage-content-read-only="true"] button, [data-manage-content-read-only="true"] input, [data-manage-content-read-only="true"] select, [data-manage-content-read-only="true"] textarea')
+        .forEach((control) => {
+          if (control.matches('[data-unsafe-record-detail], [data-material-record-detail], [data-work-prep-record-detail], [data-manage-center-page], [data-record-filter]')) {
+            control.disabled = false;
+            control.removeAttribute("aria-disabled");
+            return;
+          }
+          control.disabled = true;
+          control.setAttribute("aria-disabled", "true");
+        });
+    }
+
     function applyScreenMode() {
       const isNarrow = isNarrowViewport();
       const mode = effectiveScreenMode();
@@ -3423,6 +3517,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       document.body.classList.toggle("screen-desktop", mode === "desktop");
       document.body.classList.toggle("preview-mobile", !isNarrow && mode === "mobile");
       document.body.classList.toggle("preview-desktop", isNarrow && mode === "desktop");
+      syncManageMobileDetailBodyClass();
       updateScreenToggle();
     }
 
@@ -3524,6 +3619,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function render() {
       const focusedFieldState = captureFocusedFieldState();
+      syncManageMobileDetailBodyClass();
       renderNav();
       renderAppHeader();
       const page = $("page");
@@ -3558,6 +3654,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       page.insertAdjacentHTML("beforeend", renderSyncDetailsPanel());
       setSyncStatus(state.syncText, state.syncMode);
       applyClientSearchFilters();
+      enforceManageReadOnlyControls();
       setupSignaturePad();
       setupPictogramImageFallbacks();
       ensureRenderedAccessibility();
@@ -4038,16 +4135,27 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function visibleNavItems() {
-      if (isRedesignPreviewPage()) return [...NAV, ADMIN_NAV_ITEM, ...PREVIEW_NAV_ITEMS];
-      return state.adminMode ? [...NAV, ADMIN_NAV_ITEM] : NAV;
+      const standard = NAV.filter((item) => item.id !== "manage");
+      if (isRedesignPreviewPage()) return [...standard, ADMIN_NAV_ITEM, ...PREVIEW_NAV_ITEMS];
+      return state.adminMode ? [...standard, ADMIN_NAV_ITEM] : standard;
     }
 
     function mobileNavItems() {
-      return NAV.filter((nav) => MOBILE_NAV_IDS.has(nav.id));
+      if (Array.isArray(NAVIGATION_MODEL.MOBILE_PARENTS)) {
+        return NAVIGATION_MODEL.MOBILE_PARENTS.map((parent) => {
+          const routeId = MOBILE_NAV_ROUTE_IDS[parent.id];
+          const route = NAV.find((item) => item.id === routeId) || LEGACY_NAV.find((item) => item.id === routeId);
+          return { ...route, id: routeId, label: parent.label };
+        }).filter((item) => item.id);
+      }
+      return LEGACY_NAV.filter((nav) => ["dashboard", "check", "ships", "history", "items"].includes(nav.id));
     }
 
     function renderNavButtons(items) {
-      const activeView = ["unsafe", "materials"].includes(state.view) ? "items" : state.view;
+      const activeParentId = typeof NAVIGATION_MODEL.getActiveMobileParentId === "function"
+        ? NAVIGATION_MODEL.getActiveMobileParentId(state.view)
+        : "";
+      const activeView = MOBILE_NAV_ROUTE_IDS[activeParentId] || (["unsafe", "materials"].includes(state.view) ? "items" : state.view);
       return items.map((nav) => `
         <button class="nav-btn ${activeView === nav.id ? "active" : ""}" data-view="${nav.id}" type="button">
           <span class="nav-icon">${navIcon(nav.icon)}</span><span>${esc(nav.label)}</span>
@@ -5581,34 +5689,32 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const sections = sectionsFor(categoryId);
       const visibleItems = filteredChecklistItems(categoryId);
       if (!sections.length) return `<div class="empty empty-section-note">등록된 섹션이 없습니다.</div>`;
-      const visibleSections = sections
-        .map((section) => ({
-          section,
-          items: visibleItems.filter((row) => row.sectionId === section.id),
-        }))
-        .filter(({ items }) => items.length);
-      if (!visibleSections.length) return `<div class="empty empty-section-note">선택한 공기구/준비물에 해당하는 점검 항목이 없습니다.</div>`;
-      return visibleSections.map(({ section, items }) => {
-        const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
-        return `<section class="check-section" data-check-section="${esc(section.id)}">
-          <div class="check-section-hero">
-            <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
-            ${sectionSignImg(section.signCode)}
-            <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
-          </div>
-          <div class="check-section-titlebar" data-risk-tone="${tone}">
-            <span class="check-section-title">${esc(section.title)}</span>
-            <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
-          </div>
-          <div class="check-section-items">
-            ${items.map((row) => `
-              <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
-                <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
-                <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
-              </label>`).join("")}
-          </div>
-        </section>`;
-      }).join("");
+      return sections
+        .map((section) => {
+          const items = visibleItems.filter((row) => row.sectionId === section.id);
+          if (!items.length) return "";
+          const tone = section.totalScore >= 6 ? "high" : section.totalScore >= 3 ? "mid" : "low";
+          return `<section class="check-section" data-check-section="${esc(section.id)}">
+            <div class="check-section-hero">
+              <input type="checkbox" class="check-section-master" data-check-section-master="${esc(section.id)}" aria-label="위험요인 전체 확인" ${items.every((row) => state.draft.checks[row.id]) ? "checked" : ""} />
+              ${sectionSignImg(section.signCode)}
+              <div class="check-section-badges">${sectionRiskBadge(section)}${sectionGradeBadge(section)}</div>
+            </div>
+            <div class="check-section-titlebar" data-risk-tone="${tone}">
+              <span class="check-section-title">${esc(section.title)}</span>
+              <span class="small muted" data-check-section-count="${esc(section.id)}">${items.filter((row) => state.draft.checks[row.id]).length}/${items.length}</span>
+            </div>
+            <div class="check-section-items">
+              ${items.map((row) => `
+                <label class="check-item ${state.draft.checks[row.id] ? "checked" : ""}" data-check-row="${esc(row.id)}">
+                  <input type="checkbox" data-check-item="${esc(row.id)}" ${state.draft.checks[row.id] ? "checked" : ""} />
+                  <span class="check-text">${esc(row.text)}${renderItemToolChips(row)}</span>
+                </label>`).join("")}
+            </div>
+          </section>`;
+        })
+        .filter(Boolean)
+        .join("");
     }
 
     function renderHistory() {
@@ -5848,10 +5954,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function renderShips() {
-      const ships = sortedShips();
+      const allShips = sortedShips();
+      state.shipCollectionState = {
+        ...state.shipCollectionState,
+        filters: { ...(state.shipCollectionState?.filters || {}), search: state.shipSearchQuery, status: "" },
+      };
+      const shipPage = typeof PAGED_COLLECTION.buildPagedCollection === "function"
+        ? PAGED_COLLECTION.buildPagedCollection(allShips, {
+          state: state.shipCollectionState,
+          pageSize: 25,
+          cursorKey: `ships:${state.shipSortMode}`,
+          fields: { id: "id", ship: "no", status: () => "", search: ["no", "type"] },
+        })
+        : { items: allShips, resultCount: allShips.length, pageSize: allShips.length || 25, pageIndex: 0 };
+      const ships = shipPage.items;
       const grouped = SHIP_WORKFLOW_STAGES.map((stage) => ({
         stage,
-        ships: ships.filter((ship) => effectiveShipStage(ship).stage === stage),
+        ships: allShips.filter((ship) => effectiveShipStage(ship).stage === stage),
       }));
       const bulkShipAddPanel = state.adminMode ? `
       <div class="panel panel-pad" style="margin-bottom:14px">
@@ -5901,8 +6020,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           </div>
           <button class="btn-light" data-action="save-ship-order" ${state.adminMode && state.ships.length ? "" : "disabled"} type="button">현재 순서 저장</button>
         </div>
-        ${state.ships.length ? `<div class="list" data-ship-search-list>${ships.map(renderShipRow).join("")}</div><div class="empty" data-ship-search-empty hidden>검색 결과가 없습니다.</div>` : `<div class="empty">등록된 호선이 없습니다.</div>`}
+        ${state.ships.length ? `<div class="list" data-ship-search-list>${ships.map(renderShipRow).join("")}</div>${renderPagedCollectionFooter("ships", shipPage)}<div class="empty" data-ship-search-empty ${ships.length ? "hidden" : ""}>검색 결과가 없습니다.</div>` : `<div class="empty">등록된 호선이 없습니다.</div>`}
       </div>`;
+    }
+
+    function renderPagedCollectionFooter(kind, page) {
+      if (!page || Number(page.resultCount || 0) <= Number(page.pageSize || 25)) return "";
+      const from = page.resultCount ? page.pageIndex * page.pageSize + 1 : 0;
+      const to = Math.min(page.resultCount, from + page.items.length - 1);
+      return `<nav class="manage-center__pagination" aria-label="${kind === "ships" ? "호선" : "작업지시서"} 페이지">
+        <span>${from}-${to} / ${page.resultCount}</span>
+        <button class="btn-light" data-action="page-${kind}-collection" data-collection-cursor="${esc(page.previousCursor || "")}" ${page.hasPreviousPage ? "" : "disabled"} type="button">이전</button>
+        <button class="btn-light" data-action="page-${kind}-collection" data-collection-cursor="${esc(page.nextCursor || "")}" ${page.hasNextPage ? "" : "disabled"} type="button">다음</button>
+      </nav>`;
     }
 
     function renderProcessBoard(grouped) {
@@ -6070,9 +6200,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function toggleShipDataCard(shipId) {
       if (!shipId) return;
-      const openIds = new Set(state.shipDataCardOpenIds || []);
-      openIds.has(shipId) ? openIds.delete(shipId) : openIds.add(shipId);
-      state.shipDataCardOpenIds = [...openIds];
+      state.shipDataCardOpenIds = state.shipDataCardOpenIds?.[0] === shipId ? [] : [shipId];
+      if (typeof PAGED_COLLECTION.selectCollectionRecord === "function") {
+        state.shipCollectionState = state.shipDataCardOpenIds.length
+          ? PAGED_COLLECTION.selectCollectionRecord(state.shipCollectionState, shipId)
+          : PAGED_COLLECTION.clearCollectionSelection(state.shipCollectionState);
+      }
       saveJson("shipDataCardOpenIds", state.shipDataCardOpenIds);
       renderPreservingScroll();
     }
@@ -6633,6 +6766,187 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (worker) state.materialDraft.workerId = worker.value;
     }
 
+    const DATA_SURFACE_MAX_AGE_MS = 5 * 60 * 1000;
+
+    function dataSurfaceAsOf(keys = [], range) {
+      const timestamps = keys
+        .map((key) => Date.parse(state.remotePullHealth?.[key]?.successAt || ""))
+        .filter(Number.isFinite);
+      if (Number.isFinite(Number(range?.at)) && Number(range.at) > 0) timestamps.push(Number(range.at));
+      if (!timestamps.length && state.lastRemotePullAt) timestamps.push(Number(state.lastRemotePullAt));
+      return timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : "";
+    }
+
+    function dataSurfaceState({ keys = [], collections = [], range = null, empty = false } = {}) {
+      if (!isSyncConfigured()) return empty ? "empty" : "ready";
+      const hasCachedData = collections.some((rows) => Array.isArray(rows) && rows.length > 0);
+      if (state.syncMode === "offline") return hasCachedData ? "offline" : "offline-empty";
+      const health = keys.map((key) => state.remotePullHealth?.[key] || {});
+      const allKeysReady = health.every((row) => row.successAt && !row.error);
+      const rangeReady = !range || range.status === "loaded";
+      const hasFailure = health.some((row) => row.error) || range?.status === "error" || state.syncMode === "error";
+      const oldestSuccessAt = dataSurfaceAsOf(keys, range);
+      const age = oldestSuccessAt ? Date.now() - Date.parse(oldestSuccessAt) : NaN;
+      const isFresh = state.syncMode === "online" && Number.isFinite(age) && age >= 0 && age <= DATA_SURFACE_MAX_AGE_MS;
+      if (allKeysReady && rangeReady && isFresh) return empty ? "empty" : "ready";
+      if (hasFailure) return hasCachedData ? "stale" : "error";
+      if (hasCachedData) return "stale";
+      return "loading";
+    }
+
+    function dataSurfaceContext({ eyebrow, title, description, businessDate, keys = [], range = null, dataState }) {
+      const statusLabels = {
+        ready: "최신",
+        loading: "확인 중",
+        error: "불러오기 실패",
+        empty: "확인 완료 · 결과 없음",
+        stale: "저장본 · 재확인 필요",
+        offline: "오프라인 저장본",
+        "offline-empty": "오프라인 · 저장본 없음",
+      };
+      const asOf = dataSurfaceAsOf(keys, range);
+      return {
+        eyebrow,
+        title,
+        description,
+        businessDate,
+        asOf: asOf ? formatDateTime(asOf) : (isSyncConfigured() ? "확인 전" : "이 기기 저장본"),
+        status: dataState === "ready" ? "fresh" : dataState,
+        statusLabel: statusLabels[dataState] || "확인 필요",
+      };
+    }
+
+    function manageCenterRemoteKeys(tab) {
+      return {
+        workers: ["workers"],
+        push: ["workers"],
+        unsafe: ["unsafeIssues"],
+        materials: ["missingMaterials"],
+        workPrep: ["workPrepRecords"],
+        safetySettings: [],
+      }[tab] || [];
+    }
+
+    function manageCenterCollections(tab) {
+      const rows = {
+        workers: state.workers,
+        push: state.workers,
+        unsafe: state.unsafeIssues,
+        materials: state.missingMaterials,
+        workPrep: state.workPrepRecords,
+      }[tab];
+      return Array.isArray(rows) ? [rows] : [];
+    }
+
+    function manageCenterDataState(tab) {
+      const keys = manageCenterRemoteKeys(tab);
+      const collections = manageCenterCollections(tab);
+      if (!keys.length) return "ready";
+      return dataSurfaceState({
+        keys,
+        collections,
+        empty: collections.length > 0 && collections.every((rows) => rows.length === 0),
+      });
+    }
+
+    function manageCenterSelectedRecord(tab) {
+      if (tab === "unsafe") {
+        const row = state.unsafeIssues.find((item) => item.id === state.unsafeDetailId);
+        return row ? {
+          id: row.id,
+          title: `${row.shipNo || "-"} 불안전요소`,
+          meta: `${row.status || "미확인"} · ${relativeRecordTime(row.createdAt)}`,
+          html: renderUnsafeInlineDetail(row),
+        } : null;
+      }
+      if (tab === "materials") {
+        const row = state.missingMaterials.find((item) => item.id === state.materialDetailId);
+        return row ? {
+          id: row.id,
+          title: `${row.shipNo || "-"} ${row.materialName || "자재누락"}`,
+          meta: `${row.status || "미확인"} · ${relativeRecordTime(row.createdAt)}`,
+          html: renderMaterialInlineDetail(row),
+        } : null;
+      }
+      if (tab === "workPrep") {
+        const row = state.workPrepRecords.find((item) => item.id === state.workPrepDetailId);
+        return row ? {
+          id: row.id,
+          title: `${row.shipNo || "-"} 작업지시서`,
+          meta: `${WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(row.status)] || row.status || "미확인"} · ${row.date || "날짜 미지정"}`,
+          html: renderWorkPrepInlineDetail(row),
+        } : null;
+      }
+      return null;
+    }
+
+    function manageCenterDetailId(tab) {
+      return {
+        unsafe: state.unsafeDetailId,
+        materials: state.materialDetailId,
+        workPrep: state.workPrepDetailId,
+      }[tab] || "";
+    }
+
+    function manageCenterDetailTrigger(tab, id) {
+      const attribute = {
+        unsafe: "data-unsafe-record-detail",
+        materials: "data-material-record-detail",
+        workPrep: "data-work-prep-record-detail",
+      }[tab];
+      if (!attribute || !id) return null;
+      return Array.from(document.querySelectorAll(`[${attribute}="${cssEscape(id)}"]`))
+        .find((element) => element.getClientRects().length > 0) || null;
+    }
+
+    function focusManageCenterMobileDetail() {
+      if (!isNarrowViewport()) return;
+      requestAnimationFrame(() => {
+        const back = Array.from(document.querySelectorAll('[data-action="back-manage-center-list"]'))
+          .find((element) => element.getClientRects().length > 0);
+        const heading = Array.from(document.querySelectorAll("#manageCenterDetailHeading"))
+          .find((element) => element.getClientRects().length > 0);
+        (back || heading)?.focus();
+      });
+    }
+
+    function closeManageCenterMobileDetail() {
+      const tab = state.manageTab;
+      const id = manageCenterDetailId(tab);
+      if (!id) return false;
+      if (tab === "unsafe") state.unsafeDetailId = "";
+      if (tab === "materials") state.materialDetailId = "";
+      if (tab === "workPrep") state.workPrepDetailId = "";
+      render();
+      requestAnimationFrame(() => {
+        const trigger = manageCenterDetailTrigger(tab, id);
+        trigger?.scrollIntoView({ block: "nearest" });
+        trigger?.focus();
+      });
+      return true;
+    }
+
+    function selectManageCenterTab(tab) {
+      if (!manageCenterRemoteKeys(tab).length && tab !== "safetySettings") return false;
+      state.manageTab = tab;
+      state.unsafeDetailId = "";
+      state.materialDetailId = "";
+      state.workPrepDetailId = "";
+      if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
+      if (state.manageTab === "materials") resetMaterialShipFilter();
+      saveJson("manageTab", state.manageTab);
+      render();
+      scrollScreenTop();
+      return true;
+    }
+
+    function retryManageCenterData() {
+      const keys = manageCenterRemoteKeys(state.manageTab);
+      if (!keys.length) return;
+      pullRemote({ force: true, keys, reason: "manage-center-retry" });
+      render();
+    }
+
     function renderManage() {
       const tabs = [
         ["workers", "작업자"],
@@ -6640,9 +6954,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ["unsafe", "불안전요소"],
         ["materials", "자재누락"],
         ["workPrep", "작업지시서"],
+        ["safetySettings", "안전 설정"],
       ];
       const previewAdmin = isRedesignPreviewPage();
-      const readOnlyTabs = new Set(["unsafe", "materials"]);
+      const readOnlyTabs = new Set(["unsafe", "materials", "safetySettings"]);
       if (!state.adminMode && !previewAdmin && !readOnlyTabs.has(state.manageTab)) state.manageTab = "unsafe";
       const readOnlyList = !state.adminMode && readOnlyTabs.has(state.manageTab);
       if (!state.adminMode && !previewAdmin && !readOnlyList) {
@@ -6650,6 +6965,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         + `<div class="notice danger">관리자만 사용할 수 있는 기능입니다.</div>`;
       }
       const visibleTabs = state.adminMode || previewAdmin ? tabs : tabs.filter(([id]) => readOnlyTabs.has(id));
+      const dataState = manageCenterDataState(state.manageTab);
+      const hasManageData = dataState === "ready" || dataState === "stale" || dataState === "offline";
+      const actionsDisabled = dataState !== "ready";
       const unsafeOpen = state.unsafeIssues.filter((row) => row.status !== ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[2]).length;
       const materialOpen = state.missingMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
       const tabCounts = {
@@ -6658,41 +6976,137 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         unsafe: unsafeOpen,
         materials: materialOpen,
         workPrep: state.workPrepRecords.length,
+        safetySettings: 1,
       };
       const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "접수 현황을 확인합니다.";
-      return DASHBOARD_VIEW.renderManageShellView({
+      const context = dataSurfaceContext({
+        eyebrow: "관리센터",
+        title: "현장 관리",
+        description: lead,
+        businessDate: today(),
+        keys: manageCenterRemoteKeys(state.manageTab),
+        dataState,
+      });
+      context.actionsHtml = adminToggleButton();
+      const workPrepCollection = state.manageTab === "workPrep" ? buildWorkPrepManagerCollection() : null;
+      const panels = {
+        workers: state.manageTab === "workers" ? renderWorkerManager() : "",
+        push: state.manageTab === "push" ? renderPushManager() : "",
+        unsafe: state.manageTab === "unsafe" ? renderUnsafeManager() : "",
+        materials: state.manageTab === "materials" ? renderMaterialManager() : "",
+        workPrep: state.manageTab === "workPrep" ? renderWorkPrepManager() : "",
+        safetySettings: state.manageTab === "safetySettings" ? renderSafetySettingsAuthority() : "",
+      };
+      const shellModel = {
         pageHeadHtml: pageHead("관리", lead, adminToggleButton()),
         readOnlyNoticeHtml: state.adminMode || previewAdmin ? "" : `<div class="notice" style="margin-bottom:12px">목록은 볼 수 있고, 상태 변경과 삭제는 관리자 모드에서 사용할 수 있습니다.</div>`,
         tabs: visibleTabs.map(([id, label]) => ({
           id,
           label,
-          count: tabCounts[id],
+          count: hasManageData ? tabCounts[id] : undefined,
           active: state.manageTab === id,
         })),
         activeTab: state.manageTab,
-        panels: {
-          workers: state.manageTab === "workers" ? renderWorkerManager() : "",
-          push: state.manageTab === "push" ? renderPushManager() : "",
-          unsafe: state.manageTab === "unsafe" ? renderUnsafeManager() : "",
-          materials: state.manageTab === "materials" ? renderMaterialManager() : "",
-          workPrep: state.manageTab === "workPrep" ? renderWorkPrepManager() : "",
-        },
-      });
+        panels,
+      };
+      if (typeof MANAGE_CENTER_VIEW.renderManageCenterView === "function") {
+        const activePanel = panels[state.manageTab] || "";
+        const selectedRecord = manageCenterSelectedRecord(state.manageTab);
+        return `${shellModel.readOnlyNoticeHtml}${MANAGE_CENTER_VIEW.renderManageCenterView({
+          tabs: shellModel.tabs,
+          activeTab: state.manageTab,
+          panelHtml: activePanel,
+          context,
+          cards: [
+            { id: "intake", label: "접수 처리", count: hasManageData ? unsafeOpen + materialOpen : undefined },
+            { id: "operations", label: "작업 운영", count: hasManageData ? state.workPrepRecords.length : undefined },
+            { id: "people", label: "구성원", count: hasManageData ? state.workers.length : undefined },
+            { id: "records", label: "기록", count: hasManageData ? state.inspections.length : undefined },
+          ],
+          list: workPrepCollection && hasManageData ? {
+            label: shellModel.tabs.find((tab) => tab.active)?.label || "관리 항목",
+            resultCount: workPrepCollection.page.resultCount,
+            totalCount: state.workPrepRecords.length,
+            pageSize: workPrepCollection.page.pageSize,
+            pageIndex: workPrepCollection.page.pageIndex,
+            hasPreviousPage: workPrepCollection.page.hasPreviousPage,
+            hasNextPage: workPrepCollection.page.hasNextPage,
+            previousCursor: workPrepCollection.page.previousCursor,
+            nextCursor: workPrepCollection.page.nextCursor,
+            pageAction: "page-work-prep-collection",
+          } : {
+            label: shellModel.tabs.find((tab) => tab.active)?.label || "관리 항목",
+            resultCount: hasManageData ? tabCounts[state.manageTab] || 0 : 0,
+            totalCount: hasManageData ? tabCounts[state.manageTab] || 0 : 0,
+            pageSize: 25,
+            pageIndex: 0,
+          },
+          dataState,
+          actionsDisabled,
+          contentReadOnly: actionsDisabled,
+          detailEnabled: ["unsafe", "materials", "workPrep"].includes(state.manageTab),
+          selectedRecord,
+          mobileDetailOpen: Boolean(selectedRecord && isNarrowViewport()),
+          retryAction: "retry-manage-center",
+          dangerZone: { description: "위험 작업은 기존 권한 확인과 복구 경계를 그대로 따릅니다." },
+        }, {
+          renderDataContext: SCREEN_VIEWS.renderDataContext,
+          renderDataState: SCREEN_VIEWS.renderDataState,
+        })}`;
+      }
+      return DASHBOARD_VIEW.renderManageShellView(shellModel);
+    }
+
+    function renderSafetySettingsAuthority() {
+      const sync = typeof SAFETY_SETTINGS.evaluateDeviceSync === "function"
+        ? SAFETY_SETTINGS.evaluateDeviceSync({
+          deviceVersion: "",
+          publishedVersion: "",
+          checkedAt: "",
+          lastSyncedAt: state.lastRemotePullAt ? new Date(state.lastRemotePullAt).toISOString() : "",
+          online: state.syncMode === "online",
+        }, { now: serverNow() })
+        : { authoritativeSource: "server", versionState: "unknown", freshness: "unknown", lastSyncedAt: "" };
+      return `<section class="panel panel-pad" aria-labelledby="safetySettingsAuthorityTitle">
+        <div class="section-title" id="safetySettingsAuthorityTitle">안전 설정 권위와 동기화</div>
+        <dl class="record-meta-grid">
+          <div><dt>권위 원본</dt><dd>${esc(sync.authoritativeSource === "server" ? "서버 게시본" : "확인 필요")}</dd></div>
+          <div><dt>게시 버전</dt><dd>${esc(sync.publishedVersion || "미확인")}</dd></div>
+          <div><dt>기기 버전</dt><dd>${esc(sync.deviceVersion || "미적용")}</dd></div>
+          <div><dt>동기화 최신성</dt><dd>${esc(sync.freshness || "unknown")}</dd></div>
+          <div><dt>마지막 동기화</dt><dd>${esc(sync.lastSyncedAt ? formatDateTime(sync.lastSyncedAt) : "기록 없음")}</dd></div>
+        </dl>
+        <div class="notice">이 화면은 읽기 전용입니다. 서버 게시본을 확인하지 못한 상태를 게시 완료로 표시하지 않습니다.</div>
+      </section>`;
+    }
+
+    function buildWorkPrepManagerCollection() {
+      const filters = state.workPrepFilters;
+      const filtered = filterWorkPrepRecords(state.workPrepRecords, filters);
+      const records = sortWorkPrepAdminRecords(filtered, filters.sort);
+      const page = typeof PAGED_COLLECTION.buildPagedCollection === "function"
+        ? PAGED_COLLECTION.buildPagedCollection(records, {
+          state: state.workPrepCollectionState,
+          pageSize: 25,
+          cursorKey: `work-prep:${JSON.stringify(filters)}`,
+          fields: { id: "id", status: () => "" },
+        })
+        : { items: records, resultCount: records.length, pageSize: records.length || 25, pageIndex: 0 };
+      return { filters, filtered, records, page, pageRecords: page.items };
     }
 
     function renderWorkPrepManager() {
       if (state.workPrepRegisterOpen) return renderWorkPrepRegister();
+      const collection = buildWorkPrepManagerCollection();
       const canEdit = canOpenWorkPrepRegister() || isRedesignPreviewPage();
-      const filters = state.workPrepFilters;
-      const filtered = filterWorkPrepRecords(state.workPrepRecords, filters);
-      const records = sortWorkPrepAdminRecords(filtered, filters.sort);
+      const { filters, filtered, pageRecords } = collection;
       const filterPanelRows = filterWorkPrepRecords(state.workPrepRecords, { ...filters, shipNo: "" });
       const shipGroups = groupWorkPrepRecordsByShip(sortWorkPrepAdminRecords(filterPanelRows, "shipNo"));
       const preparing = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "preparing").length;
       const confirmed = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "confirmed").length;
       const ordered = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "ordered").length;
       const used = state.workPrepRecords.filter((row) => normalizeWorkPrepStatus(row.status) === "used").length;
-      const activeId = records.some((row) => row.id === state.workPrepDetailId) ? state.workPrepDetailId : "";
+      const activeId = pageRecords.some((row) => row.id === state.workPrepDetailId) ? state.workPrepDetailId : "";
       return SCREEN_VIEWS.renderWorkPrepManagerView({
         totalCount: state.workPrepRecords.length,
         progressCount: confirmed + ordered,
@@ -6714,9 +7128,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           count: group.records.length,
         })),
         filteredCount: filtered.length,
-        rowsHtml: records.map((row) => {
+        rowsHtml: pageRecords.map((row) => {
           const active = row.id === activeId;
-          return `${renderWorkPrepAdminRow(row, active)}${active ? renderWorkPrepInlineDetail(row) : ""}`;
+          return renderWorkPrepAdminRow(row, active);
         }).join(""),
       });
     }
@@ -6789,7 +7203,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const status = normalizeWorkPrepStatus(record.status);
       const sync = workPrepSyncPresentation(record);
       const canEdit = state.adminMode || isRedesignPreviewPage();
-      return SCREEN_VIEWS.renderWorkPrepAdminRowView({
+      return relabelWorkPrepArchiveControl(SCREEN_VIEWS.renderWorkPrepAdminRowView({
         status,
         active,
         recordId: record.id,
@@ -6811,9 +7225,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         syncDetail: sync.detail,
         statusControlHtml: renderWorkPrepStatusControl(record, canEdit),
         canEdit,
-        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 삭제`,
+        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 보관`,
         timelineSummaryHtml: renderWorkPrepAdminTimelineSummary(record),
-      });
+      }));
+    }
+
+    function relabelWorkPrepArchiveControl(html) {
+      return String(html || "")
+        .replace(/delete-work-prep-record/g, "archive-work-prep-record")
+        .replace(/>삭제</g, ">보관<")
+        .replace(/작업지시서 삭제/g, "작업지시서 보관");
     }
 
     function renderWorkPrepAdminTimelineSummary(record) {
@@ -6869,7 +7290,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const total = progressInfo.total || workPrepParticipantWorkerIds(record).length;
       const progressPercent = total ? Math.round(progressInfo.done / total * 100) : 0;
       const statusLabel = WORK_PREP_STATUS_LABELS[status] || status;
-      return SCREEN_VIEWS.renderWorkPrepDetailView({
+      return relabelWorkPrepArchiveControl(SCREEN_VIEWS.renderWorkPrepDetailView({
         shipNo: record.shipNo || "-",
         categoryLabel: category ? workLabel(category) : "작업 유형 없음",
         metaLine: [record.team || "-", shortDate(record.workDate || record.createdAt), workPrepAppearanceMeta(record)].filter(Boolean).join(" · "),
@@ -6885,7 +7306,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         createdAtLabel: formatDateTime(record.createdAt || record.updatedAt || ""),
         canEdit,
         recordId: record.id,
-      });
+      }));
     }
 
     function renderWorkPrepTimeline(record) {
@@ -7185,7 +7606,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         shipFilterNoticeHtml: state.unsafeFilters.shipNo ? renderShipFilterNotice("unsafe", state.unsafeFilters.shipNo) : "",
         rowsHtml: sorted.length ? sorted.map((row) => {
           const active = row.id === activeId;
-          return `${renderUnsafeQueueItem(row, active)}${active ? renderUnsafeInlineDetail(row) : ""}`;
+          return renderUnsafeQueueItem(row, active);
         }).join("") : "",
       });
     }
@@ -7358,6 +7779,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const checking = state.missingMaterials.filter((row) => row.status === statuses[1]).length;
       const done = state.missingMaterials.filter((row) => row.status === statuses[2]).length;
       const activeId = sorted.some((row) => row.id === state.materialDetailId) ? state.materialDetailId : "";
+      const reconciledSelection = typeof MATERIAL_BULK_SELECTION.reconcileMaterialBulkSelection === "function"
+        ? MATERIAL_BULK_SELECTION.reconcileMaterialBulkSelection(state.materialBulkSelection, state.missingMaterials)
+        : { selectionState: state.materialBulkSelection };
+      state.materialBulkSelection = reconciledSelection.selectionState;
       const filterPanelHtml = `<button class="material-ship-filter ${state.materialFilters.shipNo ? "" : "active"}" data-record-filter="materials:shipNo" value="" type="button">
               <span>전체 호선</span><strong>${filterPanelRows.length}</strong>
             </button>
@@ -7381,11 +7806,39 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         visibleCount: filtered.length,
         sortValue: state.materialFilters.sort === "latest" ? "status" : "latest",
         sortLabel: state.materialFilters.sort === "latest" ? "상태순" : "최신순",
-        rowsHtml: sorted.length ? sorted.map((row) => {
+        rowsHtml: `${renderMaterialBulkReviewSheet(sorted)}${sorted.length ? sorted.map((row) => {
           const active = row.id === activeId;
-          return `${renderMaterialTableRow(row, active)}${active ? renderMaterialInlineDetail(row) : ""}`;
-        }).join("") : "",
+          return renderMaterialTableRow(row, active);
+        }).join("") : ""}`,
       });
+    }
+
+    function materialBulkReview(filteredRecords = []) {
+      if (typeof MATERIAL_BULK_SELECTION.buildMaterialBulkReview !== "function") return null;
+      return MATERIAL_BULK_SELECTION.buildMaterialBulkReview({
+        records: state.missingMaterials,
+        filteredRecords,
+        selectionState: state.materialBulkSelection,
+        scope: MATERIAL_BULK_SELECTION.BULK_SCOPE_SELECTED,
+        targetStatus: state.materialBulkTargetStatus,
+        memo: state.materialBulkMemo,
+        memoRequired: true,
+        validStatuses: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES,
+      });
+    }
+
+    function renderMaterialBulkReviewSheet(filteredRecords) {
+      const review = materialBulkReview(filteredRecords);
+      if (!state.materialBulkReviewOpen) return `<div class="notice">체크박스로 선택한 기록만 일괄 변경합니다. 현재 선택 ${review?.selectedCount || 0}건</div>`;
+      return `<section class="panel panel-pad" data-material-bulk-review aria-label="선택 자재 상태 변경 검토">
+        <div class="section-title">선택 ${review?.targetCount || 0}건 변경 검토</div>
+        <p>현재 필터 전체가 아니라 체크한 기록만 적용됩니다.</p>
+        <label class="field"><span>변경 상태</span><select class="select" data-material-bulk-status>
+          <option value="">상태 선택</option>${ISSUE_MATERIAL_RULES.MATERIAL_STATUSES.map((status) => `<option value="${esc(status)}" ${state.materialBulkTargetStatus === status ? "selected" : ""}>${esc(status)}</option>`).join("")}
+        </select></label>
+        <label class="field"><span>변경 메모</span><textarea class="textarea" data-material-bulk-memo>${esc(state.materialBulkMemo)}</textarea></label>
+        <div class="manage-actions"><button class="btn-light" data-action="cancel-material-bulk-review" type="button">취소</button><button class="btn" data-action="apply-material-bulk-status" ${review?.canSubmit ? "" : "disabled"} type="button">선택 ${review?.targetCount || 0}건 적용</button></div>
+      </section>`;
     }
 
     function materialKpi(label, value, unit, color, status) {
@@ -7405,7 +7858,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const token = `materials:${row.id}`;
       const canEdit = state.adminMode || isRedesignPreviewPage();
       return `<div class="material-row ${active ? "active" : ""}" data-material-record-detail="${esc(row.id)}" role="button" tabindex="0" aria-label="${esc(`${row.shipNo || "-"} ${row.materialName || "자재누락"} 상세 보기`)}">
-        <span><input type="checkbox" aria-label="자재 기록 선택" ${canEdit ? "" : "disabled"} /></span>
+        <span><input type="checkbox" data-material-bulk-select="${esc(row.id)}" aria-label="${esc(row.materialName || "자재 기록")} 선택" ${state.materialBulkSelection?.selectedById?.[row.id] ? "checked" : ""} ${canEdit ? "" : "disabled"} /></span>
         <span><strong>${esc(row.shipNo || "-")}</strong><em>${esc(shipStageForNo(row.shipNo))}</em></span>
         <span><strong>${esc(row.materialName || "-")}</strong><em>${esc(row.content || "내용 없음")}</em></span>
         <span><strong>${esc(materialQuantity(row))}</strong></span>
@@ -7462,21 +7915,59 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return ANALYTICS_MODEL.combineInspectionRows(state.inspections, archived);
     }
 
+    function operationalDependencyFreshness() {
+      const now = Date.now();
+      const maxAgeMs = 5 * 60 * 1000;
+      const dependency = (key) => {
+        const health = state.remotePullHealth?.[key] || {};
+        const successAt = String(health.successAt || "");
+        const age = now - Date.parse(successAt);
+        return {
+          complete: Boolean(successAt && !health.error),
+          fresh: state.syncMode === "online" && Number.isFinite(age) && age >= 0 && age <= maxAgeMs,
+          asOf: successAt,
+        };
+      };
+      return {
+        workers: dependency("workers"),
+        workPrepRecords: dependency("workPrepRecords"),
+        inspections: dependency("inspections"),
+      };
+    }
+
+    function operationalCohortForDate(dateValue) {
+      if (typeof OPERATIONAL_COHORT.deriveTodayOperationalCohort !== "function") return null;
+      const input = {
+        date: dateValue,
+        workers: visiblePledgeAnalyticsWorkers(),
+        workPrepRecords: state.workPrepRecords,
+        inspections: combinedInspectionRows(),
+        freshness: operationalDependencyFreshness(),
+        asOf: new Date(state.lastRemotePullAt || Date.now()).toISOString(),
+      };
+      return dateValue === today()
+        ? OPERATIONAL_COHORT.deriveTodayOperationalCohort(input)
+        : OPERATIONAL_COHORT.deriveHistoricalOperationalCohort(input);
+    }
+
     function pledgeDashboardRows(date = today()) {
       const dateValue = dateOnly(date) || today();
       const dayInspections = combinedInspectionRows().filter((row) => row.date === dateValue);
       const byWorker = new Map();
       dayInspections.forEach((row) => {
-        const name = row.worker || "미지정";
-        if (!byWorker.has(name)) byWorker.set(name, row);
+        const identity = String(row.workPrepWorkerId || row.workerId || row.worker || "미지정");
+        if (!byWorker.has(identity)) byWorker.set(identity, row);
       });
-      const workerRows = visiblePledgeAnalyticsWorkers().map((worker) => {
-        const row = byWorker.get(worker.name);
+      const cohort = operationalCohortForDate(dateValue);
+      const cohortIds = cohort?.includedWorkerIds || visiblePledgeAnalyticsWorkers().map((worker) => worker.id);
+      const workerRows = cohortIds.map((workerId) => {
+        const worker = state.workers.find((item) => item.id === workerId);
+        const row = byWorker.get(workerId) || byWorker.get(worker?.name);
         const done = Boolean(row && String(row.safetyPledge || "").trim());
         return {
-          workerId: worker.id,
-          name: worker.name,
-          team: worker.team || "-",
+          workerId,
+          name: worker?.name || row?.worker || "기록 작업자",
+          team: worker?.team || "-",
           shipNo: row ? row.shipNo || "-" : "-",
           time: row ? row.time || "-" : "-",
           done,
@@ -7489,9 +7980,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function pledgeWeekStats(anchorDate = today()) {
       return Array.from({ length: 7 }, (_, index) => addDays(anchorDate, index - 6)).map((date) => {
-        const rows = combinedInspectionRows().filter((row) => row.date === date && !hiddenPledgeAnalyticsWorkerName(row.worker));
-        const total = Math.max(visiblePledgeAnalyticsWorkers().length, rows.length);
-        const done = rows.filter((row) => String(row.safetyPledge || "").trim()).length;
+        const rows = pledgeDashboardRows(date);
+        const total = rows.length;
+        const done = rows.filter((row) => row.done).length;
         const pct = total ? Math.round(done / total * 100) : 0;
         return { date, total, done, pct };
       });
@@ -7533,16 +8024,150 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
+    function retryPledgeInspectionRange() {
+      const viewDate = pledgeViewDate();
+      ensureInspectionRangeLoaded(addDays(viewDate, -6), viewDate, true);
+      renderPreservingScroll();
+    }
+
+    function pledgeNotificationPreflight(rows) {
+      if (typeof NOTIFICATION_PREFLIGHT.buildNotificationPreflight !== "function") return null;
+      const notification = pushNotificationFromTemplate("pledgePending", {
+        날짜: today().replace(/-/g, "."),
+        인원: rows.length,
+      });
+      return NOTIFICATION_PREFLIGHT.buildNotificationPreflight({
+        recipients: rows.map((row) => {
+          const status = workerPushSubscriptionStatusFor(row.workerId);
+          return {
+            id: row.workerId,
+            eligible: Boolean(row.workerId),
+            subscriptionCount: Number(status.subscriptionCount || 0),
+            registered: status.registered === true,
+          };
+        }),
+        selectedWorkerIds: rows.map((row) => row.workerId),
+        message: { ...notification, url: "/pledge.html" },
+        acknowledged: state.pledgePreflightAcknowledged,
+        requireAcknowledgment: true,
+      });
+    }
+
+    function pledgeNotificationPreflightSnapshot(preflight, businessDate = today()) {
+      const ids = (rows) => (Array.isArray(rows) ? rows : [])
+        .map((row) => String(row?.id || "").trim())
+        .filter(Boolean)
+        .sort();
+      return JSON.stringify({
+        businessDate,
+        selectedWorkerIds: [...(preflight?.selectedWorkerIds || [])].map(String).sort(),
+        targetedWorkerIds: ids(preflight?.targeted),
+        unregisteredWorkerIds: ids(preflight?.unregistered),
+      });
+    }
+
+    function pledgeDataSnapshot(viewDate = pledgeViewDate()) {
+      const inspectionRange = { start: addDays(viewDate, -6), end: viewDate };
+      const rows = pledgeDashboardRows(viewDate);
+      const cohort = operationalCohortForDate(viewDate);
+      const rangeEntry = inspectionRangeLoadEntry(inspectionRange);
+      const keys = ["workers", "workPrepRecords"];
+      return {
+        viewDate,
+        inspectionRange,
+        rows,
+        cohort,
+        rangeEntry,
+        keys,
+        dataState: dataSurfaceState({
+          keys,
+          collections: [state.workers, state.workPrepRecords, rows],
+          range: rangeEntry,
+          empty: Boolean(cohort && Number(cohort.denominator?.value || 0) === 0 && rows.length === 0),
+        }),
+      };
+    }
+
+    function pledgeActionModel(viewDate, rows, dataState, context) {
+      const cohort = operationalCohortForDate(viewDate);
+      const pendingRows = rows.filter((row) => !row.done);
+      const preflight = pledgeNotificationPreflight(pendingRows);
+      const filteredRows = state.pledgeActionFilter === "unregistered"
+        ? pendingRows.filter((row) => Number(workerPushSubscriptionStatusFor(row.workerId).subscriptionCount || 0) === 0)
+        : pendingRows;
+      const freshness = cohort?.freshness || { status: "stale", staleDependencies: ["workers", "workPrepRecords", "inspections"] };
+      const authoritativeFreshness = dataState === "ready" ? "fresh" : freshness.status;
+      return {
+        dataState,
+        context,
+        actionsDisabled: dataState !== "ready",
+        viewDate,
+        maxDate: today(),
+        denominatorLabel: `확정 작업지시 ${cohort?.denominator?.value ?? rows.length}명 기준`,
+        freshness: {
+          status: authoritativeFreshness,
+          label: authoritativeFreshness === "fresh" ? "최신" : "재확인 필요",
+          detail: authoritativeFreshness === "fresh" ? `기준 ${context.asOf}` : `지연: ${(freshness.staleDependencies || []).map(syncTableLabel).join(", ")}`,
+        },
+        kpis: {
+          target: cohort?.denominator?.value ?? rows.length,
+          completed: rows.filter((row) => row.done).length,
+          actionNeeded: pendingRows.length,
+          completionRate: rows.length ? Math.round(rows.filter((row) => row.done).length / rows.length * 100) : 0,
+        },
+        filters: [
+          { value: "all", label: "전체", count: pendingRows.length, active: state.pledgeActionFilter === "all" },
+          { value: "unregistered", label: "알림 미등록", count: pendingRows.filter((row) => Number(workerPushSubscriptionStatusFor(row.workerId).subscriptionCount || 0) === 0).length, active: state.pledgeActionFilter === "unregistered" },
+        ],
+        actionRows: filteredRows.map((row) => ({
+          id: row.workerId,
+          subjectLabel: row.name,
+          assignmentLabel: row.shipNo || "-",
+          statusLabel: row.done ? "완료" : "미완료",
+          reasonLabel: Number(workerPushSubscriptionStatusFor(row.workerId).subscriptionCount || 0) > 0 ? "서약 확인 필요" : "알림 미등록",
+          updatedLabel: row.time || "-",
+        })),
+        preflight: {
+          open: state.pledgePreflightOpen,
+          acknowledged: state.pledgePreflightAcknowledged && !state.pledgePreflightSending,
+          targetCount: preflight?.counts?.targeted || 0,
+          checks: [
+            { label: `선택 ${preflight?.counts?.selected || 0}명`, passed: Boolean(preflight?.counts?.selected) },
+            { label: `발송 가능 ${preflight?.counts?.targeted || 0}명`, passed: Boolean(preflight?.counts?.targeted) },
+            { label: `알림 미등록 ${preflight?.counts?.unregistered || 0}명`, passed: !(preflight?.counts?.unregistered) },
+          ],
+        },
+        recentSend: { title: "최근 발송", summary: "서버 발송 이력에서 결과를 확인합니다.", statusLabel: "읽기 전용" },
+        utilities: { historyLabel: "점검 이력", settingsLabel: "안전 설정" },
+      };
+    }
+
     function renderPledgeManager() {
       const viewDate = pledgeViewDate();
-      ensureInspectionRangeLoaded(addDays(viewDate, -6), viewDate);
+      const snapshot = pledgeDataSnapshot(viewDate);
+      const { inspectionRange, rows, cohort, rangeEntry, keys: pledgeKeys, dataState } = snapshot;
+      ensureInspectionRangeLoaded(inspectionRange.start, inspectionRange.end);
       const isToday = viewDate === today();
-      const rows = pledgeDashboardRows(viewDate);
+      const context = dataSurfaceContext({
+        eyebrow: "안전서약 운영",
+        title: isToday ? "오늘 작업 전 안전서약" : "날짜별 안전서약",
+        description: "대상 확인 → 알림 검토 → 완료 추적",
+        businessDate: viewDate,
+        keys: pledgeKeys,
+        range: rangeEntry,
+        dataState,
+      });
       const completed = rows.filter((row) => pledgeRowStatus(row) === "완료").length;
       const pending = Math.max(rows.length - completed, 0);
       const rate = rows.length ? Math.round(completed / rows.length * 100) : 0;
       const week = pledgeWeekStats(viewDate);
       const weekTotal = week.reduce((sum, row) => sum + row.done, 0);
+      if (typeof PLEDGE_ACTION_VIEW.renderPledgeActionView === "function" && isToday) {
+        return PLEDGE_ACTION_VIEW.renderPledgeActionView(pledgeActionModel(viewDate, rows, dataState, context), {
+          renderDataContext: SCREEN_VIEWS.renderDataContext,
+          renderDataState: SCREEN_VIEWS.renderDataState,
+        });
+      }
       const kpiHtml = [
         pledgeKpi(isToday ? "오늘 서약 완료" : "서약 완료", completed, "명", `전체 ${rows.length}명 중`, "done"),
         pledgeKpi("미완료", pending, "명", isToday ? "알림 발송 가능" : "지난 날짜 조회", "warn"),
@@ -7551,9 +8176,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       ].join("");
       return SCREEN_VIEWS.renderPledgeManagerView({
         dateLabel: viewDate.replace(/-/g, "."),
-        todayIso: today(),
+        todayIso: viewDate,
         viewDate,
         isToday,
+        dataState,
+        context,
+        actionsDisabled: dataState !== "ready",
         maxDate: today(),
         rows: rows.map((row) => ({
           name: row.name,
@@ -7567,9 +8195,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         kpiHtml,
         canNotifyPledge: canSendPledgeNotifications() && isToday,
         adminMode: state.adminMode,
-        editing: Boolean(state.pledgeTemplateEditing),
+        editing: isToday && Boolean(state.pledgeTemplateEditing),
         rules: pledgeRules(),
         weekBars: week.map((row) => ({ label: row.date.slice(5).replace("-", "/"), pct: row.pct })),
+      }, {
+        renderDataContext: SCREEN_VIEWS.renderDataContext,
+        renderDataState: SCREEN_VIEWS.renderDataState,
       });
     }
 
@@ -7917,17 +8548,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       render();
     }
 
-    function monthlyWorkerInspectionDataState(range) {
-      if (!isSyncConfigured()) return "ready";
+    function inspectionRangeLoadEntry(range) {
       const start = dateOnly(range?.start);
       let end = dateOnly(range?.end);
       const todayValue = today();
       if (end && end > todayValue) end = todayValue;
-      if (!start || !end || start > end) return "error";
-      const entry = state.remoteLoadedInspectionRanges?.[`${start}~${end}`];
-      if (entry?.status === "loaded") return "ready";
-      if (entry?.status === "error") return "error";
-      return "loading";
+      if (!start || !end || start > end) return { status: "error", at: Date.now() };
+      return state.remoteLoadedInspectionRanges?.[`${start}~${end}`] || { status: "loading", at: 0 };
+    }
+
+    function monthlyWorkerInspectionDataState(range) {
+      if (!isSyncConfigured()) return "ready";
+      return dataSurfaceState({
+        keys: ["workers"],
+        collections: [state.workers, combinedInspectionRows()],
+        range: inspectionRangeLoadEntry(range),
+      });
     }
 
     function buildMonthlyWorkerAnalyticsModel() {
@@ -7936,8 +8572,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const holidayRows = stats.range.dates.map((date) => koreanPublicHolidayInfo(date)).filter(Boolean);
       const customRows = restState.customRestDays.filter((date) => monthKeyForDate(date) === stats.range.monthKey);
       const expandedWorkers = monthlyWorkerExpandedKeySet(stats.workers);
+      const dataState = monthlyWorkerInspectionDataState(stats.range);
       return {
-        dataState: monthlyWorkerInspectionDataState(stats.range),
+        dataState,
+        actionsDisabled: dataState !== "ready",
         monthText: `${stats.range.year}년 ${stats.range.month}월`,
         monthHighlight: state.monthlyWorkerMonthHighlight,
         restOpen: state.monthlyRestDayPanelOpen,
@@ -7966,9 +8604,40 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return DASHBOARD_VIEW.renderMonthlyWorkerAnalyticsView(buildMonthlyWorkerAnalyticsModel(), { analyticsKpi });
     }
 
+    function analyticsRemoteKeys() {
+      return ["inspections", "unsafeIssues", "missingMaterials", "ships", "workers", "workPrepRecords"];
+    }
+
+    function analyticsSourceCollections() {
+      return [
+        combinedInspectionRows(),
+        state.unsafeIssues,
+        state.missingMaterials,
+        state.ships,
+        state.workers,
+        state.workPrepRecords,
+      ];
+    }
+
+    function analyticsDashboardDataState() {
+      const collections = analyticsSourceCollections();
+      return dataSurfaceState({
+        keys: analyticsRemoteKeys(),
+        collections,
+        empty: collections.every((rows) => rows.length === 0),
+      });
+    }
+
+    function retryAnalyticsDashboardData() {
+      const range = currentMonthRange(selectedMonthlyWorkerMonth());
+      pullRemote({ force: true, keys: analyticsRemoteKeys(), reason: "analytics-retry" });
+      ensureInspectionRangeLoaded(range.start, range.end, true);
+      render();
+    }
+
     // 분석 모델 빌더는 assets/js/analytics-model.js (window.ShipyardAnalyticsModel)로 추출됨.
     function buildAnalyticsDashboardModel() {
-      return ANALYTICS_MODEL.buildAnalyticsDashboardModel({
+      const model = ANALYTICS_MODEL.buildAnalyticsDashboardModel({
         now: serverNow(),
         todayValue: today(),
         syncText: state.syncText || "로컬 저장",
@@ -7987,11 +8656,38 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         materialStatuses: ISSUE_MATERIAL_RULES.MATERIAL_STATUSES,
         workflowStages: SHIP_WORKFLOW_STAGES,
       });
+      const cohort = operationalCohortForDate(today());
+      const completedWorkerIds = combinedInspectionRows()
+        .filter((row) => row.date === today() && String(row.safetyPledge || "").trim())
+        .map((row) => row.workPrepWorkerId || row.workerId)
+        .filter(Boolean);
+      const actionMetrics = typeof ANALYTICS_MODEL.buildCohortCompletionSummary === "function"
+        ? ANALYTICS_MODEL.buildCohortCompletionSummary(cohort, completedWorkerIds)
+        : null;
+      const dataState = analyticsDashboardDataState();
+      return {
+        ...model,
+        dataState,
+        actionsDisabled: dataState !== "ready",
+        context: dataSurfaceContext({
+          eyebrow: "안전 분석",
+          title: "현장 안전 브리핑",
+          description: "점검, 불안전요소, 자재와 작업 흐름을 같은 기준 시점으로 확인합니다.",
+          businessDate: today(),
+          keys: analyticsRemoteKeys(),
+          dataState,
+        }),
+        todayPending: actionMetrics?.reliable ? actionMetrics.pendingWorkerIds.length : undefined,
+        actionMetrics,
+        operationalCohort: cohort,
+      };
     }
 
     function renderAnalyticsDashboard() {
       return DASHBOARD_VIEW.renderAnalyticsDashboardView(buildAnalyticsDashboardModel(), {
         analyticsKpi,
+        renderDataContext: SCREEN_VIEWS.renderDataContext,
+        renderDataState: SCREEN_VIEWS.renderDataState,
         monthlyWorkerAnalyticsHtml: renderMonthlyWorkerAnalytics(),
         relativeRecordTime,
         shortUnsafeTitle,
@@ -9197,6 +9893,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     const ADMIN_ACTIONS = new Set([
       "bulk-material-status",
+      "apply-material-bulk-status",
+      "cancel-material-bulk-review",
       "edit-pledge-template",
       "save-pledge-template",
       "cancel-pledge-template",
@@ -9208,7 +9906,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function adminActionApi() {
       return {
+        openMaterialBulkReview,
         bulkUpdateMaterialStatus,
+        applyMaterialBulkStatus,
+        cancelMaterialBulkReview,
         editPledgeTemplate,
         savePledgeTemplate,
         cancelPledgeTemplate,
@@ -9277,7 +9978,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "start-work-prep-record": () => startWorkPrepRecord(workPrepRecordId()),
         "start-check-from-work-prep": () => startCheckFromWorkPrepRecord(workPrepRecordId()),
         "edit-work-prep-record": () => openWorkPrepRecordForEdit(workPrepRecordId()),
-        "delete-work-prep-record": () => deleteWorkPrepRecord(workPrepRecordId()),
+        "archive-work-prep-record": () => archiveWorkPrepRecord(workPrepRecordId()),
         "select-work-prep-date": () => selectWorkPrepDate(event.target.closest("[data-work-prep-date]")?.dataset.workPrepDate || ""),
         "toggle-work-prep-appearance": () => {
           state.workPrepAppearanceOpen = !state.workPrepAppearanceOpen;
@@ -9289,6 +9990,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         },
         "toggle-work-prep-direct": () => {
           state.workPrepDirectOpen = !state.workPrepDirectOpen;
+          renderPreservingScroll();
+        },
+        "page-work-prep-collection": () => {
+          state.workPrepCollectionState = PAGED_COLLECTION.setCollectionCursor(
+            state.workPrepCollectionState,
+            event.target.closest("[data-collection-cursor]")?.dataset.collectionCursor || null,
+          );
+          state.workPrepDetailId = "";
           renderPreservingScroll();
         },
       }, action, event);
@@ -9303,6 +10012,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           event.target.closest("[data-ship-data-target]")?.dataset.shipDataTarget,
           event.target.closest("[data-ship-no]")?.dataset.shipNo,
         ),
+        "page-ships-collection": () => {
+          state.shipCollectionState = PAGED_COLLECTION.setCollectionCursor(
+            state.shipCollectionState,
+            event.target.closest("[data-collection-cursor]")?.dataset.collectionCursor || null,
+          );
+          renderPreservingScroll();
+        },
       }, action, event);
     }
 
@@ -9321,6 +10037,87 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "pledge-prev-day": () => setPledgeViewDate("prev"),
         "pledge-next-day": () => setPledgeViewDate("next"),
         "pledge-view-today": () => setPledgeViewDate("today"),
+        "retry-pledge-range": retryPledgeInspectionRange,
+        "review-pledge-notifications": () => {
+          const snapshot = pledgeDataSnapshot();
+          if (snapshot.viewDate !== today() || snapshot.dataState !== "ready") {
+            toast("최신 안전서약 데이터를 확인한 뒤 다시 시도해주세요.");
+            return;
+          }
+          const preflight = pledgeNotificationPreflight(snapshot.rows.filter((row) => !row.done));
+          state.pledgePreflightOpen = true;
+          state.pledgePreflightAcknowledged = false;
+          state.pledgePreflightSending = false;
+          state.pledgePreflightIdempotencyKey = uid("pledge_pending");
+          state.pledgePreflightSnapshot = pledgeNotificationPreflightSnapshot(preflight, snapshot.viewDate);
+          renderPreservingScroll();
+        },
+        "close-pledge-preflight": () => {
+          if (state.pledgePreflightSending) return;
+          state.pledgePreflightOpen = false;
+          state.pledgePreflightAcknowledged = false;
+          state.pledgePreflightIdempotencyKey = "";
+          state.pledgePreflightSnapshot = "";
+          renderPreservingScroll();
+        },
+        "complete-pledge-preflight": async () => {
+          if (state.pledgePreflightSending) return;
+          if (!state.pledgePreflightAcknowledged) {
+            toast("대상과 알림 내용을 확인하고 동의해주세요.");
+            return;
+          }
+          if (state.remotePullInFlight) {
+            toast("서버 동기화가 끝난 뒤 다시 확인해주세요.");
+            return;
+          }
+          const idempotencyKey = state.pledgePreflightIdempotencyKey || uid("pledge_pending");
+          state.pledgePreflightIdempotencyKey = idempotencyKey;
+          state.pledgePreflightSending = true;
+          renderPreservingScroll();
+          try {
+            const businessDate = today();
+            await Promise.all([
+              pullRemote({ force: true, silent: true, keys: ["workers", "workPrepRecords"], reason: "pledge-preflight" }),
+              ensureInspectionRangeLoaded(addDays(businessDate, -6), businessDate, true),
+            ]);
+            const snapshot = pledgeDataSnapshot(businessDate);
+            const preflight = pledgeNotificationPreflight(snapshot.rows.filter((row) => !row.done));
+            const currentSnapshot = pledgeNotificationPreflightSnapshot(preflight, businessDate);
+            if (pledgeViewDate() !== businessDate || snapshot.dataState !== "ready" || currentSnapshot !== state.pledgePreflightSnapshot) {
+              state.pledgePreflightAcknowledged = false;
+              state.pledgePreflightIdempotencyKey = "";
+              state.pledgePreflightSnapshot = "";
+              toast("안전서약 대상이 변경되었습니다. 최신 대상을 다시 확인해주세요.");
+              return;
+            }
+            if (!preflight?.canSend) {
+              toast("발송 가능한 안전서약 대상이 없습니다.");
+              return;
+            }
+            const result = await notifyPledgePendingWorkers(
+              preflight.targeted.map((recipient) => recipient.id),
+              { idempotencyKey },
+            );
+            if (!result) return;
+            state.pledgePreflightOpen = false;
+            state.pledgePreflightAcknowledged = false;
+            state.pledgePreflightIdempotencyKey = "";
+            state.pledgePreflightSnapshot = "";
+          } finally {
+            state.pledgePreflightSending = false;
+            renderPreservingScroll();
+          }
+        },
+        "filter-pledge-action": () => {
+          state.pledgeActionFilter = event.target.closest("[data-filter-value]")?.dataset.filterValue || "all";
+          renderPreservingScroll();
+        },
+        "open-pledge-history": () => changeView("history"),
+        "open-pledge-settings": () => {
+          state.manageTab = "safetySettings";
+          saveJson("manageTab", state.manageTab);
+          changeView("manage");
+        },
       }, action, event);
     }
 
@@ -9505,6 +10302,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const range = currentMonthRange(selectedMonthlyWorkerMonth());
         ensureInspectionRangeLoaded(range.start, range.end, true);
         render();
+        return true;
+      }
+      if (button.dataset.action === "retry-analytics-data") {
+        retryAnalyticsDashboardData();
         return true;
       }
       if (button.dataset.action === "add-monthly-rest-day") {
@@ -9703,6 +10504,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function handleHistoryManageButtonClick(button) {
+      if (button.dataset.manageCenterTab) {
+        state.manageTab = button.dataset.manageCenterTab;
+        state.unsafeDetailId = "";
+        state.materialDetailId = "";
+        state.workPrepDetailId = "";
+        saveJson("manageTab", state.manageTab);
+        render();
+        scrollScreenTop();
+        return true;
+      }
+      if (button.dataset.manageCenterCard) {
+        state.manageTab = ({ intake: "unsafe", operations: "workPrep", people: "workers", records: "materials" })[button.dataset.manageCenterCard] || state.manageTab;
+        saveJson("manageTab", state.manageTab);
+        render();
+        scrollScreenTop();
+        return true;
+      }
       if (button.dataset.action === "view-unsafe-list") {
         state.manageTab = "unsafe";
         setUnsafeStatusFilter("");
@@ -9742,8 +10560,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         pushRouteState();
       }
       if (button.dataset.action === "toggle-admin") toggleAdminMode();
-      if (button.dataset.manageTab) {
-        state.manageTab = button.dataset.manageTab;
+      const requestedManageTab = button.dataset.manageCenterTab || button.dataset.manageTab;
+      if (requestedManageTab) {
+        state.manageTab = requestedManageTab;
         state.unsafeDetailId = "";
         state.materialDetailId = "";
         state.workPrepDetailId = "";
@@ -9782,6 +10601,26 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         $("newShipNos")?.focus();
       }
       if (button.dataset.deleteShip) deleteShip(button.dataset.deleteShip);
+      return false;
+    }
+
+    function handleManageCenterButtonClick(button) {
+      if (button.dataset.manageCenterTab) return selectManageCenterTab(button.dataset.manageCenterTab);
+      if (button.dataset.action === "back-manage-center-list") return closeManageCenterMobileDetail();
+      if (button.dataset.action === "retry-manage-center") {
+        retryManageCenterData();
+        return true;
+      }
+      const cardTarget = {
+        intake: "unsafe",
+        operations: "workPrep",
+        people: "workers",
+      }[button.dataset.manageCenterCard];
+      if (cardTarget) return selectManageCenterTab(cardTarget);
+      if (button.dataset.manageCenterCard === "records") {
+        changeView("history");
+        return true;
+      }
       return false;
     }
 
@@ -9995,6 +10834,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (handlePledgeButtonClick(button)) return;
       if (handleUnsafeDraftButtonClick(button)) return;
       if (handleMaterialDraftButtonClick(button)) return;
+      if (handleManageCenterButtonClick(button)) return;
       if (button.dataset.recordFilter) {
         updateRecordFilter(button.dataset.recordFilter, button.value || "");
         return;
@@ -10089,6 +10929,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.unsafeDetailId = state.unsafeDetailId === id ? "" : id;
         shouldLoadPhotos = state.unsafeDetailId === id;
         renderPreservingScroll();
+        if (shouldLoadPhotos) focusManageCenterMobileDetail();
         pushRouteState();
       } else {
         state.unsafeDetailId = id;
@@ -10098,7 +10939,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!shouldLoadPhotos) return;
       try {
         await loadIssuePhotosForDetail(id);
-        if (state.unsafeDetailId === id) renderPreservingScroll();
+        if (state.unsafeDetailId === id) {
+          renderPreservingScroll();
+          focusManageCenterMobileDetail();
+        }
       } catch (error) {
         console.warn("issue photo detail load failed", error);
       }
@@ -10160,6 +11004,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (state.view === "manage") {
         state.materialDetailId = state.materialDetailId === id ? "" : id;
         renderPreservingScroll();
+        if (state.materialDetailId === id) focusManageCenterMobileDetail();
         pushRouteState();
       } else {
         state.materialFilters.shipNo = row.shipNo || "";
@@ -10175,10 +11020,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const row = state.workPrepRecords.find((item) => item.id === id);
       if (!row) return;
       state.manageTab = "workPrep";
+      if (typeof PAGED_COLLECTION.selectCollectionRecord === "function") {
+        state.workPrepCollectionState = PAGED_COLLECTION.selectCollectionRecord(state.workPrepCollectionState, id);
+      }
       saveJson("manageTab", state.manageTab);
       if (state.view === "manage") {
         state.workPrepDetailId = state.workPrepDetailId === id ? "" : id;
         renderPreservingScroll();
+        if (state.workPrepDetailId === id) focusManageCenterMobileDetail();
         pushRouteState();
       } else {
         state.workPrepFilters.shipNo = row.shipNo || "";
@@ -10291,9 +11140,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.materialDraft.content = event.target.value;
         saveJson("materialDraft", state.materialDraft);
       }
+      if (event.target.matches("[data-material-bulk-memo]")) {
+        state.materialBulkMemo = event.target.value;
+      }
       if (event.target.matches("[data-ship-search]")) {
         state.shipSearchQuery = event.target.value;
-        applyShipSearchFilter();
+        state.shipCollectionState = typeof PAGED_COLLECTION.setCollectionFilters === "function"
+          ? PAGED_COLLECTION.setCollectionFilters(state.shipCollectionState, { search: state.shipSearchQuery, status: "" })
+          : state.shipCollectionState;
+        renderPreservingScroll();
       }
       if (event.target.matches("[data-tool-search]")) {
         state.toolSearchQuery = event.target.value;
@@ -10336,6 +11191,30 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches('[data-action="acknowledge-pledge-preflight"]')) {
+        state.pledgePreflightAcknowledged = event.target.checked;
+        renderPreservingScroll();
+        return;
+      }
+      if (event.target.matches("[data-material-bulk-select]")) {
+        state.materialBulkSelection = MATERIAL_BULK_SELECTION.setMaterialBulkSelected(
+          state.materialBulkSelection,
+          event.target.dataset.materialBulkSelect,
+          event.target.checked,
+        );
+        if (state.materialBulkReviewOpen) renderPreservingScroll();
+        return;
+      }
+      if (event.target.matches("[data-material-bulk-status]")) {
+        state.materialBulkTargetStatus = event.target.value;
+        renderPreservingScroll();
+        return;
+      }
+      if (event.target.matches("[data-material-bulk-memo]")) {
+        state.materialBulkMemo = event.target.value;
+        renderPreservingScroll();
+        return;
+      }
       if (event.target.matches("[data-section-editor-field]")) {
         updateSectionEditorDraft(event.target.dataset.sectionEditorId, event.target.dataset.sectionEditorField, event.target.value);
       }
@@ -10639,9 +11518,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       scrollScreenTop();
       replaceRouteState();
       toast(files.length ? "불안전요소가 접수되었습니다. 사진 업로드 중입니다." : "불안전요소가 접수되었습니다.");
-      notifyUnsafeIssueRegistered(row);
       try {
-        await syncUnsafeIssue(row, files);
+        const synced = await syncUnsafeIssue(row, files);
+        if (synced) await notifyUnsafeIssueRegistered(row);
       } finally {
         state.unsafeSubmitting = false;
       }
@@ -11078,6 +11957,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ? state.workPrepFilters
           : state.materialFilters;
       target[key] = value;
+      if (kind === "workPrep" && typeof PAGED_COLLECTION.setCollectionCursor === "function") {
+        state.workPrepCollectionState = PAGED_COLLECTION.setCollectionCursor(state.workPrepCollectionState, null);
+        state.workPrepDetailId = "";
+      }
       saveJson(kind === "unsafe" ? "unsafeFilters" : kind === "workPrep" ? "workPrepFilters" : "materialFilters", target);
       if (key === "shipNo" && !value && routeQueryParam("shipNo")) {
         history.replaceState(routeState(), "", location.pathname);
@@ -11672,16 +12555,35 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return downloadExport(`safety-analytics-${date}.xlsx`, rows, "통계");
     }
 
-    async function bulkUpdateMaterialStatus() {
+    function openMaterialBulkReview() {
       if (!requireAdminWrite()) return;
-      const rows = ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, state.materialFilters);
-      if (!rows.length) return toast("변경할 자재 누락 기록이 없습니다.");
+      const review = materialBulkReview(ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, state.materialFilters));
+      if (!review?.selectedCount) return toast("상태를 변경할 기록을 체크박스로 선택하세요.");
+      state.materialBulkReviewOpen = true;
+      state.materialBulkTargetStatus ||= ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[1];
+      renderPreservingScroll();
+    }
+
+    function bulkUpdateMaterialStatus() {
+      return openMaterialBulkReview();
+    }
+
+    function cancelMaterialBulkReview() {
+      state.materialBulkReviewOpen = false;
+      state.materialBulkTargetStatus = "";
+      state.materialBulkMemo = "";
+      renderPreservingScroll();
+    }
+
+    async function applyMaterialBulkStatus() {
+      if (!requireAdminWrite()) return;
+      const filtered = ISSUE_MATERIAL_RULES.filterRecords(state.missingMaterials, state.materialFilters);
+      const review = materialBulkReview(filtered);
+      if (!review?.canSubmit) return toast("선택 기록, 변경 상태, 변경 메모를 모두 확인하세요.");
+      const rows = review.targetRecords;
       const statuses = ISSUE_MATERIAL_RULES.MATERIAL_STATUSES;
-      const selected = prompt(`변경할 상태를 입력하세요: ${statuses.join(" / ")}`, statuses[1]);
-      if (selected === null) return;
-      const status = selected.trim();
-      if (!statuses.includes(status)) return toast("사용할 수 없는 상태입니다.");
-      const memo = prompt("일괄 변경 메모", "상태 일괄 변경") || "";
+      const status = review.targetStatus;
+      const memo = review.memo;
       const updatedAt = serverNow().toISOString();
       const doneStatus = statuses[2];
       const snapshots = rows.map((row) => ({ row, previous: { ...row, statusHistory: Array.isArray(row.statusHistory) ? [...row.statusHistory] : [] } }));
@@ -11706,6 +12608,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         render();
         return;
       }
+      if (typeof MATERIAL_BULK_SELECTION.buildMaterialBulkResultSummary === "function") {
+        MATERIAL_BULK_SELECTION.buildMaterialBulkResultSummary(review, rows.map((row) => ({ id: row.id, ok: true })));
+      }
+      state.materialBulkSelection = MATERIAL_BULK_SELECTION.clearMaterialBulkSelection();
+      state.materialBulkReviewOpen = false;
+      state.materialBulkTargetStatus = "";
+      state.materialBulkMemo = "";
       persist();
       render();
       toast(`${rows.length}건의 상태를 변경했습니다.`);
@@ -11713,12 +12622,18 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function editPledgeTemplate() {
       if (!requireAdminWrite()) return;
+      if (pledgeViewDate() !== today()) return toast("지난 날짜의 서약 기록은 수정할 수 없습니다.");
       state.pledgeTemplateEditing = true;
       render();
     }
 
     function savePledgeTemplate() {
       if (!requireAdminWrite()) return;
+      if (pledgeViewDate() !== today()) {
+        state.pledgeTemplateEditing = false;
+        render();
+        return toast("지난 날짜의 서약 기록은 수정할 수 없습니다.");
+      }
       const next = document.querySelector("#pledgeRulesInput")?.value || "";
       const rules = next.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
       if (!rules.length) return toast("서약 문구를 1개 이상 입력하세요.");

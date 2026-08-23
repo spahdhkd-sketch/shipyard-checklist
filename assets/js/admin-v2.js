@@ -1,5 +1,7 @@
 const ACTION_HANDLERS = {
   "bulk-material-status": "bulkUpdateMaterialStatus",
+  "apply-material-bulk-status": "applyMaterialBulkStatus",
+  "cancel-material-bulk-review": "cancelMaterialBulkReview",
   "edit-pledge-template": "editPledgeTemplate",
   "save-pledge-template": "savePledgeTemplate",
   "cancel-pledge-template": "cancelPledgeTemplate",

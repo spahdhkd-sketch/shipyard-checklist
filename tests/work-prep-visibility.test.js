@@ -133,7 +133,7 @@ assert.doesNotMatch(app, /firstUpcomingDate/, "work prep entry should default to
 assert.match(app, /renderWorkPrepDateSection\(selectedDate, selectedRecords, \{ next: selectedDate !== todayDate, force: true, dateOptions \}\)/);
 assert.doesNotMatch(app, /const nextDate = addDaysToLocalDate\(todayDate, 1\)/);
 
-assert.match(app, /function deleteWorkPrepRecord\(recordId\)/);
+assert.match(app, /async function archiveWorkPrepRecord\(recordId\)/);
 assert.match(screenViews, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /rememberDeletedWorkPrepRecordId\(record\.id\)/);
@@ -142,7 +142,7 @@ assert.match(app, /key:\s*"workPrepRecords"[\s\S]*?limit:\s*0,/, "work prep mana
 assert.match(app, /!row\.deletedAt/);
 assert.match(app, /key === "workPrepRecords" \? filterDeletedWorkPrepRecords\(rows\) : rows/);
 assert.match(app, /function removePendingSyncRows\(key, ids\)/);
-assert.match(app, /"delete-work-prep-record": \(\) => deleteWorkPrepRecord\(workPrepRecordId\(\)\)/);
+assert.match(app, /"archive-work-prep-record": \(\) => archiveWorkPrepRecord\(workPrepRecordId\(\)\)/);
 assert.match(app, /deleteDisabled: !canDelete,/);
 assert.match(app, /function renderWorkPrepTypeIcon\(category, className = "work-prep-record-type-icon"\)/);
 assert.match(app, /category \? categoryVisual\(category\) : lineIcon\("shieldCheck"\)/);
@@ -166,5 +166,4 @@ assert.match(app, /data-work-prep-date="\$\{esc\(prevDate\)\}"/);
 assert.match(app, /aria-label="이전 작업지시서 날짜"/);
 assert.match(app, /aria-label="다음 작업지시서 날짜"/);
 assert.match(app, /"select-work-prep-date": \(\) => selectWorkPrepDate\(event\.target\.closest\("\[data-work-prep-date\]"\)\?\.dataset\.workPrepDate \|\| ""\)/);
-assert.match(app, /선택한 공기구\/준비물에 해당하는 점검 항목이 없습니다\./);
 assert.doesNotMatch(app, /작업지시서 준비물에 해당하는 점검 항목이 없습니다\./);

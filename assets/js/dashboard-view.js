@@ -153,8 +153,28 @@
       </div>`;
   }
 
+  function defaultAnalyticsDataState(model = {}) {
+    const dataState = model.state;
+    const messages = {
+      loading: model.loadingLabel || "분석 데이터를 불러오는 중입니다.",
+      error: model.errorLabel || "분석 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.",
+      empty: model.emptyLabel || "표시할 분석 데이터가 없습니다.",
+      stale: model.staleLabel || "최신 데이터를 확인하지 못해 마지막으로 저장된 내용을 표시합니다.",
+      offline: model.offlineLabel || "오프라인 상태입니다. 마지막으로 저장된 내용을 읽기 전용으로 표시합니다.",
+    };
+    const message = messages[dataState];
+    const retryButton = dataState !== "loading" && dataState !== "empty" && model.retryAction
+      ? `<button class="btn-light" data-action="${esc(model.retryAction)}" type="button">${esc(model.retryLabel || "다시 시도")}</button>`
+      : "";
+    return message
+      ? `<div class="analytics-data-state" data-analytics-data-state="${esc(dataState)}" role="status" aria-live="polite">${esc(message)}${retryButton}</div>`
+      : "";
+  }
+
   function renderAnalyticsDashboardView(model = {}, deps = {}) {
     const analyticsKpi = typeof deps.analyticsKpi === "function" ? deps.analyticsKpi : defaultAnalyticsKpi;
+    const renderDataContext = typeof deps.renderDataContext === "function" ? deps.renderDataContext : () => "";
+    const renderDataState = typeof deps.renderDataState === "function" ? deps.renderDataState : defaultAnalyticsDataState;
     const monthlyWorkerAnalyticsHtml = typeof deps.monthlyWorkerAnalyticsHtml === "string" ? deps.monthlyWorkerAnalyticsHtml : "";
     const relativeRecordTime = typeof deps.relativeRecordTime === "function" ? deps.relativeRecordTime : (value) => value || "";
     const shortUnsafeTitle = typeof deps.shortUnsafeTitle === "function" ? deps.shortUnsafeTitle : (value) => value || "";
@@ -163,6 +183,7 @@
       dateLabel = "",
       syncText = "",
       todayDone = 0,
+      todayPending,
       todayDeltaText = "",
       unsafeOpen = 0,
       unsafeSummary = "",
@@ -175,33 +196,84 @@
       risk = {},
       weeklyAverage = "0.0",
       recent = [],
+      dataState = "ready",
+      actionsDisabled = false,
     } = model;
+    const dataContextHtml = renderDataContext(model.context);
+    const dataStateHtml = renderDataState({
+      state: dataState,
+      loadingLabel: "분석 데이터를 불러오는 중입니다.",
+      errorLabel: "분석 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.",
+      emptyLabel: "표시할 분석 데이터가 없습니다.",
+      staleLabel: "최신 데이터를 확인하지 못해 마지막으로 저장된 내용을 표시합니다.",
+      offlineLabel: "오프라인 상태입니다. 마지막으로 저장된 내용을 읽기 전용으로 표시합니다.",
+      retryAction: "retry-analytics-data",
+      retryLabel: "다시 시도",
+    });
+    const blockingDataState = ["loading", "error", "empty", "offline-empty"].includes(dataState);
+    const freshActionsDisabled = Boolean(actionsDisabled);
+    const analyticsStateAttribute = dataState === "ready" ? "" : ` data-analytics-state="${esc(dataState)}"`;
     const riskNg = risk.ng || { count: 0, percent: 0 };
     const riskWarn = risk.warn || { count: 0, percent: 0 };
     const riskOk = risk.ok || { count: 0, percent: 0 };
+    const hasTodayPending = typeof todayPending === "number" && Number.isFinite(todayPending);
+    const todayPendingValue = hasTodayPending ? todayPending : "—";
+    const todayPendingNote = hasTodayPending ? "오늘 대상 점검 중 미완료" : "대상 점검 집계 대기";
 
-    return `<section class="admin-board analytics-board">
+    if (blockingDataState) {
+      return `<section class="admin-board analytics-board"${analyticsStateAttribute}>
+        ${dataContextHtml}
+        ${dataStateHtml}
+      </section>`;
+    }
+
+    return `<section class="admin-board analytics-board"${analyticsStateAttribute}>
+        ${dataContextHtml}
+        ${dataStateHtml}
         <div class="admin-board-top">
           <div>
-            <h2>안전 관리 대시보드</h2>
+            <p class="analytics-eyebrow">현장 우선순위</p>
+            <h2>오늘의 안전 브리핑</h2>
             <p>${esc(dateLabel)} · ${esc(syncText)}</p>
           </div>
-          <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
-            <button class="btn" data-view="check" type="button">새 점검</button>
+        </div>
+        <section class="analytics-action-first" aria-labelledby="analyticsActionHeading">
+          <div class="analytics-section-heading">
+            <div><p class="analytics-eyebrow">지금 확인</p><h3 id="analyticsActionHeading">오늘 남은 조치</h3></div>
+            <span>${esc(todayDone)}건 점검 완료${todayDeltaText ? ` · ${esc(todayDeltaText)}` : ""}</span>
           </div>
-        </div>
-        <div class="analytics-kpi-grid">
-          ${analyticsKpi("오늘 점검 완료", todayDone, todayDeltaText, "done")}
-          ${analyticsKpi("불안전요소 · 미확인", unsafeOpen, unsafeSummary, "danger")}
-          ${analyticsKpi("자재 누락", materialOpen, materialSummary, "warn")}
-          ${analyticsKpi("호선 점검중", shipCount, processSummary, "ship")}
-        </div>
+          <div class="analytics-action-grid">
+            ${analyticsKpi("오늘 미점검", todayPendingValue, todayPendingNote, "danger")}
+            ${analyticsKpi("미조치 불안전요소", unsafeOpen, unsafeSummary, "danger")}
+            ${analyticsKpi("미처리 자재", materialOpen, materialSummary, "warn")}
+            ${analyticsKpi("오늘 완료", todayDone, "오늘 완료한 점검", "done")}
+          </div>
+          <details class="analytics-metric-basis">
+            <summary>지표 기준 보기</summary>
+            <dl>
+              <div><dt>오늘 미점검</dt><dd>오늘 대상 점검 중 아직 완료되지 않은 건수</dd></div>
+              <div><dt>미조치 불안전요소</dt><dd>조치 완료 전인 불안전요소 접수 및 조치중 기록</dd></div>
+              <div><dt>미처리 자재</dt><dd>처리 완료 전인 자재 누락 요청</dd></div>
+              <div><dt>오늘 완료</dt><dd>오늘 완료 처리된 점검 건수</dd></div>
+            </dl>
+          </details>
+        </section>
+        <section class="analytics-priority" data-analytics-priority aria-labelledby="analyticsPriorityHeading">
+          <div class="analytics-section-heading">
+            <div><p class="analytics-eyebrow">우선 순위</p><h3 id="analyticsPriorityHeading">우선 조치 대상</h3></div>
+            <span>현장 대응이 필요한 항목</span>
+          </div>
+          <div class="analytics-priority-list">
+            <div class="analytics-priority-item danger"><span>NG 안전 신호</span><strong>${esc(riskNg.count)}건</strong><small>최근 7일 점검 결과</small></div>
+            <div class="analytics-priority-item danger"><span>미조치 불안전요소</span><strong>${esc(unsafeOpen)}건</strong><small>${esc(unsafeSummary)}</small></div>
+            <div class="analytics-priority-item warn"><span>미처리 자재 요청</span><strong>${esc(materialOpen)}건</strong><small>${esc(materialSummary)}</small></div>
+          </div>
+        </section>
         ${monthlyWorkerAnalyticsHtml}
         <div class="analytics-grid">
           <section class="analytics-panel">
             <div class="material-table-head">
-              <div><strong>호선 공정 현황</strong><span>전체 ${shipCount}척 · ${processStageCount}단계 진행률</span></div>
+              <div><strong>현장 진행 현황</strong><span>전체 ${shipCount}척 · ${processStageCount}단계 진행률</span></div>
               <button class="btn-light" data-view="ships" type="button">자세히 →</button>
             </div>
             <div class="analytics-process-list">
@@ -215,7 +287,7 @@
           </section>
           <section class="analytics-panel">
             <div class="material-table-head">
-              <div><strong>위험도 분포</strong><span>최근 7일 점검 결과</span></div>
+              <div><strong>최근 안전 신호</strong><span>최근 7일 점검 결과</span></div>
             </div>
             <div class="risk-bars">
               <div class="risk-row danger"><span>위험 · NG</span><i><b style="width:${riskNg.percent}%"></b></i><strong>${riskNg.count}건 · ${riskNg.percent}%</strong></div>
@@ -231,8 +303,7 @@
         </div>
         <section class="analytics-recent-card">
           <div class="material-table-head">
-            <div><strong>최근 활동 · 불안전요소 등록 & 자재누락</strong><span>행을 선택하면 상세 화면으로 이동합니다</span></div>
-            <div class="material-table-actions"><button class="btn-light" data-action="open-analytics-filters" type="button">필터</button><button class="btn" data-action="open-analytics-detail" type="button">상세 보기</button></div>
+            <div><strong>최근 현장 안전 기록</strong><span>행을 선택하면 상세 화면으로 이동합니다</span></div>
           </div>
           <div class="analytics-table">
             <div class="analytics-row analytics-row-head"><span>시각</span><span>호선</span><span>내용</span><span>작업자</span><span>상태</span></div>
@@ -244,6 +315,12 @@
               <span>${statusChip(row.status)}</span>
             </div>`).join("") : `<div class="empty">최근 활동이 없습니다.</div>`}
           </div>
+        </section>
+        <section class="analytics-utilities" aria-label="분석 도구">
+          <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
+          <button class="btn-light" data-action="open-analytics-filters" type="button">필터</button>
+          <button class="btn-light" data-action="open-analytics-detail" type="button">상세 보기</button>
+          <button class="btn" data-view="check" type="button"${freshActionsDisabled ? " disabled" : ""}>새 점검</button>
         </section>
       </section>`;
   }
@@ -347,6 +424,7 @@
 
   function renderMonthlyWorkerAnalyticsView(model = {}, deps = {}) {
     const analyticsKpi = typeof deps.analyticsKpi === "function" ? deps.analyticsKpi : defaultAnalyticsKpi;
+    const renderDataState = typeof deps.renderDataState === "function" ? deps.renderDataState : defaultAnalyticsDataState;
     const {
       dataState = "ready",
       monthText = "",
@@ -359,29 +437,35 @@
       dueLabel = "누락 작업자",
       dueMissing = 0,
       restPanel = {},
+      actionsDisabled = false,
     } = model;
     const dataReady = dataState === "ready";
+    const blockingDataState = ["loading", "error", "empty", "offline-empty"].includes(dataState);
+    const dataStateHtml = renderDataState({
+      state: dataState,
+      loadingLabel: "월간 점검 데이터를 불러오는 중입니다.",
+      errorLabel: "월간 점검 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.",
+      emptyLabel: "표시할 월간 점검 데이터가 없습니다.",
+      staleLabel: "최신 월간 점검 데이터를 확인하지 못해 마지막으로 저장된 내용을 표시합니다.",
+      offlineLabel: "오프라인 상태입니다. 마지막으로 저장된 월간 점검 내용을 읽기 전용으로 표시합니다.",
+      retryAction: "retry-monthly-worker-analytics",
+      retryLabel: "다시 시도",
+    });
     const meta = renderMonthlyWorkerMonthMeta(monthText, monthHighlight);
-    const retryButton = dataState === "error"
-      ? '\n              <button class="btn-light" data-action="retry-monthly-worker-analytics" type="button">다시 시도</button>'
-      : "";
     const toolbar = `<div class="monthly-worker-toolbar">
               <button class="btn-light" data-monthly-worker-month="prev" type="button">이전 달</button>
               <button class="btn-light" data-monthly-worker-month="current" type="button">이번 달</button>
               <button class="btn-light" data-monthly-worker-month="next" ${range.canGoNext ? "" : "disabled"} type="button">다음 달</button>
-              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>${retryButton}
-              <button class="btn" data-export-records="monthly-worker-analytics"${dataReady ? "" : " disabled"} type="button">월간 내보내기</button>
+              <button class="btn-light" data-action="toggle-monthly-rest-settings" type="button">${restOpen ? "휴무 설정 닫기" : "휴무 설정"}</button>
+              <button class="btn" data-export-records="monthly-worker-analytics"${dataReady && !actionsDisabled ? "" : " disabled"} type="button">월간 내보내기</button>
             </div>`;
-    if (!dataReady) {
-      const message = dataState === "error"
-        ? "월간 점검 데이터를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요."
-        : "월간 점검 데이터를 불러오는 중입니다.";
+    if (blockingDataState) {
       return `<section class="analytics-panel monthly-worker-analytics" data-monthly-worker-state="${esc(dataState)}">
           <div class="monthly-worker-head">
             <div><strong>월간 작업자 점검 현황</strong>${meta}</div>
             ${toolbar}
           </div>
-          <div class="empty monthly-worker-data-state" role="status" aria-live="polite">${esc(message)}</div>
+          ${dataStateHtml}
           ${restOpen ? renderMonthlyRestDaySettingsView(restPanel) : ""}
         </section>`;
     }
@@ -619,6 +703,7 @@
                 </div>
                 <div class="history-list-status-stack">
                   <button class="history-status-btn" data-history-detail="${esc(row.id)}" type="button">${esc(row.statusLabel || "점검 완료")}</button>
+                  ${row.riskBadgeHtml || ""}
                   <div class="history-list-time">
                     <strong>${row.timePeriod ? `${esc(row.timePeriod)} ` : ""}${esc(row.timeText || "시간 미기록")}</strong>
                     <span>${esc(row.dateText || "-")}</span>

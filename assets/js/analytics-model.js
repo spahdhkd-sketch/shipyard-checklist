@@ -139,10 +139,38 @@
       return extras.length ? [...primary, ...extras] : primary;
     }
 
+    function buildCohortCompletionSummary(rawCohort, rawCompletedWorkerIds) {
+      const cohort = rawCohort || {};
+      const includedWorkerIds = Array.isArray(cohort.includedWorkerIds)
+        ? [...new Set(cohort.includedWorkerIds.map((id) => String(id || "").trim()).filter(Boolean))]
+        : [];
+      const includedSet = new Set(includedWorkerIds);
+      const completedWorkerIds = [...new Set((Array.isArray(rawCompletedWorkerIds) ? rawCompletedWorkerIds : [])
+        .map((id) => String(id || "").trim())
+        .filter((id) => id && includedSet.has(id)))].sort();
+      const pendingWorkerIds = includedWorkerIds.filter((id) => !completedWorkerIds.includes(id));
+      const denominator = Number.isFinite(cohort.denominator?.value)
+        ? Math.max(0, cohort.denominator.value)
+        : includedWorkerIds.length;
+      return {
+        denominator,
+        completed: completedWorkerIds.length,
+        rate: analyticsPercent(completedWorkerIds.length, denominator),
+        completedWorkerIds,
+        pendingWorkerIds,
+        reliable: cohort.denominator?.reliable === true,
+        reasonCodes: Array.isArray(cohort.denominator?.reasonCodes) ? [...cohort.denominator.reasonCodes] : [],
+        freshnessStatus: cohort.freshness?.status || "stale",
+        staleDependencies: Array.isArray(cohort.freshness?.staleDependencies) ? [...cohort.freshness.staleDependencies] : [],
+        asOf: cohort.freshness?.asOf || "",
+      };
+    }
+
   return {
     analyticsPercent,
     buildAnalyticsDashboardModel,
     monthlyWorkerDayStatus,
     combineInspectionRows,
+    buildCohortCompletionSummary,
   };
 }));

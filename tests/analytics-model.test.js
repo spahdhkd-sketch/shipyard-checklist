@@ -1,5 +1,5 @@
 const assert = require("node:assert");
-const { analyticsPercent, buildAnalyticsDashboardModel, monthlyWorkerDayStatus, combineInspectionRows } = require("../assets/js/analytics-model.js");
+const { analyticsPercent, buildAnalyticsDashboardModel, monthlyWorkerDayStatus, combineInspectionRows, buildCohortCompletionSummary } = require("../assets/js/analytics-model.js");
 
 assert.strictEqual(analyticsPercent(1, 4), 25);
 assert.strictEqual(analyticsPercent(0, 0), 0);
@@ -108,5 +108,23 @@ assert.deepStrictEqual(combineInspectionRows(null, archivedRows).map((row) => ro
 // 입력 배열은 변경되지 않는다
 assert.strictEqual(windowRows.length, 2);
 assert.strictEqual(archivedRows.length, 3);
+
+// Given an authoritative cohort and stable IDs with completed pledges/checks
+// When a completion summary is built
+// Then its rate and pending IDs use the cohort denominator and carry freshness metadata.
+{
+  const summary = buildCohortCompletionSummary({
+    includedWorkerIds: ["worker-a", "worker-b"],
+    denominator: { value: 2, reliable: false, reasonCodes: ["stale_dependencies"] },
+    freshness: { status: "stale", staleDependencies: ["workPrepRecords"], asOf: "2026-08-15T00:06:00Z" },
+  }, ["worker-a", "worker-a", "outside-cohort"]);
+  assert.strictEqual(summary.denominator, 2);
+  assert.strictEqual(summary.completed, 1);
+  assert.strictEqual(summary.rate, 50);
+  assert.deepStrictEqual(summary.completedWorkerIds, ["worker-a"]);
+  assert.deepStrictEqual(summary.pendingWorkerIds, ["worker-b"]);
+  assert.strictEqual(summary.reliable, false);
+  assert.deepStrictEqual(summary.staleDependencies, ["workPrepRecords"]);
+}
 
 console.log("analytics model tests passed");

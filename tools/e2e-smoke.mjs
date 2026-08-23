@@ -2,7 +2,7 @@
 // 실행: npm run e2e  (최초 1회: npm i -D puppeteer-core)
 // 크롬 경로: 1) PUPPETEER_EXECUTABLE_PATH 환경변수 2) @sparticuz/chromium 3) OS 기본 설치 경로
 import { createServer } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { extname, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8917;
 const PRE = "shipyardSafetyV1.";
 const PWA_ONLY = process.argv.includes("--pwa-only");
+const DESIGN_TOKEN_VISUAL = process.argv.includes("--design-token-visual");
 
 async function resolveChrome() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -151,6 +152,73 @@ async function main() {
   const makePage = async (options = {}) => {
     const pageBrowser = options.browserInstance || browser;
     const newPage = await pageBrowser.newPage();
+    const mockRemoteRows = {
+      safety_categories: [{
+        id: "welding",
+        label: "용접",
+        icon: "",
+        color: "#2E5DA6",
+        require_tool_check: true,
+        tool_nature: "선행/후행",
+        tool_ids: ["t-welder", "t-grinder"],
+        sort_order: 1,
+      }],
+      safety_tools: (seed[PRE + "tools"] || []).map((tool) => ({
+        id: tool.id,
+        category_id: tool.categoryId,
+        name: tool.name,
+        nature: tool.nature,
+        deleted: tool.deleted,
+        sort_order: tool.order,
+      })),
+      safety_ships: (seed[PRE + "ships"] || []).map((ship) => ({
+        id: ship.id,
+        no: ship.no,
+        type: ship.type,
+        note: JSON.stringify({
+          _shipMeta: 1,
+          note: ship.note || "",
+          lcDate: ship.lcDate || "",
+          stDate: ship.stDate || "",
+          clDate: ship.clDate || "",
+          dlDate: ship.dlDate || "",
+          deliveryType: ship.deliveryType || "",
+          deliveryDate: ship.deliveryDate || "",
+        }),
+        process_stage: ship.processStage,
+        delivery_type: ship.deliveryType,
+        delivery_date: ship.deliveryDate || null,
+        created_at: ship.createdAt,
+        sort_order: ship.order,
+      })),
+      workers_public: (seed[PRE + "workers"] || []).map((worker) => ({
+        id: worker.id,
+        name: worker.name,
+        team: worker.team,
+        position: worker.position,
+        active: worker.active,
+        unsafe_push_target: worker.unsafePushTarget,
+        created_at: worker.createdAt,
+        updated_at: worker.updatedAt,
+      })),
+      work_prep_records: (seed[PRE + "workPrepRecords"] || []).map((record) => ({
+        id: record.id,
+        work_date: record.workDate,
+        appearance_time: record.appearanceTime,
+        team: record.team,
+        ship_no: record.shipNo,
+        category_id: record.categoryId,
+        leader_worker_id: record.leaderWorkerId,
+        worker_ids: record.workerIds,
+        other_team_worker_ids: record.otherTeamWorkerIds,
+        tool_ids: record.toolIds,
+        status: "confirmed",
+        status_history: record.statusHistory,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+        deleted_at: null,
+      })),
+    };
     await newPage.emulateTimezone(tz);
     await newPage.evaluateOnNewDocument((nowMs) => {
       const NativeDate = Date;
@@ -167,7 +235,7 @@ async function main() {
       globalThis.Date = TestDate;
     }, testNowMs);
     if (options.mockRealtime) {
-      await newPage.evaluateOnNewDocument((realtimeInspectionRows) => {
+      await newPage.evaluateOnNewDocument((realtimeInspectionRows, remoteRows, mutationDelayMs) => {
         const handlers = [];
         const statusCallbacks = [];
         const metrics = { reads: 0, removedChannels: 0, tables: [], channels: {}, timeline: [] };
@@ -184,7 +252,10 @@ async function main() {
             in() { return query; },
             then(resolve) {
               metrics.reads += 1;
-              resolve({ data: table === "safety_inspections" ? realtimeInspectionRows : [], error: null });
+              resolve({
+                data: table === "safety_inspections" ? realtimeInspectionRows : (remoteRows[table] || []),
+                error: null,
+              });
             },
           };
           return query;
@@ -231,7 +302,12 @@ async function main() {
             if (channel?.__realtimeTestState) channel.__realtimeTestState.subscribed = false;
           },
           realtime: { isConnected: () => socketConnected },
-          functions: { invoke: async () => ({ data: { ok: true }, error: null }) },
+          functions: {
+            invoke: async () => {
+              if (mutationDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, mutationDelayMs));
+              return { data: { ok: true, mutated: 1 }, error: null };
+            },
+          },
         };
         const fakeSupabase = { createClient: () => client };
         Object.defineProperty(window, "supabase", {
@@ -254,7 +330,7 @@ async function main() {
             });
           },
         };
-      }, options.realtimeInspectionRows || []);
+      }, options.realtimeInspectionRows || [], mockRemoteRows, Number(options.mockAdminMutationDelayMs || 0));
     }
     newPage.on("dialog", (d) => d.accept());
     await newPage.setRequestInterception(true);
@@ -262,6 +338,23 @@ async function main() {
       const url = req.url();
       const isInspectionDeletionRead = url.includes(".supabase.co/rest/v1/safety_inspection_deletions");
       const isInspectionRead = url.includes(".supabase.co/rest/v1/safety_inspections");
+      const remoteTable = (url.match(/\.supabase\.co\/rest\/v1\/([^?]+)/) || [])[1];
+      if (options.mockSupabaseReads && req.method() === "GET" && remoteTable) {
+        const requestHeaders = req.headers();
+        req.respond({
+          status: 200,
+          contentType: "application/json",
+          headers: {
+            "Access-Control-Allow-Origin": requestHeaders.origin || `http://localhost:${PORT}`,
+            "Access-Control-Allow-Headers": requestHeaders["access-control-request-headers"] || "authorization, x-client-info, apikey, content-type, prefer, x-retry-count, accept-profile, content-profile",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+            "Access-Control-Expose-Headers": "Content-Range",
+            "Content-Range": `0-${Math.max(0, (mockRemoteRows[remoteTable] || []).length - 1)}/${(mockRemoteRows[remoteTable] || []).length}`,
+          },
+          body: JSON.stringify(mockRemoteRows[remoteTable] || []),
+        }).catch(() => {});
+        return;
+      }
       if (options.mockSupabaseWrites
         && req.method() === "GET"
         && (isInspectionDeletionRead || isInspectionRead)) {
@@ -369,6 +462,312 @@ async function main() {
     }
   };
 
+  const runDesignTokenViewportFlow = async () => {
+    const viewports = [
+      { label: "PC", width: 1366, height: 768, mobile: false },
+      { label: "430", width: 430, height: 932, mobile: true },
+      { label: "390", width: 390, height: 844, mobile: true },
+      { label: "360", width: 360, height: 800, mobile: true },
+    ];
+    const routes = [
+      { label: "서약", path: "pledge.html", selector: ".pledge-action-view", kpiSelector: ".pledge-action-kpis" },
+      { label: "통계", path: "analytics.html", selector: ".analytics-board", kpiSelector: ".analytics-action-grid" },
+      { label: "관리", path: "manage.html", selector: ".manage-center", kpiSelector: ".manage-center__card-grid" },
+    ];
+    const evidenceDir = join(ROOT, ".omo", "evidence", "design-token");
+    if (DESIGN_TOKEN_VISUAL) mkdirSync(evidenceDir, { recursive: true });
+    const results = [];
+    for (const viewport of viewports) {
+      const visualPage = await makePage({ mockSupabaseWrites: true, mockSupabaseReads: true });
+      await visualPage.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
+      await visualPage.evaluateOnNewDocument((storagePrefix, screenMode) => {
+        localStorage.setItem(storagePrefix + "screenMode", screenMode);
+        localStorage.setItem(storagePrefix + "manageTab", JSON.stringify("workers"));
+        const workPrepRecords = JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]");
+        localStorage.setItem(storagePrefix + "workPrepRecords", JSON.stringify(workPrepRecords.map((record) => ({ ...record, status: "confirmed" }))));
+        sessionStorage.setItem(storagePrefix + "adminMode", "true");
+        sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+        sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+          token: "e2e-admin-session",
+          workerId: "w-hong",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }));
+      }, PRE, viewport.mobile ? "mobile" : "desktop");
+      try {
+        for (const route of routes) {
+          await visualPage.goto(`http://localhost:${PORT}/${route.path}`, { waitUntil: "domcontentloaded", timeout: 25000 });
+          await wait(900);
+          const pledgeReady = route.path !== "pledge.html" || await visualPage.waitForFunction(() => {
+            const surface = document.querySelector(".pledge-action-view");
+            return Boolean(
+              surface
+              && surface.getAttribute("aria-busy") !== "true"
+              && surface.querySelectorAll(".pledge-action-kpi").length >= 3
+              && surface.querySelectorAll(".pledge-action-table tbody tr").length > 0,
+            );
+          }, { timeout: 8000 }).then(() => true).catch(() => false);
+          const observation = await visualPage.evaluate((selector, kpiSelector, mobile) => {
+            const visible = (element) => {
+              const rect = element?.getBoundingClientRect();
+              const style = element ? getComputedStyle(element) : null;
+              return Boolean(rect && style && style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0);
+            };
+            const rootStyle = getComputedStyle(document.documentElement);
+            const bodyStyle = getComputedStyle(document.body);
+            const surface = document.querySelector(selector);
+            const context = surface?.querySelector(".data-context");
+            const kpiGrid = surface?.querySelector(kpiSelector);
+            const bottomNav = document.querySelector(".bottom-nav");
+            const main = document.querySelector(".main");
+            const navVisible = visible(bottomNav);
+            const navHeight = navVisible ? bottomNav.getBoundingClientRect().height : 0;
+            const mainBottomPadding = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+            const undersized = surface
+              ? [...surface.querySelectorAll("button, a, [role=button]")]
+                .filter(visible)
+                .map((element) => {
+                  const rect = element.getBoundingClientRect();
+                  return {
+                    label: (element.innerText || element.getAttribute("aria-label") || "").trim().slice(0, 32),
+                    className: element.className,
+                    minHeight: getComputedStyle(element).minHeight,
+                    width: rect.width,
+                    height: rect.height,
+                  };
+                })
+                .filter((control) => control.width < 44 || control.height < 44)
+              : [];
+            return {
+              surfaceVisible: visible(surface),
+              overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+              scrollWidth: document.documentElement.scrollWidth,
+              viewportWidth: window.innerWidth,
+              navVisible,
+              navClear: !mobile || mainBottomPadding >= navHeight,
+              contextVisible: visible(context),
+              contextTitleCount: context ? context.querySelectorAll("h1").length : 0,
+              hasBusinessDate: [...(context?.querySelectorAll("dt") || [])].some((node) => node.textContent.includes("기준 날짜")),
+              hasAsOf: [...(context?.querySelectorAll("dt") || [])].some((node) => node.textContent.includes("최종 반영")),
+              kpiItemCount: kpiGrid ? [...kpiGrid.children].filter(visible).length : 0,
+              kpiColumnCount: kpiGrid ? getComputedStyle(kpiGrid).gridTemplateColumns.split(/\s+/).filter(Boolean).length : 0,
+              fontFamily: bodyStyle.fontFamily,
+              navy: rootStyle.getPropertyValue("--ds-color-navy-950").trim().toUpperCase(),
+              teal: rootStyle.getPropertyValue("--ds-color-teal-700").trim().toUpperCase(),
+              cream: rootStyle.getPropertyValue("--ds-color-cream-50").trim().toUpperCase(),
+              undersized,
+            };
+          }, route.selector, route.kpiSelector, viewport.mobile);
+          let manageDetail = null;
+          if (viewport.mobile && route.path === "manage.html") {
+            const tabSelection = await visualPage.evaluate((storagePrefix) => {
+              const candidates = [...document.querySelectorAll('[data-manage-center-tab="workPrep"]')];
+              const element = candidates.find((candidate) => {
+                const rect = candidate.getBoundingClientRect();
+                const style = getComputedStyle(candidate);
+                return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+              });
+              if (!element) return { requested: "workPrep", stored: localStorage.getItem(storagePrefix + "manageTab"), candidateCount: candidates.length, visible: false };
+              let clickObserved = 0;
+              element.addEventListener("click", () => { clickObserved += 1; });
+              const rect = element.getBoundingClientRect();
+              const hitTarget = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+              element.click();
+              return {
+                requested: element.getAttribute("data-manage-center-tab"),
+                stored: localStorage.getItem(storagePrefix + "manageTab"),
+                clickObserved,
+                disabled: element.disabled,
+                inertAncestor: Boolean(element.closest("[inert]")),
+                visible: rect.width > 0 && rect.height > 0,
+                hitSelf: hitTarget === element || Boolean(hitTarget && element.contains(hitTarget)),
+              };
+            }, PRE);
+            const manageRowReady = await visualPage.waitForFunction(() => {
+              const surface = document.querySelector(".manage-center");
+              const state = surface?.getAttribute("data-manage-center-state");
+              return ["ready", "stale", "offline"].includes(state) && surface.querySelector("[data-work-prep-record-detail]");
+            }, { timeout: 8000 }).then(() => true).catch(() => false);
+            if (!manageRowReady) {
+              const diagnostic = await visualPage.evaluate(() => ({
+                state: document.querySelector(".manage-center")?.getAttribute("data-manage-center-state") || "missing",
+                activeTab: document.querySelector('[data-manage-center-tab][aria-selected="true"]')?.getAttribute("data-manage-center-tab") || "missing",
+                rowCount: document.querySelectorAll("[data-work-prep-record-detail]").length,
+              }));
+              throw new Error(`manage mobile detail fixture unavailable: ${JSON.stringify({ tabSelection, diagnostic })}`);
+            }
+            const listObservation = await visualPage.evaluate(() => {
+              const visible = (element) => {
+                const rect = element?.getBoundingClientRect();
+                const style = element ? getComputedStyle(element) : null;
+                return Boolean(rect && style && style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0);
+              };
+              return [...document.querySelectorAll(".manage-center button, .manage-center a, .manage-center [role=button]")]
+                .filter(visible)
+                .map((element) => {
+                  const rect = element.getBoundingClientRect();
+                  return { label: (element.innerText || element.getAttribute("aria-label") || "").trim().slice(0, 32), width: rect.width, height: rect.height };
+                })
+                .filter((control) => control.width < 44 || control.height < 44);
+            });
+            const readOnlyGuard = await visualPage.evaluate(() => {
+              const surface = document.querySelector(".manage-center");
+              const state = surface?.getAttribute("data-manage-center-state") || "missing";
+              const guardedControls = [...document.querySelectorAll('[data-manage-content-read-only="true"] button, [data-manage-content-read-only="true"] input, [data-manage-content-read-only="true"] select, [data-manage-content-read-only="true"] textarea')];
+              const safeControlSelector = "[data-unsafe-record-detail], [data-material-record-detail], [data-work-prep-record-detail], [data-manage-center-page], [data-record-filter]";
+              const enabledControls = guardedControls.filter((control) => !control.disabled);
+              const unexpectedEnabledControls = enabledControls.filter((control) => !control.matches(safeControlSelector));
+              const record = [...document.querySelectorAll("[data-work-prep-record-detail]")].find((element) => element.getClientRects().length > 0);
+              return {
+                state,
+                guardedCount: guardedControls.length,
+                enabledCount: enabledControls.length,
+                unexpectedEnabledCount: unexpectedEnabledControls.length,
+                recordNavigable: Boolean(record && record.getAttribute("tabindex") === "0"),
+                ok: state === "ready" || (guardedControls.length > 0 && unexpectedEnabledControls.length === 0 && Boolean(record && record.getAttribute("tabindex") === "0")),
+              };
+            });
+            const recordSelection = await visualPage.evaluate(() => {
+              const candidates = [...document.querySelectorAll("[data-work-prep-record-detail]")];
+              const element = candidates.find((candidate) => {
+                const rect = candidate.getBoundingClientRect();
+                const style = getComputedStyle(candidate);
+                return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+              });
+              if (!element) return { id: "", candidateCount: candidates.length, clicked: false };
+              element.scrollIntoView({ block: "center" });
+              element.focus();
+              element.click();
+              return { id: element.getAttribute("data-work-prep-record-detail"), candidateCount: candidates.length, clicked: true };
+            });
+            const recordId = recordSelection.id;
+            const detailOpened = await visualPage.waitForFunction(() => document.body.classList.contains("manage-mobile-detail-open") && document.querySelector(".manage-center__detail.is-mobile-fullscreen"), { timeout: 8000 }).then(() => true).catch(() => false);
+            if (!detailOpened) {
+              const diagnostic = await visualPage.evaluate(() => ({
+                bodyClass: document.body.className,
+                detailId: document.querySelector("[data-manage-center-selected]")?.getAttribute("data-manage-center-selected") || "missing",
+                fullscreenCount: document.querySelectorAll(".manage-center__detail.is-mobile-fullscreen").length,
+              }));
+              throw new Error(`manage mobile detail did not open: ${JSON.stringify({ tabSelection, recordSelection, diagnostic })}`);
+            }
+            await visualPage.waitForFunction(() => document.activeElement?.getAttribute("data-action") === "back-manage-center-list", { timeout: 2000 }).catch(() => {});
+            const opened = await visualPage.evaluate(() => {
+              const visible = (element) => {
+                const rect = element?.getBoundingClientRect();
+                const style = element ? getComputedStyle(element) : null;
+                return Boolean(rect && style && style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0);
+              };
+              const detail = document.querySelector(".manage-center__detail.is-mobile-fullscreen");
+              const back = document.querySelector('[data-action="back-manage-center-list"]');
+              const bottomNav = document.querySelector(".bottom-nav");
+              const rect = detail?.getBoundingClientRect();
+              const undersized = detail
+                ? [...detail.querySelectorAll("button, a, [role=button]")]
+                  .filter(visible)
+                  .map((element) => {
+                    const controlRect = element.getBoundingClientRect();
+                    return { label: (element.innerText || element.getAttribute("aria-label") || "").trim().slice(0, 32), width: controlRect.width, height: controlRect.height };
+                  })
+                  .filter((control) => control.width < 44 || control.height < 44)
+                : [];
+              return {
+                bodyLocked: document.body.classList.contains("manage-mobile-detail-open") && getComputedStyle(document.body).overflow === "hidden",
+                detailVisible: visible(detail),
+                fillsViewport: Boolean(rect && rect.top <= 1 && rect.left <= 1 && rect.width >= window.innerWidth - 1 && rect.height >= window.innerHeight - 1),
+                selectedCount: document.querySelectorAll(".manage-center__detail.is-mobile-fullscreen[data-manage-center-selected]").length,
+                backVisible: visible(back),
+                focusOnBack: document.activeElement === back,
+                bottomNavHidden: !visible(bottomNav),
+                overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+                undersized,
+              };
+            });
+            if (DESIGN_TOKEN_VISUAL) {
+              await visualPage.screenshot({ path: join(evidenceDir, `manage-detail-${viewport.width}.png`), fullPage: false });
+            }
+            const backSelection = await visualPage.evaluate(() => {
+              const candidates = [...document.querySelectorAll('[data-action="back-manage-center-list"]')];
+              const element = candidates.find((candidate) => {
+                const rect = candidate.getBoundingClientRect();
+                const style = getComputedStyle(candidate);
+                return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+              });
+              if (!element) return { candidateCount: candidates.length, clicked: false };
+              element.click();
+              return { candidateCount: candidates.length, clicked: true };
+            });
+            const detailClosed = await visualPage.waitForFunction(() => !document.body.classList.contains("manage-mobile-detail-open") && !document.querySelector(".manage-center__detail.is-mobile-fullscreen"), { timeout: 8000 }).then(() => true).catch(() => false);
+            if (!detailClosed) {
+              const diagnostic = await visualPage.evaluate(() => ({ bodyClass: document.body.className, fullscreenCount: document.querySelectorAll(".manage-center__detail.is-mobile-fullscreen").length }));
+              throw new Error(`manage mobile detail did not close: ${JSON.stringify({ backSelection, diagnostic })}`);
+            }
+            await visualPage.waitForFunction((expectedId) => document.activeElement?.getAttribute("data-work-prep-record-detail") === expectedId, { timeout: 2000 }, recordId).catch(() => {});
+            const returned = await visualPage.evaluate((expectedId) => {
+              const trigger = document.querySelector(`[data-work-prep-record-detail="${CSS.escape(expectedId)}"]`);
+              const nav = document.querySelector(".bottom-nav");
+              const navStyle = nav ? getComputedStyle(nav) : null;
+              const navVisible = Boolean(nav && navStyle && navStyle.display !== "none" && navStyle.visibility !== "hidden" && nav.getBoundingClientRect().height > 0);
+              return {
+                bodyUnlocked: !document.body.classList.contains("manage-mobile-detail-open"),
+                focusRestored: document.activeElement === trigger,
+                bottomNavVisible: navVisible,
+              };
+            }, recordId);
+            manageDetail = {
+              listUndersized: listObservation,
+              readOnlyGuard,
+              opened,
+              returned,
+              ok: listObservation.length === 0
+                && readOnlyGuard.ok
+                && opened.bodyLocked
+                && opened.detailVisible
+                && opened.fillsViewport
+                && opened.selectedCount === 1
+                && opened.backVisible
+                && opened.focusOnBack
+                && opened.bottomNavHidden
+                && !opened.overflow
+                && opened.undersized.length === 0
+                && returned.bodyUnlocked
+                && returned.focusRestored
+                && returned.bottomNavVisible,
+            };
+          }
+          const ok = pledgeReady
+            && observation.surfaceVisible
+            && !observation.overflow
+            && observation.navVisible === viewport.mobile
+            && observation.navClear
+            && observation.contextVisible
+            && observation.contextTitleCount === 1
+            && observation.hasBusinessDate
+            && observation.hasAsOf
+            && observation.kpiItemCount === 4
+            && (!viewport.mobile || observation.kpiColumnCount === 2)
+            && observation.fontFamily.startsWith('"Noto Sans KR"')
+            && observation.navy === "#07162F"
+            && observation.teal === "#0F766E"
+            && observation.cream === "#F8F1E8"
+            && observation.undersized.length === 0
+            && (!manageDetail || manageDetail.ok);
+          results.push({ label: `${viewport.label} ${route.label}`, viewport, route: route.path, ok, pledgeReady, observation, manageDetail });
+          if (DESIGN_TOKEN_VISUAL) {
+            await visualPage.screenshot({ path: join(evidenceDir, `${route.path.replace(".html", "")}-${viewport.width}.png`), fullPage: true });
+          }
+        }
+      } finally {
+        await visualPage.close();
+      }
+    }
+    if (DESIGN_TOKEN_VISUAL) {
+      writeFileSync(
+        join(evidenceDir, "viewport-observations.json"),
+        `${JSON.stringify({ generatedAt: new Date().toISOString(), viewports, routes, results }, null, 2)}\n`,
+      );
+    }
+    return results;
+  };
+
   const runIconPickerFlow = async () => {
     const iconPage = await makePage({ mockAdminMutations: true });
     await iconPage.evaluateOnNewDocument((storagePrefix) => {
@@ -408,32 +807,190 @@ async function main() {
   };
 
   const runWorkerDeleteFlow = async () => {
-    const workerPage = await makePage({ mockAdminMutations: true });
+    const workerPage = await makePage({ mockAdminMutations: true, mockRealtime: true });
     await workerPage.evaluateOnNewDocument((storagePrefix) => {
+      sessionStorage.setItem(storagePrefix + "workerSession", JSON.stringify({
+        workerId: "w-kim",
+        workerName: "김조장",
+        employeeNo: "1234",
+        loggedInAt: new Date().toISOString(),
+      }));
       sessionStorage.setItem(storagePrefix + "adminMode", "true");
       sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
       sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
         token: "e2e-admin-session",
-        workerId: "w-hong",
+        workerId: "w-kim",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       }));
     }, PRE);
     await workerPage.goto(`http://localhost:${PORT}/manage.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
-    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-hong"]')?.click());
-    const selfDeleteDisabled = await workerPage.$eval('[data-delete-worker="w-hong"]', (button) => button.disabled);
+    await workerPage.waitForFunction(() => {
+      const selfToggle = document.querySelector('[data-worker-card-toggle="w-kim"]');
+      const targetToggle = document.querySelector('[data-worker-card-toggle="w-lee"]');
+      return selfToggle && targetToggle && !selfToggle.disabled && !targetToggle.disabled;
+    }, { timeout: 8000 });
+    await wait(1000);
+    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-kim"]')?.click());
+    const selfDeleteDisabled = await workerPage.$eval('[data-delete-worker="w-kim"]', (button) => button.disabled);
     await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-lee"]')?.click());
-    await workerPage.evaluate(() => document.querySelector('[data-delete-worker="w-lee"]')?.click());
-    await workerPage.waitForFunction(() => !document.querySelector('[data-worker-card-toggle="w-lee"]'), { timeout: 5000 });
+    await workerPage.click('[data-delete-worker="w-lee"]');
+    await wait(250);
+    const targetRemovedFromView = await workerPage.waitForFunction(
+      () => !document.querySelector('[data-worker-card-toggle="w-lee"]'),
+      { timeout: 5000 },
+    ).then(() => true).catch(() => false);
+    if (!targetRemovedFromView) {
+      const diagnostic = await workerPage.evaluate((storagePrefix) => ({
+        dataState: document.querySelector(".data-context")?.dataset.status || "",
+        readOnlyGuard: Boolean(document.querySelector('[data-manage-content-read-only="true"]')),
+        deleteDisabled: Boolean(document.querySelector('[data-delete-worker="w-lee"]')?.disabled),
+        localWorkerCount: JSON.parse(localStorage.getItem(storagePrefix + "workers") || "[]").length,
+        failureToast: document.body.innerText.includes("작업자 삭제에 실패했습니다."),
+      }), PRE);
+      console.log("  작업자 삭제 진단:", JSON.stringify(diagnostic));
+    }
     const result = await workerPage.evaluate((storagePrefix) => {
       const workers = JSON.parse(localStorage.getItem(storagePrefix + "workers") || "[]");
       return {
         targetRemoved: !workers.some((worker) => worker.id === "w-lee"),
-        countUpdated: document.body.innerText.includes("현재 2명"),
-        toastShown: document.body.innerText.includes("이순신 작업자를 삭제했습니다."),
+        countUpdated: document.querySelectorAll("[data-worker-card-toggle]").length === workers.length,
+        toastShown: Boolean(document.querySelector("#toast.show")?.textContent?.includes("작업자를 삭제했습니다.")),
       };
     }, PRE);
     await workerPage.close();
-    return selfDeleteDisabled && result.targetRemoved && result.countUpdated && result.toastShown;
+    const ok = targetRemovedFromView && selfDeleteDisabled && result.targetRemoved && result.countUpdated && result.toastShown;
+    if (!ok) console.log("  작업자 삭제 결과:", JSON.stringify({ targetRemovedFromView, selfDeleteDisabled, ...result }));
+    return ok;
+  };
+
+  const runManageReadOnlyNavigationFlow = async () => {
+    const readOnlyPage = await makePage({ mockSupabaseWrites: true });
+    const unsafeId = "unsafe-read-only-e2e";
+    const materialId = "material-read-only-e2e";
+    await readOnlyPage.evaluateOnNewDocument((storagePrefix, now, unsafeRecordId, materialRecordId) => {
+      localStorage.setItem(storagePrefix + "unsafeIssues", JSON.stringify([{
+        id: unsafeRecordId,
+        shipNo: "2401",
+        content: "읽기 전용 불안전요소",
+        workerId: "w-hong",
+        workerNameSnapshot: "홍길동",
+        workerTeamSnapshot: "선행",
+        status: "접수",
+        adminMemo: "",
+        createdAt: now,
+        updatedAt: now,
+        completedAt: "",
+        statusHistory: [],
+      }]));
+      localStorage.setItem(storagePrefix + "missingMaterials", JSON.stringify([{
+        id: materialRecordId,
+        shipNo: "2401",
+        materialName: "읽기 전용 자재",
+        quantity: 1,
+        unit: "EA",
+        workerId: "w-hong",
+        workerNameSnapshot: "홍길동",
+        workerTeamSnapshot: "선행",
+        status: "접수",
+        adminMemo: "",
+        createdAt: now,
+        updatedAt: now,
+        completedAt: "",
+        statusHistory: [],
+      }]));
+      sessionStorage.setItem(storagePrefix + "workerSession", JSON.stringify({
+        workerId: "w-kim",
+        workerName: "김조장",
+        employeeNo: "1234",
+        loggedInAt: now,
+        mutationToken: "e2e-worker-mutation",
+        mutationExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }));
+      sessionStorage.setItem(storagePrefix + "adminMode", "true");
+      sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+      sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+        token: "e2e-admin-session",
+        workerId: "w-kim",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }));
+    }, PRE, new Date(testNowMs).toISOString(), unsafeId, materialId);
+
+    const clickCurrent = async (selector) => readOnlyPage.evaluate((targetSelector) => {
+      const target = [...document.querySelectorAll(targetSelector)].find((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      });
+      if (!target) return false;
+      target.click();
+      return true;
+    }, selector);
+
+    const selectCachedTab = async (tab, rowSelector) => {
+      if (!await clickCurrent(`[data-manage-center-tab="${tab}"]`)) {
+        throw new Error(`관리 저장본 탭을 찾을 수 없습니다: ${tab}`);
+      }
+      await readOnlyPage.waitForFunction((requestedTab, selector) => {
+        const state = document.querySelector(".manage-center")?.dataset.manageCenterState || "";
+        const tabButton = document.querySelector(`[data-manage-center-tab="${requestedTab}"]`);
+        return ["stale", "offline"].includes(state)
+          && tabButton?.getAttribute("aria-selected") === "true"
+          && Boolean(document.querySelector(selector));
+      }, { timeout: 8000 }, tab, rowSelector);
+      await wait(250);
+    };
+
+    const openAndReturn = async (rowSelector, selectedId) => {
+      if (!await clickCurrent(rowSelector)) {
+        throw new Error(`관리 저장본 행을 찾을 수 없습니다: ${rowSelector}`);
+      }
+      await readOnlyPage.waitForFunction((recordId) => (
+        document.body.classList.contains("manage-mobile-detail-open")
+        && Boolean(document.querySelector(`[data-manage-center-selected="${recordId}"]`))
+      ), { timeout: 5000 }, selectedId);
+      const detailReadOnly = await readOnlyPage.evaluate(() => {
+        const guarded = document.querySelector('.manage-center__detail-body[data-manage-content-read-only="true"]');
+        const controls = [...(guarded?.querySelectorAll("button,input,select,textarea") || [])];
+        return Boolean(guarded) && controls.length > 0 && controls.every((control) => control.disabled);
+      });
+      if (!await clickCurrent('button[data-action="back-manage-center-list"]')) {
+        throw new Error("관리 저장본 상세의 뒤로 버튼을 찾을 수 없습니다.");
+      }
+      await readOnlyPage.waitForFunction((recordId) => (
+        !document.body.classList.contains("manage-mobile-detail-open")
+        && !document.querySelector(`[data-manage-center-selected="${recordId}"]`)
+      ), { timeout: 5000 }, selectedId);
+      return detailReadOnly;
+    };
+
+    try {
+      await readOnlyPage.goto(`http://localhost:${PORT}/manage.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+      await selectCachedTab("unsafe", `[data-unsafe-record-detail="${unsafeId}"]`);
+      const unsafeGuard = await readOnlyPage.evaluate((recordId) => {
+        const guarded = document.querySelector('[data-manage-content-read-only="true"]');
+        const row = guarded?.querySelector(`[data-unsafe-record-detail="${recordId}"]`);
+        const navigationSelector = "[data-unsafe-record-detail], [data-material-record-detail], [data-work-prep-record-detail], [data-manage-center-page], [data-record-filter]";
+        const mutationControls = [...(guarded?.querySelectorAll("button,input,select,textarea") || [])]
+          .filter((control) => !control.matches(navigationSelector));
+        return Boolean(row)
+          && !row.disabled
+          && row.getAttribute("aria-disabled") !== "true"
+          && mutationControls.length > 0
+          && mutationControls.every((control) => control.disabled);
+      }, unsafeId);
+      const unsafeDetail = await openAndReturn(`[data-unsafe-record-detail="${unsafeId}"]`, unsafeId);
+
+      await selectCachedTab("materials", `[data-material-record-detail="${materialId}"]`);
+      const materialDetail = await openAndReturn(`[data-material-record-detail="${materialId}"]`, materialId);
+
+      await selectCachedTab("workPrep", "[data-work-prep-record-detail]");
+      const workPrepId = await readOnlyPage.$eval("[data-work-prep-record-detail]", (row) => row.dataset.workPrepRecordDetail);
+      const workPrepDetail = await openAndReturn(`[data-work-prep-record-detail="${workPrepId}"]`, workPrepId);
+
+      return unsafeGuard && unsafeDetail && materialDetail && workPrepDetail;
+    } finally {
+      await readOnlyPage.close().catch(() => {});
+    }
   };
 
   const runRealtimeSyncFlow = async () => {
@@ -566,27 +1123,47 @@ async function main() {
     const workPrepPage = await makePage({
       browserInstance: workPrepBrowser,
       mockAdminMutations: true,
+      mockRealtime: true,
       mockSupabaseWrites: true,
       mockAdminMutationDelayMs: 800,
     });
     try {
       await workPrepPage.evaluateOnNewDocument((storagePrefix) => {
+        sessionStorage.setItem(storagePrefix + "workerSession", JSON.stringify({
+          workerId: "w-kim",
+          workerName: "김조장",
+          employeeNo: "1234",
+          loggedInAt: new Date().toISOString(),
+          mutationToken: "e2e-worker-mutation",
+          mutationExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }));
         sessionStorage.setItem(storagePrefix + "adminMode", "true");
         sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
         sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
           token: "e2e-admin-session",
-          workerId: "w-hong",
+          workerId: "w-kim",
           expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         }));
       }, PRE);
       await workPrepPage.goto(`http://localhost:${PORT}/manage.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+      await workPrepPage.waitForFunction(() => (
+        document.querySelector(".data-context")?.dataset.status === "fresh"
+        && !document.querySelector('[data-manage-center-tab="workPrep"]')?.disabled
+      ), { timeout: 8000 });
+      await wait(1000);
       if (!await clickBtn(workPrepPage, "작업지시서")) return false;
-      await wait(300);
+      await workPrepPage.waitForFunction(() => document.querySelector('[data-manage-center-tab="workPrep"][aria-selected="true"]'));
       if (!await clickBtn(workPrepPage, "+ 신규 등록")) return false;
-      await wait(300);
-      await workPrepPage.evaluate(() => {
-        document.querySelector("[data-work-prep-tool]")?.click();
-      });
+      await workPrepPage.waitForSelector('[data-action="save-work-prep-registration"]', { visible: true });
+      await workPrepPage.$eval("#workPrepDate", (input, value) => {
+        input.value = value;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }, todayStr);
+      await workPrepPage.select("#workPrepTeam", "선행");
+      await workPrepPage.select("#workPrepShip", "2401");
+      await workPrepPage.select("#workPrepCategory", "welding");
+      await workPrepPage.select("#workPrepLeader", "w-kim");
+      await workPrepPage.click('[data-work-prep-tool="t-welder"]');
       await wait(100);
       if (!await clickBtn(workPrepPage, "작업지시서 저장")) return false;
       await wait(100);
@@ -594,19 +1171,26 @@ async function main() {
         const status = document.querySelector('[data-work-prep-sync-state="pending"]');
         return status?.textContent?.trim() || "";
       });
-      await workPrepPage.waitForFunction(() => (
+      const syncCompleted = await workPrepPage.waitForFunction(() => (
         !document.querySelector('[data-work-prep-sync-state="pending"]')
         && [...document.querySelectorAll('[data-work-prep-sync-state="synced"]')].length >= 2
-      ), { timeout: 5000 });
-      const completed = await workPrepPage.evaluate(() => ({
-        syncedCount: [...document.querySelectorAll('[data-work-prep-sync-state="synced"]')].length,
-        serverToast: document.body.innerText.includes("작업지시서가 서버에 반영되었습니다."),
-        retryCount: [...document.querySelectorAll('[data-work-prep-sync-state="retry"]')].length,
-        offlineCount: [...document.querySelectorAll('[data-work-prep-sync-state="offline"]')].length,
-        pendingCount: [...document.querySelectorAll('[data-work-prep-sync-state="pending"]')].length,
-      }));
-      const ok = pendingState.includes("서버 반영 중") && completed.syncedCount >= 2 && completed.serverToast;
-      if (!ok) console.log("  작업지시서 동기화 진단:", JSON.stringify({ pendingState, completed }));
+      ), { timeout: 5000 }).then(() => true).catch(() => false);
+      const completed = await workPrepPage.evaluate((storagePrefix) => {
+        const toastText = document.querySelector("#toast")?.textContent || "";
+        return {
+          syncedCount: [...document.querySelectorAll('[data-work-prep-sync-state="synced"]')].length,
+          serverToast: toastText.includes("작업지시서가 서버에 반영되었습니다."),
+          retryCount: [...document.querySelectorAll('[data-work-prep-sync-state="retry"]')].length,
+          offlineCount: [...document.querySelectorAll('[data-work-prep-sync-state="offline"]')].length,
+          pendingCount: [...document.querySelectorAll('[data-work-prep-sync-state="pending"]')].length,
+          registerStillOpen: Boolean(document.querySelector('[data-action="save-work-prep-registration"]')),
+          localRecordCount: JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]").length,
+          validationBlocked: /선택하세요|1개 이상/.test(toastText),
+          adminDenied: toastText.includes("관리자"),
+        };
+      }, PRE);
+      const ok = syncCompleted && pendingState.includes("서버 반영 중") && completed.syncedCount >= 2 && completed.serverToast;
+      if (!ok) console.log("  작업지시서 동기화 진단:", JSON.stringify({ syncCompleted, pendingState, completed }));
       return ok;
     } finally {
       try { await workPrepPage.close(); } catch {}
@@ -659,6 +1243,17 @@ async function main() {
   };
 
   console.log(`E2E 스모크 시작 (tz=${tz}, today=${todayStr}, app=${appVersion})`);
+  if (process.argv.includes("--design-token-only")) {
+    for (const result of await runDesignTokenViewportFlow()) {
+      if (!result.ok) console.log("  디자인 토큰 진단:", result.label, JSON.stringify({ observation: result.observation, manageDetail: result.manageDetail }));
+      check(`디자인 토큰: ${result.label} 셸·토큰·터치영역`, result.ok);
+    }
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`디자인 토큰 E2E 실패: ${failures}건`);
+    console.log("디자인 토큰 E2E 통과");
+    return;
+  }
   if (PWA_ONLY) {
     check("PWA: 최신 서비스워커 활성화·캐시 교체·버전 자산 로드", await runPwaFlow());
     try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
@@ -681,6 +1276,14 @@ async function main() {
     srv.close();
     if (failures) throw new Error(`작업자 삭제 E2E 실패: ${failures}건`);
     console.log("작업자 삭제 E2E 통과");
+    return;
+  }
+  if (process.argv.includes("--manage-read-only-only")) {
+    check("관리 저장본: 조회 행 이동 유지·변경 컨트롤 잠금", await runManageReadOnlyNavigationFlow());
+    try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
+    srv.close();
+    if (failures) throw new Error(`관리 저장본 E2E 실패: ${failures}건`);
+    console.log("관리 저장본 E2E 통과");
     return;
   }
   if (process.argv.includes("--realtime-only")) {
@@ -712,7 +1315,7 @@ async function main() {
   await goto("ships.html");
   check("호선: 공정 현황 보드 렌더", (await bodyText(page)).includes("호선 공정 현황"));
   await goto("pledge.html");
-  check("서약: 관리 화면 렌더", (await bodyText(page)).includes("안전 서약 관리"));
+  check("서약: 오늘 작업 전 안전서약 화면 렌더", (await bodyText(page)).includes("오늘 작업 전 안전서약"));
   await goto("history.html");
   check("이력: 점검 현황 요약 렌더", (await bodyText(page)).includes("오늘 작업자 점검 현황"));
   await goto("manage.html");
@@ -809,7 +1412,13 @@ async function main() {
 
   check("아이콘 관리: 선택·적용 후 저장값과 완료 안내 변경", await runIconPickerFlow());
   check("작업자 관리: 본인 삭제 방지·다른 작업자 삭제 후 목록 즉시 반영", await runWorkerDeleteFlow());
+  check("관리 저장본: 조회 행 이동 유지·변경 컨트롤 잠금", await runManageReadOnlyNavigationFlow());
   check("실시간 동기화: 핵심 구독·행 반영·삭제·폴링 폴백", await runRealtimeSyncFlow());
+
+  for (const result of await runDesignTokenViewportFlow()) {
+    if (!result.ok) console.log("  디자인 토큰 진단:", result.label, JSON.stringify({ observation: result.observation, manageDetail: result.manageDetail }));
+    check(`디자인 토큰: ${result.label} 셸·토큰·터치영역`, result.ok);
+  }
 
   try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
   srv.close();

@@ -67,20 +67,39 @@
   // model: { dateLabel, rows: [{ name, team, shipNo, time, statusChipHtml }], totalCount, pendingCount,
   //          kpiHtml, canNotifyPledge, adminMode, editing, rules: [string], weekBars: [{ label, pct }], todayIso,
   //          viewDate, isToday, maxDate }
-  function renderPledgeManagerView(model = {}) {
+  function renderPledgeManagerView(model = {}, deps = {}) {
     const rows = Array.isArray(model.rows) ? model.rows : [];
     const rules = Array.isArray(model.rules) ? model.rules : [];
     const weekBars = Array.isArray(model.weekBars) ? model.weekBars : [];
     const isToday = model.isToday !== false;
-    return `<section class="admin-board pledge-board">
+    const canAdministerToday = isToday && Boolean(model.adminMode);
+    const editing = canAdministerToday && Boolean(model.editing);
+    const renderContext = typeof deps.renderDataContext === "function" ? deps.renderDataContext : renderDataContext;
+    const renderState = typeof deps.renderDataState === "function" ? deps.renderDataState : renderDataState;
+    const isLoading = model.dataState === "loading";
+    const isBlockingDataState = ["loading", "error", "empty", "offline-empty"].includes(model.dataState);
+    const actionDisabled = model.actionsDisabled ? " disabled" : "";
+    const contextHtml = model.context ? renderContext(model.context) : "";
+    const dataStateHtml = renderState({
+      state: model.dataState,
+      loadingLabel: model.loadingLabel || "선택한 날짜의 서약 데이터를 불러오는 중입니다.",
+      errorLabel: model.errorLabel || "선택한 날짜의 서약 데이터를 불러오지 못했습니다.",
+      emptyLabel: model.emptyLabel || "선택한 날짜에 표시할 서약 데이터가 없습니다.",
+      staleLabel: model.staleLabel || "이전 서약 데이터를 표시하고 있습니다.",
+      offlineLabel: model.offlineLabel || "오프라인 상태입니다. 이전 서약 데이터를 표시하고 있습니다.",
+      retryAction: model.retryAction || "retry-pledge-range",
+      retryLabel: model.retryLabel || "다시 시도",
+    });
+    return `<section class="admin-board pledge-board"${isLoading ? ' aria-busy="true"' : ""}>
+        ${contextHtml}
         <div class="admin-board-top">
           <div>
             <h2>안전 서약 관리</h2>
             <p>${esc(model.dateLabel)} · ${isToday ? "오늘 서약 현황 실시간" : "지난 서약 기록 조회 (읽기 전용)"}</p>
           </div>
           <div class="admin-board-actions">
-            <button class="btn-light" data-export-records="pledge" type="button">내보내기</button>
-            <button class="btn" data-action="edit-pledge-template" type="button">서약 양식 편집</button>
+            <button class="btn-light" data-export-records="pledge"${actionDisabled} type="button">내보내기</button>
+            ${canAdministerToday ? `<button class="btn" data-action="edit-pledge-template"${actionDisabled} type="button">서약 양식 편집</button>` : ""}
           </div>
         </div>
         <div class="pledge-date-nav">
@@ -89,16 +108,17 @@
           <button class="btn-light" data-action="pledge-next-day" ${isToday ? "disabled" : ""} type="button" aria-label="다음 날 서약 보기">다음 날 ▶</button>
           ${isToday ? "" : `<button class="btn" data-action="pledge-view-today" type="button">오늘로</button>`}
         </div>
-        <div class="pledge-kpi-grid">
+        ${dataStateHtml}
+        ${isBlockingDataState ? "" : `<div class="pledge-kpi-grid">
           ${model.kpiHtml || ""}
         </div>
         <div class="pledge-layout">
           <section class="pledge-table-card">
             <div class="material-table-head">
               <div><strong>${isToday ? "오늘 서약 현황" : "서약 현황"}</strong><span>${esc(model.dateLabel)} · ${rows.length}명</span></div>
-              ${model.canNotifyPledge || model.adminMode ? `<div class="material-table-actions pledge-notify-actions">
-                ${model.adminMode ? `<button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending" type="button">푸시 문구 수정</button>` : ""}
-                ${model.canNotifyPledge ? `<button class="btn" data-action="notify-pledge-pending" ${model.pendingCount ? "" : "disabled"} title="${model.pendingCount ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>` : ""}
+              ${model.canNotifyPledge || canAdministerToday ? `<div class="material-table-actions pledge-notify-actions">
+                ${canAdministerToday ? `<button class="btn-light" data-action="edit-push-template" data-push-template-kind="pledgePending"${actionDisabled} type="button">푸시 문구 수정</button>` : ""}
+                ${model.canNotifyPledge ? `<button class="btn" data-action="notify-pledge-pending" ${model.pendingCount && !model.actionsDisabled ? "" : "disabled"} title="${model.pendingCount ? "브라우저 알림을 발송합니다" : "미완료자가 없습니다"}" type="button">미완료자 알림 발송</button>` : ""}
               </div>` : ""}
             </div>
             <div class="pledge-table">
@@ -115,10 +135,10 @@
           <aside class="pledge-side">
             <section class="pledge-preview-card">
               <div class="material-table-head">
-                <div><strong>서약 양식 미리보기</strong></div>
-                ${model.editing ? `<div class="material-table-actions"><button class="btn-light" data-action="cancel-pledge-template" type="button">취소</button><button class="btn" data-action="save-pledge-template" type="button">저장</button></div>` : `<button class="btn-light" data-action="edit-pledge-template" type="button">편집</button>`}
+                <div><strong>${isToday ? "서약 양식 미리보기" : "현재 적용 양식 참고"}</strong>${isToday ? "" : "<span>지난 기록은 읽기 전용입니다.</span>"}</div>
+                ${editing ? `<div class="material-table-actions"><button class="btn-light" data-action="cancel-pledge-template"${actionDisabled} type="button">취소</button><button class="btn" data-action="save-pledge-template"${actionDisabled} type="button">저장</button></div>` : canAdministerToday ? `<button class="btn-light" data-action="edit-pledge-template"${actionDisabled} type="button">편집</button>` : ""}
               </div>
-              ${model.editing ? `<div class="pledge-editor">
+              ${editing ? `<div class="pledge-editor">
                 <label for="pledgeRulesInput">서약 수칙</label>
                 <textarea class="textarea" id="pledgeRulesInput">${esc(rules.join("\n"))}</textarea>
                 <p>각 줄이 서약서의 한 항목으로 저장됩니다.</p>
@@ -142,7 +162,7 @@
               </div>
             </section>
           </aside>
-        </div>
+        </div>`}
       </section>`;
   }
 
@@ -1062,6 +1082,68 @@
       </section>`;
   }
 
+  function renderDataContext(model = {}) {
+    const statusLabels = {
+      fresh: "최신 데이터",
+      stale: "이전 데이터",
+      offline: "오프라인",
+      "offline-empty": "오프라인 · 저장본 없음",
+      loading: "불러오는 중",
+      error: "불러오지 못했습니다",
+      empty: "표시할 데이터가 없습니다",
+      unknown: "상태 확인 필요",
+    };
+    const status = Object.hasOwn(statusLabels, model.status) ? model.status : "unknown";
+    const businessDateLabel = model.businessDateLabel || "기준 날짜";
+    const asOfLabel = model.asOfLabel || "최종 반영";
+    const statusLabel = model.statusLabel || statusLabels[status];
+    const actionsHtml = typeof model.actionsHtml === "string" ? model.actionsHtml : "";
+    return `<header class="data-context" data-status="${status}">
+      <div class="data-context__main">
+        ${model.eyebrow ? `<p class="data-context__eyebrow">${esc(model.eyebrow)}</p>` : ""}
+        <h1>${esc(model.title)}</h1>
+        ${model.description ? `<p class="data-context__description">${esc(model.description)}</p>` : ""}
+      </div>
+      <dl class="data-context__meta">
+        <div><dt>${esc(businessDateLabel)}</dt><dd>${esc(model.businessDate)}</dd></div>
+        <div><dt>${esc(asOfLabel)}</dt><dd>${esc(model.asOf)}</dd></div>
+        <div><dt>상태</dt><dd><span class="data-context__status is-${status}" role="status" aria-live="polite">${esc(statusLabel)}</span></dd></div>
+      </dl>
+      ${actionsHtml ? `<div class="data-context__actions">${actionsHtml}</div>` : ""}
+    </header>`;
+  }
+
+  function renderDataState(model = {}) {
+    const state = ["loading", "error", "empty", "stale", "offline", "offline-empty"].includes(model.state) ? model.state : "ready";
+    if (state === "ready") return "";
+    const retryButton = (fallbackAction = "") => {
+      const action = model.retryAction || fallbackAction;
+      return action
+        ? `<button class="data-surface-state__retry" data-action="${esc(action)}" type="button">${esc(model.retryLabel || "다시 시도")}</button>`
+        : "";
+    };
+    if (state === "loading") {
+      return `<div class="data-surface-state is-loading" role="status" aria-live="polite">
+        <p>${esc(model.loadingLabel || "데이터를 불러오는 중입니다.")}</p>
+        <div class="data-surface-state__skeleton">
+          <span class="data-surface-state__skeleton-row" aria-hidden="true"></span>
+          <span class="data-surface-state__skeleton-row" aria-hidden="true"></span>
+          <span class="data-surface-state__skeleton-row" aria-hidden="true"></span>
+        </div>
+      </div>`;
+    }
+    if (state === "error") {
+      return `<div class="data-surface-state is-error" role="alert"><p>${esc(model.errorLabel || "데이터를 불러오지 못했습니다.")}</p>${retryButton("retry-data")}</div>`;
+    }
+    const labels = {
+      empty: model.emptyLabel || "표시할 데이터가 없습니다.",
+      stale: model.staleLabel || "이전 데이터를 표시하고 있습니다.",
+      offline: model.offlineLabel || "오프라인 상태입니다.",
+      "offline-empty": model.offlineEmptyLabel || "오프라인 상태이며 이 기기에 저장된 데이터가 없습니다.",
+    };
+    return `<div class="data-surface-state is-${state}" role="status" aria-live="polite"><p>${esc(labels[state])}</p>${state === "empty" ? "" : retryButton()}</div>`;
+  }
+
   return {
     renderProcessBoardView,
     renderHistoryPledgeStatusView,
@@ -1088,5 +1170,7 @@
     renderSectionManagerView,
     renderWorkPrepStatusControlView,
     renderWorkPrepTimelineView,
+    renderDataContext,
+    renderDataState,
   };
 }));
