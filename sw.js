@@ -1,5 +1,5 @@
 const APP_VERSION = "1.12.4-20260814-editor-safety";
-const ASSET_TOKEN = "20260814-editor-safety-1";
+const ASSET_TOKEN = "20260818-fix-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
@@ -31,6 +31,15 @@ const SHELL = [
   `/assets/dist/js/ship-import-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/screen-views.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/operational-cohort.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/notification-preflight.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/material-bulk-selection.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/record-retention.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/paged-collection.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/safety-settings.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/navigation-model.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/pledge-action-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/manage-center-view.min.js?v=${ASSET_TOKEN}`,
   "/assets/dist/js/admin-v2.js",
   `/assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`
 ];

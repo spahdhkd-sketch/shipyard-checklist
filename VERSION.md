@@ -20,7 +20,7 @@ Notes:
 - Opens section editing directly below the selected section row without leaving the work-type manager.
 - Preserves danger-sign image proportions in the selection preview.
 - Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
-- Uses `20260814-editor-safety-1` to refresh PWA assets after deployment.
+- Uses `20260818-fix-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -52,5 +52,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260814-editor-safety-1` and service-worker version
+- Issues asset token `20260818-fix-1` and service-worker version
   `1.12.4-20260814-editor-safety` so installed clients refresh safely.

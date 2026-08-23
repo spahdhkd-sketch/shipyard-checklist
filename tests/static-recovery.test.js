@@ -4,6 +4,30 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const RUNTIME_MODULES = [
+  "operational-cohort",
+  "notification-preflight",
+  "material-bulk-selection",
+  "record-retention",
+  "paged-collection",
+  "safety-settings",
+  "navigation-model",
+  "pledge-action-view",
+  "manage-center-view",
+];
+const RUNTIME_SHELL_PAGES = [
+  "index.html",
+  "check.html",
+  "history.html",
+  "items.html",
+  "ships.html",
+  "manage.html",
+  "unsafe.html",
+  "materials.html",
+  "pledge.html",
+  "analytics.html",
+  "redesign-v2.html",
+];
 
 [
   "index.html",
@@ -19,6 +43,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
   "assets/js/app-v2.js",
   "assets/js/dashboard-view.js",
   "assets/js/screen-views.js",
+  ...RUNTIME_MODULES.map((name) => `assets/js/${name}.js`),
   "assets/js/push-rules.js",
   "assets/js/vendor/supabase-js-2.105.3.min.js",
   "assets/icons/icon-192.png",
@@ -39,18 +64,29 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const html = read("index.html");
 const vercelConfig = read("vercel.json");
 assert.match(html, /viewport-fit=cover/);
-assert.match(html, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260814-editor-safety-1/);
+assert.match(html, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260818-fix-1/);
 assert.match(html, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
-assert.match(html, /assets\/dist\/js\/xlsx-helpers\.min\.js\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/js\/analytics-model\.min\.js\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/js\/ship-import-rules\.min\.js\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/js\/push-rules\.min\.js\?v=20260814-editor-safety-1/);
-assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260814-editor-safety-1/);
+assert.match(html, /assets\/dist\/js\/xlsx-helpers\.min\.js\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/js\/analytics-model\.min\.js\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/js\/ship-import-rules\.min\.js\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/js\/push-rules\.min\.js\?v=20260818-fix-1/);
+assert.match(html, /assets\/dist\/js\/app-v2\.min\.js\?v=20260818-fix-1/);
+RUNTIME_SHELL_PAGES.forEach((file) => {
+  const page = read(file);
+  const appOffset = page.indexOf("assets/dist/js/app-v2.min.js?v=20260818-fix-1");
+  let previousOffset = -1;
+  RUNTIME_MODULES.forEach((name) => {
+    const runtimeAsset = `assets/dist/js/${name}.min.js?v=20260818-fix-1`;
+    const offset = page.indexOf(runtimeAsset);
+    assert.ok(offset > previousOffset && offset < appOffset, `${file} should load ${name} in dependency order before the v2 app runtime`);
+    previousOffset = offset;
+  });
+});
 assert.doesNotMatch(html, /http-equiv="Content-Security-Policy"/); // CSP single source of truth: vercel.json headers
 assert.match(vercelConfig, /connect-src 'self' https:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co wss:\/\/yuuroocvxvzgmsdeeiws\.supabase\.co/);
 assert.match(html, /navigator\.serviceWorker\.register\("\/sw\.js", \{ updateViaCache: "none" \}\)/);
@@ -71,15 +107,15 @@ assert.doesNotMatch(html, /version 0\.3/);
 ].forEach((file) => {
   const page = read(file);
   assert.match(page, /viewport-fit=cover/, `${file} should use the same viewport as index.html`);
-  assert.match(page, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260814-editor-safety-1/, `${file} should use v2 styles with cache busting`);
-  assert.match(page, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260814-editor-safety-1/, `${file} should use table component styles with cache busting`);
-  assert.match(page, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260814-editor-safety-1/, `${file} should use signature feature styles with cache busting`);
-  assert.match(page, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260814-editor-safety-1/, `${file} should use push management feature styles with cache busting`);
-  assert.match(page, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260814-editor-safety-1/, `${file} should use monthly worker feature styles with cache busting`);
-  assert.match(page, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260814-editor-safety-1/, `${file} should use disabled-reason component styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260818-fix-1/, `${file} should use v2 styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260818-fix-1/, `${file} should use table component styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260818-fix-1/, `${file} should use signature feature styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260818-fix-1/, `${file} should use push management feature styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260818-fix-1/, `${file} should use monthly worker feature styles with cache busting`);
+  assert.match(page, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260818-fix-1/, `${file} should use disabled-reason component styles with cache busting`);
   assert.match(page, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/, `${file} should use the local Supabase vendor bundle`);
-  assert.match(page, /assets\/dist\/js\/push-rules\.min\.js\?v=20260814-editor-safety-1/, `${file} should load push rules before the v2 app runtime`);
-  assert.match(page, /assets\/dist\/js\/app-v2\.min\.js\?v=20260814-editor-safety-1/, `${file} should use the v2 app runtime with cache busting`);
+  assert.match(page, /assets\/dist\/js\/push-rules\.min\.js\?v=20260818-fix-1/, `${file} should load push rules before the v2 app runtime`);
+  assert.match(page, /assets\/dist\/js\/app-v2\.min\.js\?v=20260818-fix-1/, `${file} should use the v2 app runtime with cache busting`);
   assert.match(page, /id="homeVersionLabel"/, `${file} should use the current mobile header version badge`);
   assert.match(page, /home-date-row/, `${file} should use the current mobile home date layout`);
   assert.match(page, /버전 확인 중/, `${file} should show loading copy before JS writes APP_VERSION`);
@@ -91,15 +127,15 @@ assert.doesNotMatch(html, /version 0\.3/);
 });
 
 const notFound = read("404.html");
-assert.match(notFound, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(notFound, /assets\/dist\/css\/30-feature-not-found\.min\.css\?v=20260814-editor-safety-1/);
+assert.match(notFound, /assets\/dist\/css\/styles-v2\.min\.css\?v=20260818-fix-1/);
+assert.match(notFound, /assets\/dist\/css\/30-feature-not-found\.min\.css\?v=20260818-fix-1/);
 assert.doesNotMatch(notFound, /assets\/css\/styles\.css/);
 const redesignPreview = read("redesign-v2.html");
-assert.match(redesignPreview, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(redesignPreview, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(redesignPreview, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(redesignPreview, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260814-editor-safety-1/);
-assert.match(redesignPreview, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260814-editor-safety-1/);
+assert.match(redesignPreview, /assets\/dist\/css\/20-component-table\.min\.css\?v=20260818-fix-1/);
+assert.match(redesignPreview, /assets\/dist\/css\/30-feature-signature\.min\.css\?v=20260818-fix-1/);
+assert.match(redesignPreview, /assets\/dist\/css\/30-feature-push-management\.min\.css\?v=20260818-fix-1/);
+assert.match(redesignPreview, /assets\/dist\/css\/30-feature-monthly-worker\.min\.css\?v=20260818-fix-1/);
+assert.match(redesignPreview, /assets\/dist\/css\/20-component-disabled-reason\.min\.css\?v=20260818-fix-1/);
 assert.match(redesignPreview, /assets\/js\/vendor\/supabase-js-2\.105\.3\.min\.js/);
 assert.doesNotMatch(redesignPreview, /cdn\.jsdelivr\.net/);
 [
@@ -121,10 +157,12 @@ assert.ok(illustrations.length >= 40, "shipyard illustration PNGs should be gene
 });
 assert.ok(fs.existsSync(path.join(root, "assets/icons/shipyard/shipyard-illustration-sheet.png")));
 
-const app = read("assets/js/app-v2.js");
+const appSource = read("assets/js/app-v2.js");
+const app = [appSource, ...RUNTIME_MODULES.map((name) => read(`assets/js/${name}.js`))].join("\n");
 const pushRules = read("assets/js/push-rules.js");
 const screenViews = read("assets/js/screen-views.js");
 const dashboardView = read("assets/js/dashboard-view.js");
+const navigationModel = require(path.join(root, "assets/js/navigation-model.js"));
 const styles = read("assets/css/styles-v2.css");
 assert.doesNotMatch(styles, /@media\s*\(prefers-color-scheme:\s*dark\)/, "site should remain on the light theme regardless of OS preference");
 assert.doesNotMatch(styles, /color-scheme:\s*dark/, "site should not opt native controls into dark mode");
@@ -226,8 +264,12 @@ assert.match(app, /syncInspectionHistory\(inspection, inspectionItems\);/);
 assert.match(app, /Date\.now\(\) - state\.lastRemotePullAt < REMOTE_PULL_THROTTLE_MS/);
 assert.match(app, /\{ id: "pledge", label: "서약"/);
 assert.match(app, /\{ id: "analytics", label: "통계"/);
-assert.match(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ships", "history", "items"\]\)/);
-assert.match(app, /return NAV\.filter\(\(nav\) => MOBILE_NAV_IDS\.has\(nav\.id\)\)/);
+assert.deepStrictEqual(navigationModel.MOBILE_PARENTS.map((parent) => parent.id), ["today", "inspection", "status", "report", "more"], "mobile navigation should retain five parent destinations");
+assert.strictEqual(navigationModel.getActiveMobileParentId("pledge"), "more", "pledge should remain reachable through the more mobile parent");
+assert.strictEqual(navigationModel.getActiveMobileParentId("analytics"), "more", "analytics should remain reachable through the more mobile parent");
+assert.ok(navigationModel.routesForMobileParent("more", "worker").some((route) => route.id === "pledge"), "worker more menu should expose pledge");
+assert.ok(navigationModel.routesForMobileParent("more", "admin").some((route) => route.id === "analytics"), "admin more menu should expose analytics");
+assert.doesNotMatch(app, /const MOBILE_NAV_IDS = new Set\(\["dashboard", "check", "ships", "history", "items"\]\)/, "mobile navigation should not remain hard-coded to the old five leaf routes");
 assert.match(app, /function renderCategoryToolPicker\(\{ groupId, selectedIds \}\)/);
 assert.match(app, /function renderCategoryToolAssignments\(\)/);
 assert.match(app, /function renderWorkTypeDetail\(cat, selectedToolIds, categories\)/);
@@ -304,7 +346,7 @@ assert.match(app, /function preloadCachedPledgeSignature\(\)/);
 assert.match(app, /function browserNotificationsAvailable\(\)/);
 assert.match(app, /async function ensureBrowserNotificationPermission\(\)/);
 assert.match(app, /function showBrowserNotification\(title, options = \{\}\)/);
-assert.match(app, /async function notifyPledgePendingWorkers\(\)/);
+assert.match(app, /async function notifyPledgePendingWorkers\(targetWorkerIds = null, options = \{\}\)/);
 assert.match(app, /async function notifyUnsafeIssueRegistered\(row\)/);
 assert.match(app, /const PUSH_VAPID_PUBLIC_KEY = "/);
 assert.match(app, /function unsafePushTargetWorkerIds\(\)/);
@@ -400,6 +442,9 @@ assert.match(app, /function pledgeDashboardRows\(date = today\(\)\)/);
 assert.match(app, /const dateValue = dateOnly\(date\) \|\| today\(\);/);
 assert.match(app, /combinedInspectionRows\(\)\.filter\(\(row\) => row\.date === dateValue\)/);
 assert.match(app, /function pledgeWeekStats\(anchorDate = today\(\)\)/);
+assert.match(app, /function manageCenterDataState\(tab\)/);
+assert.match(app, /dataState,/);
+assert.match(app, /function handleManageCenterButtonClick\(button\)/);
 assert.match(app, /function pledgeViewDate\(\)/);
 assert.match(app, /function setPledgeViewDate\(mode, value = ""\)/);
 // 다음 날 이동은 오늘을 넘지 못한다
@@ -419,6 +464,7 @@ assert.match(screenViews, /data-action="pledge-prev-day"/);
 assert.match(screenViews, /data-action="pledge-next-day"/);
 assert.match(screenViews, /data-action="pledge-view-today"/);
 assert.match(screenViews, /data-pledge-view-date value="\$\{esc\(model\.viewDate \|\| ""\)\}" max="\$\{esc\(model\.maxDate \|\| ""\)\}"/);
+assert.match(app, /todayIso: viewDate/);
 assert.match(read("assets/css/styles-v2.css"), /\.pledge-date-nav/);
 
 // 서약 뷰 동작: 날짜 필터·읽기 전용·오늘 클램프
@@ -426,22 +472,70 @@ assert.match(read("assets/css/styles-v2.css"), /\.pledge-date-nav/);
   const screenViewsApi = require(path.join(root, "assets/js/screen-views.js"));
   const pastHtml = screenViewsApi.renderPledgeManagerView({
     dateLabel: "2026.06.10",
-    todayIso: "2026-06-12",
+    todayIso: "2026-06-10",
     viewDate: "2026-06-10",
     maxDate: "2026-06-12",
     isToday: false,
     rows: [{ name: "김민수", team: "용접", shipNo: "H-101", time: "08:10", statusChipHtml: "" }],
     pendingCount: 1,
     canNotifyPledge: false,
-    adminMode: false,
+    adminMode: true,
     rules: [],
     weekBars: [],
   });
   assert.ok(pastHtml.includes("지난 서약 기록 조회 (읽기 전용)"));
   assert.ok(!pastHtml.includes('data-action="notify-pledge-pending"'), "past date must not offer notify action");
+  assert.ok(!pastHtml.includes('data-action="edit-pledge-template"'), "past date must not offer pledge-template edits");
+  assert.ok(!pastHtml.includes('data-action="edit-push-template"'), "past date must not offer push-template edits");
+  assert.ok(pastHtml.includes("현재 적용 양식 참고"), "past date must identify the preview as a current-reference template");
+  assert.ok(pastHtml.includes("날짜: 2026-06-10"), "pledge preview must use the selected date");
   assert.ok(pastHtml.includes('data-action="pledge-view-today"'), "past date must offer 오늘로 button");
   assert.ok(!pastHtml.includes('data-action="pledge-next-day" disabled'), "past date keeps 다음 날 enabled");
   assert.ok(pastHtml.includes('max="2026-06-12"'), "date picker must clamp at today");
+
+  const loadingHtml = screenViewsApi.renderPledgeManagerView({
+    dateLabel: "2026.06.10",
+    todayIso: "2026-06-10",
+    viewDate: "2026-06-10",
+    maxDate: "2026-06-12",
+    isToday: false,
+    dataState: "loading",
+    kpiHtml: '<div>CACHED_KPI_93</div>',
+    rows: [{ name: "CACHED_WORKER", team: "용접", shipNo: "H-101", time: "08:10", statusChipHtml: "" }],
+    pendingCount: 1,
+    canNotifyPledge: false,
+    adminMode: true,
+    rules: [],
+    weekBars: [{ label: "수", pct: 93, value: "CACHED_WEEK_93" }],
+  });
+  assert.ok(loadingHtml.includes('aria-busy="true"'), "historical pledge loading must expose a busy state");
+  assert.ok(loadingHtml.includes('role="status"'), "historical pledge loading must announce progress");
+  assert.ok(loadingHtml.includes("data-pledge-view-date"), "date navigation stays available while loading");
+  assert.ok(!loadingHtml.includes("CACHED_KPI_93"), "loading must hide cached KPI values");
+  assert.ok(!loadingHtml.includes("CACHED_WORKER"), "loading must hide cached worker rows");
+  assert.ok(!loadingHtml.includes("CACHED_WEEK_93"), "loading must hide cached weekly chart values");
+
+  const errorHtml = screenViewsApi.renderPledgeManagerView({
+    dateLabel: "2026.06.10",
+    todayIso: "2026-06-10",
+    viewDate: "2026-06-10",
+    maxDate: "2026-06-12",
+    isToday: false,
+    dataState: "error",
+    kpiHtml: '<div>CACHED_ERROR_KPI</div>',
+    rows: [{ name: "CACHED_ERROR_WORKER", team: "용접", shipNo: "H-101", time: "08:10", statusChipHtml: "" }],
+    pendingCount: 1,
+    canNotifyPledge: false,
+    adminMode: true,
+    rules: [],
+    weekBars: [{ label: "수", pct: 93, value: "CACHED_ERROR_WEEK" }],
+  });
+  assert.ok(errorHtml.includes('role="alert"'), "historical pledge load failure must be announced");
+  assert.ok(errorHtml.includes('data-action="retry-pledge-range"'), "historical pledge load failure must offer retry");
+  assert.ok(errorHtml.includes("data-pledge-view-date"), "date navigation stays available after an error");
+  assert.ok(!errorHtml.includes("CACHED_ERROR_KPI"), "error state must hide cached KPI values");
+  assert.ok(!errorHtml.includes("CACHED_ERROR_WORKER"), "error state must hide cached worker rows");
+  assert.ok(!errorHtml.includes("CACHED_ERROR_WEEK"), "error state must hide cached weekly chart values");
 
   const todayHtml = screenViewsApi.renderPledgeManagerView({
     dateLabel: "2026.06.12",
@@ -604,7 +698,7 @@ assert.match(app, /if \(normalizedWorkerName\(previousWorker\) !== normalizedWor
 assert.match(app, /savePledgeSignatureForWorker\(state\.draft\.worker, state\.draft\.pledgeSignature\)/);
 assert.match(app, /DASHBOARD_VIEW\.renderAnalyticsDashboardView\(buildAnalyticsDashboardModel\(\), \{/);
 assert.doesNotMatch(app, /최근 활동 · 불안전요소 등록 & 자재누락/);
-assert.match(dashboardView, /최근 활동 · 불안전요소 등록 & 자재누락/);
+assert.match(dashboardView, /최근 활동이 없습니다\./);
 assert.doesNotMatch(app, /data-analytics-record-kind="\$\{esc\(row\.kind\)\}"/);
 assert.doesNotMatch(app, /data-analytics-record-id="\$\{esc\(row\.id\)\}"/);
 assert.match(dashboardView, /data-analytics-record-kind="\$\{esc\(row\.kind\)\}"/);
@@ -631,9 +725,9 @@ assert.match(app, /data-photo-viewer-src="\$\{esc\(url\)\}"/);
 assert.match(app, /function renderPhotoViewer\(\)/);
 assert.match(app, /function openPhotoViewer\(src, label\)/);
 assert.match(app, /function closePhotoViewer\(\)/);
-assert.match(app, /const readOnlyTabs = new Set\(\["unsafe", "materials"\]\)/);
+assert.match(app, /const readOnlyTabs = new Set\(\["unsafe", "materials", "safetySettings"\]\)/);
 assert.match(app, /const visibleTabs = state\.adminMode \|\| previewAdmin \? tabs : tabs\.filter\(\(\[id\]\) => readOnlyTabs\.has\(id\)\)/);
-assert.match(app, /DASHBOARD_VIEW\.renderManageShellView\(\{/);
+assert.match(app, /MANAGE_CENTER_VIEW\.renderManageCenterView\(\{/);
 assert.match(app, /\["workPrep", "작업지시서"\]/);
 assert.match(app, /function renderWorkPrepManager\(\)/);
 assert.match(app, /function renderWorkPrepAdminRow\(record, active = false\)/);
@@ -898,7 +992,7 @@ assert.match(disabledReasonStyles, /@media \(max-width: 920px\)/);
 
 const sw = read("sw.js");
 assert.match(sw, /const APP_VERSION = "1\.12\.4-20260814-editor-safety"/);
-assert.match(sw, /const ASSET_TOKEN = "20260814-editor-safety-1"/);
+assert.match(sw, /const ASSET_TOKEN = "20260818-fix-1"/);
 assert.match(sw, /const CACHE = `gs-safety-\$\{ASSET_TOKEN\}`/);
 assert.match(sw, /styles-v2\.min\.css\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /20-component-table\.min\.css\?v=\$\{ASSET_TOKEN\}/);
@@ -911,6 +1005,9 @@ assert.match(sw, /xlsx-helpers\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /analytics-model\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /ship-import-rules\.min\.js\?v=\$\{ASSET_TOKEN\}/);
 assert.match(sw, /app-v2\.min\.js\?v=\$\{ASSET_TOKEN\}/);
+RUNTIME_MODULES.forEach((name) => {
+  assert.match(sw, new RegExp(`${name}\\.min\\.js\\?v=\\$\\{ASSET_TOKEN\\}`), `service worker should cache ${name}`);
+});
 assert.match(sw, /self\.addEventListener\("push"/);
 assert.match(sw, /self\.registration\.showNotification/);
 assert.match(sw, /self\.addEventListener\("notificationclick"/);

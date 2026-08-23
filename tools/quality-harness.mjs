@@ -15,8 +15,8 @@ const allowNonMain = args.has("--allow-non-main");
 
 const APP_VERSION = "1.12.4-20260814-editor-safety";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260814-editor-safety-1";
-const SW_CACHE = "gs-safety-20260814-editor-safety-1";
+const ASSET_TOKEN = "20260818-fix-1";
+const SW_CACHE = "gs-safety-20260818-fix-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [
@@ -36,6 +36,18 @@ const PAGES = [
   "pledge.html",
   "analytics.html",
 ];
+const RUNTIME_MODULES = [
+  "operational-cohort",
+  "notification-preflight",
+  "material-bulk-selection",
+  "record-retention",
+  "paged-collection",
+  "safety-settings",
+  "navigation-model",
+  "pledge-action-view",
+  "manage-center-view",
+];
+const RUNTIME_SHELL_PAGES = [...PAGES, "redesign-v2.html"];
 
 const result = {
   ok: true,
@@ -164,6 +176,19 @@ function checkHtmlPages() {
     assertNotContains(html, "psatbyktzladtymdygwh.supabase.co", `${page} does not reference old Supabase project`);
   }
 
+  for (const page of RUNTIME_SHELL_PAGES) {
+    const html = read(page);
+    const appRuntime = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
+    const appOffset = html.indexOf(appRuntime);
+    let previousOffset = -1;
+    for (const runtimeModule of RUNTIME_MODULES) {
+      const runtimeAsset = `assets/dist/js/${runtimeModule}.min.js?v=${ASSET_TOKEN}`;
+      const runtimeOffset = html.indexOf(runtimeAsset);
+      add(`${page} loads ${runtimeModule} before app runtime`, runtimeOffset > previousOffset && runtimeOffset < appOffset, runtimeAsset);
+      previousOffset = runtimeOffset;
+    }
+  }
+
   const notFound = read("404.html");
   assertContains(notFound, `assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`, "404 uses current CSS token");
   assertContains(notFound, `assets/dist/css/30-feature-not-found.min.css?v=${ASSET_TOKEN}`, "404 uses current not-found CSS token");
@@ -175,6 +200,7 @@ function checkRuntimeSource() {
   const styles = read("assets/css/styles-v2.css");
   const sw = read("sw.js");
   const vercel = read("vercel.json");
+  const navigationModel = read("assets/js/navigation-model.js");
 
   assertContains(app, `const APP_VERSION = "${APP_VERSION}"`, "APP_VERSION is current");
   assertContains(app, `https://${SUPABASE_PROJECT_REF}.supabase.co`, "Supabase project ref is active target");
@@ -224,6 +250,11 @@ function checkRuntimeSource() {
   assertContains(app, 'workPrepRegisterOpen: state.view === "check" && state.workPrepRegisterOpen', "work prep register route state is preserved");
   assertContains(app, "work-prep-appearance-badge", "work prep appearance time badge exists");
   assertContains(app, "작업지시서 등록", "work prep registration section exists");
+  const mobileParentIds = Array.from(navigationModel.matchAll(/Object\.freeze\(\{ id: "([^"]+)", label: "[^"]+", url: "[^"]+", title: "[^"]+" \}\)/g)).map((match) => match[1]);
+  add("mobile navigation retains five parent destinations", JSON.stringify(mobileParentIds) === JSON.stringify(["today", "inspection", "status", "report", "more"]), mobileParentIds.join(", "));
+  assertContains(navigationModel, 'id: "pledge", label: "안전 서약", group: "more", permission: "worker", mobileParent: "more"', "pledge is reachable from the more mobile parent");
+  assertContains(navigationModel, 'id: "analytics", label: "통계", group: "more", permission: "admin", mobileParent: "more"', "analytics is reachable from the more mobile parent");
+  assertNotContains(app, 'const MOBILE_NAV_IDS = new Set(["dashboard", "check", "ships", "history", "items"])', "mobile navigation no longer hard-codes the old five leaf routes");
 
   assertNotContains(app, "L/C일 입력 전 비공개", "old L/C private helper text removed");
   assertNotContains(app, "호선 추가/삭제는 수정 모드를 ON으로 전환", "old ship edit notice removed");
@@ -245,6 +276,9 @@ function checkRuntimeSource() {
   assertContains(sw, "30-feature-push-management.min.css?v=${ASSET_TOKEN}", "service worker caches push management CSS through asset token");
   assertContains(sw, "30-feature-monthly-worker.min.css?v=${ASSET_TOKEN}", "service worker caches monthly worker CSS through asset token");
   assertContains(sw, "20-component-disabled-reason.min.css?v=${ASSET_TOKEN}", "service worker caches disabled-reason CSS through asset token");
+  for (const runtimeModule of RUNTIME_MODULES) {
+    assertContains(sw, `${runtimeModule}.min.js?v=\${ASSET_TOKEN}`, `service worker caches ${runtimeModule} through asset token`);
+  }
   assertContains(sw, "app-v2.min.js?v=${ASSET_TOKEN}", "service worker caches JS through asset token");
   const shellAssets = Array.from(sw.matchAll(/"([^"]+)"/g))
     .map((match) => match[1])
