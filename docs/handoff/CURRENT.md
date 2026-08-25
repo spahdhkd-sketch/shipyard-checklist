@@ -58,6 +58,18 @@ Updated: 2026-08-26 (Asia/Seoul)
 - Commit `804f51e37038703e74623173730051f7e21404b3` is pushed to `origin/feat/claude-batch`, its Vercel Preview passed the mobile work-order flow, and the same exact commit is deployed to the production alias.
 - Production browser verification passed the 430 px Home → Work Orders → full-screen detail → list-return flow and all five bottom navigation routes.
 
+## Pre-login remote pull restriction
+
+- Commit `453ea37d747a1be3d184c13b7888bc16c6f590b4` on `feat/claude-batch`, pushed to origin. Not deployed to Preview or production.
+- Before this change the boot sequence pulled all 13 remote tables before any login, so an anonymous browser fetched inspections, inspection items, unsafe issues, missing materials, work preparation records, issue photos and ships into local storage from the login screen alone. Measured against production v1.13.0 on 2026-08-26: 17 anonymous Supabase REST requests with no auth session present.
+- `PRE_LOGIN_REMOTE_KEYS` now limits the pre-login boot pull to `workers`, `categories`, `sections`, `items`, `tools` and `pictograms`. A saved worker session still triggers the full pull at boot, so offline boot and session resume behaviour are unchanged.
+- `submitWorkerLogin` pulls the remaining tables after a successful login, silently and without blocking the login flow when it fails.
+- `tests/release-safety-regressions.test.js` previously pinned the literal boot call `await pullRemote({ force: true })`. The assertion now enforces the flush-before-pull ordering and the login gate, and additionally asserts that the pre-login key list excludes every record table and that a post-login pull exists.
+- Reads remain anon-level in PostgREST. Anonymous SELECT on the record tables is unchanged. This reduces the exposure surface of the login screen and is not a substitute for row level security.
+- Gates run at this commit: 82/82 tests, `npm run verify`, `npm run build:assets`, the non-main quality harness, `npm run e2e`, `npm run e2e:design-tokens`, `npm run e2e:pwa`, and `git diff --check`.
+- Editing note: rewriting `assets/js/app-v2.js` with an editor that replaces the whole file can convert it from LF to CRLF. `.gitattributes` uses `text=auto`, so the conversion produces no visible `git diff` but breaks source-fragment tests that match `},
+`. Check line endings after editing.
+
 ## Preserved local inputs
 
 The following patch inputs remain untracked and were not included in commits or deployments:
@@ -65,6 +77,7 @@ The following patch inputs remain untracked and were not included in commits or 
 - `01-touch-targets.patch`
 - `02-history-risk-badge.patch`
 - `03-manage-mobile.patch`
+- `widget-integration-plan.html` (standalone visual plan; not referenced by the production app)
 
 Current comparison result: all three fail both forward and reverse `git apply --check` against the integrated worktree. `01` is superseded by the token and responsive touch-target work, `02` is partially represented by the retained risk badge while its abandoned empty-section behavior remains excluded, and `03` is superseded by the current management center/mobile detail implementation. Do not apply these patches directly.
 
@@ -73,3 +86,6 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - No live push notification was sent during release verification. Function deployment, JWT enforcement, database authorization, and idempotency contracts were verified, but a controlled device receipt still requires an explicitly approved test recipient and send.
 - No pull request was created or merged. Production currently corresponds to the feature-branch application release commit above.
 - `docs/project/PROJECT_BRIEF.md` is absent from this recovery checkout and should be restored separately if it exists in the canonical project history.
+- The hermetic browser E2E blocks live Supabase requests, so the pre-login request reduction in `453ea37` is covered only by static and unit assertions. Counting the actual anonymous requests requires a Preview deployment and a private browsing window.
+- Work Preparation Inspection Step 2 and Step 3 were not re-verified after `453ea37`.
+- Supabase Realtime WebSocket connections were observed failing repeatedly against production v1.13.0, both before and after worker login. The cursor-based polling fallback is healthy and all 11 tables report successful pulls. Whether the failure reproduces outside the observing browser environment is unconfirmed.
