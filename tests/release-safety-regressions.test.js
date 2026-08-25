@@ -50,6 +50,26 @@ assert.match(app, /hasFailed \? "전송 실패함"/);
 assert.match(app, /queue\.some\(\(job\) => job\.type === "full"\)\) return rows/);
 assert.doesNotMatch(app, /normalizePendingSyncQueue\(state\.pendingSyncQueue\)\.slice\(-80\)/);
 assert.match(app, /\[\.\.\.ids\]\.some\(\(id\) => !rowsById\.has\(id\)\)/);
-assert.match(app, /await flushPendingSyncQueue\(\);\s*await flushPendingMissingMaterialNotifications\(\);\s*await pullRemote\(\{ force: true \}\)/);
+// 부팅 순서 보장: 대기 중인 로컬 전송과 알림을 먼저 올린 뒤에 원격을 당겨야 한다.
+// 원격 풀 자체는 로그인 여부로 갈라지지만 이 순서는 바뀌면 안 된다.
+assert.match(
+  app,
+  /await flushPendingSyncQueue\(\);\s*await flushPendingMissingMaterialNotifications\(\);[\s\S]{0,400}?await pullRemote\(isWorkerLoggedIn\(\)\s*\?\s*\{ force: true \}\s*:\s*\{ force: true, keys: PRE_LOGIN_REMOTE_KEYS/,
+  "부팅은 대기 전송·알림 flush 후에 원격을 당겨야 하며, 로그인 전에는 제한된 키만 당겨야 합니다.",
+);
+
+// 로그인 전 원격 풀에 개인정보·현장 운영 기록 테이블이 들어가면 안 된다.
+const preLoginKeys = app.match(/const PRE_LOGIN_REMOTE_KEYS = \[([\s\S]*?)\];/);
+assert.ok(preLoginKeys, "PRE_LOGIN_REMOTE_KEYS 선언이 있어야 합니다.");
+["inspections", "inspectionItems", "unsafeIssues", "missingMaterials", "workPrepRecords", "issuePhotos", "ships"].forEach((key) => {
+  assert.ok(
+    !new RegExp(`"${key}"`).test(preLoginKeys[1]),
+    `로그인 전 원격 풀에 ${key}가 포함되면 안 됩니다.`,
+  );
+});
+assert.match(preLoginKeys[1], /"workers"/, "로그인 드롭다운을 위해 workers는 로그인 전에도 필요합니다.");
+
+// 로그인 성공 직후 나머지 원격 데이터를 채워야 한다.
+assert.match(app, /reason: "post-login"/, "로그인 성공 후 전체 원격 풀이 있어야 합니다.");
 
 console.log("release safety regressions: ok");

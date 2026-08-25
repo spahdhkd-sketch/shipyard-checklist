@@ -341,6 +341,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       { stage: "lc", ids: ["lc"], labels: ["후행 설치", "DP설치", "DP 설치", "DP검사", "DP 검사", "압력테스트", "압력 테스트"] },
       { stage: "st", ids: ["st"], labels: ["선주선급", "선주 선급", "DEMO", "Demo", "demo"] },
     ];
+    // 로그인 전 부팅에서 당길 원격 키. 로그인 화면 구성과 오프라인 부팅에 필요한
+    // 작업자 명부와 체크리스트 마스터만 포함한다. 점검 기록, 불안전요소, 자재누락,
+    // 작업지시, 사진, 호선은 개인정보와 현장 운영 기록이므로 로그인 이후에 당긴다.
+    const PRE_LOGIN_REMOTE_KEYS = [
+      "workers",
+      "categories",
+      "sections",
+      "items",
+      "tools",
+      "pictograms",
+    ];
     const REMOTE_TABLES = [
       {
         table: "safety_categories",
@@ -3112,7 +3123,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         syncServerClock();
         await flushPendingSyncQueue();
         await flushPendingMissingMaterialNotifications();
-        await pullRemote({ force: true });
+        // 로그인 전에는 로그인 화면에 필요한 키만 당긴다. 저장된 작업자 세션이 있으면
+        // 기존과 동일하게 전체를 당겨 오프라인 부팅과 복귀 동작을 유지한다.
+        await pullRemote(isWorkerLoggedIn()
+          ? { force: true }
+          : { force: true, keys: PRE_LOGIN_REMOTE_KEYS, reason: "boot-pre-login" });
       }
     }
 
@@ -12622,6 +12637,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           toast(`${worker.name}님 로그인되었습니다.`);
         }
         scrollScreenTop();
+        // 부팅에서 로그인 전 키만 당겼으므로 로그인 성공 직후 나머지 원격 데이터를 채운다.
+        pullRemote({ force: true, silent: true, reason: "post-login" })
+          .catch((error) => console.warn("post-login pull failed", error));
         flushPendingSyncQueue();
         flushPendingMissingMaterialNotifications();
         refreshWorkerPushSubscriptionStatus({ force: true }).catch((error) => console.warn("push status refresh failed", error));
