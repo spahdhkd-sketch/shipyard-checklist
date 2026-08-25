@@ -37,6 +37,8 @@ const model = {
     historyLabel: "발송 이력",
     settingsLabel: "알림 설정",
   },
+  rules: ["보호구를 올바르게 착용합니다.", "작업 전 위험요인을 확인합니다."],
+  previewDateLabel: "2026-08-16",
   preflight: {
     open: true,
     targetCount: 3,
@@ -68,6 +70,11 @@ assert.doesNotMatch(html, /data-action="[^"]*(?:send|notify)[^"]*"/i);
 assert.ok(html.indexOf("즉시 확인") < html.indexOf("알림 대상 검토"));
 assert.ok(html.indexOf("알림 대상 검토") < html.indexOf("최근 발송"));
 assert.ok(html.indexOf("최근 발송") < html.indexOf("발송 이력"));
+assert.match(html, /class="pledge-action-view pledge-v4"/);
+assert.match(html, /서약서 미리보기/);
+assert.match(html, /보호구를 올바르게 착용합니다\./);
+assert.match(html, /2026-08-16/);
+assert.doesNotMatch(html, /Action needed/);
 assert.match(html, /role="dialog"/);
 assert.match(html, /aria-modal="true"/);
 assert.match(html, /data-action="acknowledge-pledge-preflight"/);

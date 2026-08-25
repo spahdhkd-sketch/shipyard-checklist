@@ -1,14 +1,18 @@
 # Version
 
-Current version: `1.12.4-20260814`
+Current version: `1.13.0-20260826`
 
-Recorded at: `2026-08-14 (Section editor safety release)`
+Recorded at: `2026-08-26 (v4 responsive operations UI release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Replaces the primary Home, Work Preparation, Safety Pledge, Analytics, Management, Ships, History, Quick Menu, issue, material, login, and completion surfaces with the approved v4 responsive operations design.
+- Keeps mobile KPI summaries in a 2×2 layout and uses list-to-full-screen detail flows at 360, 390, and 430 px.
+- Makes mobile detail routes browser-history-aware and restores the originating list focus when the in-app return control is used.
+- Routes the Home work-order shortcut to Management and renders Work Orders with the approved mobile full-screen detail and list-return control.
 - Preserves every in-progress section editor field across realtime pulls and other background re-renders.
 - Warns before discarding unsaved section changes and before reloading or closing the page.
 - Keeps the editor open, restores the previous section, and prevents duplicate actions when a remote save fails or is still running.
@@ -20,7 +24,7 @@ Notes:
 - Opens section editing directly below the selected section row without leaving the work-type manager.
 - Preserves danger-sign image proportions in the selection preview.
 - Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
-- Uses `20260818-fix-1` to refresh PWA assets after deployment.
+- Uses `20260826-v4-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -52,5 +56,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260818-fix-1` and service-worker version
-  `1.12.4-20260814-editor-safety` so installed clients refresh safely.
+- Issues asset token `20260826-v4-1` and service-worker version
+  `1.13.0-20260826-v4` so installed clients refresh safely.

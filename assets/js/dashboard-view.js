@@ -17,10 +17,6 @@
     }[char]));
   }
 
-  function defaultSectionHeading(id, label) {
-    return `<h2 class="sr-only" id="${esc(id)}">${esc(label)}</h2>`;
-  }
-
   function defaultNavIcon(name) {
     return `<span aria-hidden="true">${esc(name)}</span>`;
   }
@@ -53,96 +49,104 @@
   }
 
   function renderDashboardView(model = {}, deps = {}) {
-    const sectionHeading = typeof deps.sectionHeading === "function" ? deps.sectionHeading : defaultSectionHeading;
     const navIcon = typeof deps.navIcon === "function" ? deps.navIcon : defaultNavIcon;
     const {
       todayCount = 0,
-      todayDone = 0,
       todayPending = 0,
-      todayCompletion = 0,
       unsafeCount = 0,
-      deliverySoon = 0,
       openMaterials = 0,
-      activeShips = 0,
-      processStages = [],
+      todayWorkCount = 0,
+      todayWorkProgress = 0,
+      appVersionLabel = "",
+      syncStatus = "offline",
+      syncLabel = "오프라인 · 로컬 저장",
+      syncDetail = "연결되면 자동으로 동기화합니다",
     } = model;
 
     const myCheck = model.myCheck || null;
-    const myCheckHtml = !myCheck ? "" : (() => {
-      const lines = {
-        none: { strong: "오늘 등록된 내 작업지시서가 없습니다", span: "필요하면 작업지시서 없이 바로 점검할 수 있습니다", btn: "점검 화면 열기", view: "check", disabled: false },
-        ready: { strong: `${esc(myCheck.name)}님, 미점검 ${myCheck.pending}건`, span: myCheck.nextLabel ? `다음 점검: ${esc(myCheck.nextLabel)}` : "", btn: "점검 시작", view: "check", disabled: false },
-        locked: { strong: `${esc(myCheck.name)}님, 미점검 ${myCheck.pending}건`, span: esc(myCheck.lockMessage), btn: "점검 시작", view: "check", disabled: true },
-        done: { strong: "오늘 점검을 모두 마쳤습니다", span: `${myCheck.total}건 제출 완료 · 안전한 하루 되세요`, btn: "이력 보기", view: "history", disabled: false },
-      };
-      const line = lines[myCheck.status] || lines.none;
-      return `<section class="ops-my-check is-${esc(myCheck.status)}" aria-labelledby="dashboardMyCheckHeading">
-        ${sectionHeading("dashboardMyCheckHeading", "오늘 내 점검")}
-        <div class="ops-my-check-card">
-          <div class="ops-my-check-info">
-            <strong>${line.strong}</strong>
-            ${line.span ? `<span>${line.span}</span>` : ""}
-          </div>
-          <button class="btn ops-my-check-btn" data-view="${line.view}" type="button" ${line.disabled ? `disabled title="${esc(myCheck.lockMessage)}"` : ""}>${line.btn}</button>
-        </div>
-      </section>`;
-    })();
+    const checkPending = myCheck ? Number(myCheck.pending || 0) : Number(todayPending || 0);
+    const checkAction = myCheck?.status === "done"
+      ? { label: "이력 보기", view: "history", disabled: false }
+      : { label: "점검 시작", view: "check", disabled: myCheck?.status === "locked" };
+    const checkDetail = myCheck?.status === "locked"
+      ? myCheck.lockMessage
+      : myCheck?.status === "done"
+        ? `${Number(myCheck.total || 0)}건 제출 완료`
+        : myCheck?.nextLabel
+          ? `다음 점검 · ${myCheck.nextLabel}`
+          : todayCount
+            ? "오늘 현장 전체 기준"
+            : "등록된 오늘 점검이 없습니다";
+    const syncTone = ["online", "loading", "offline", "error"].includes(syncStatus) ? syncStatus : "offline";
 
-    return `<h1 class="sr-only">조선소 안전 체크리스트</h1>
-      ${myCheckHtml}
-      <section class="ops-hero" aria-labelledby="dashboardQuickHeading">
-        ${sectionHeading("dashboardQuickHeading", "현장 빠른 실행")}
-        <div class="ops-hero-main">
-          <div class="ops-quick-actions" aria-label="현장 빠른 실행">
-            <button class="ops-quick-action primary" data-view="check" type="button">
-              <span>${navIcon("noteCheck")}</span>
-              <strong>작업 전 점검 시작</strong>
-            </button>
-            <button class="ops-quick-action danger" data-view="unsafe" type="button">
-              <span>${navIcon("warning")}</span>
-              <strong>불안전요소 등록</strong>
-            </button>
-            <button class="ops-quick-action violet" data-view="materials" type="button">
-              <span>${navIcon("board")}</span>
-              <strong>자재누락 등록</strong>
-            </button>
-          </div>
+    return `<main class="home-v4" aria-labelledby="homeV4Title">
+      <header class="home-v4__heading">
+        <div>
+          <h1 id="homeV4Title">오늘의 안전 운영</h1>
+          <p>한 화면에는 오늘 해야 할 일만</p>
         </div>
-        <div class="ops-today-panel">
-          <div class="ops-today-head">
-            <span>오늘 점검</span>
-            <strong>${todayDone}/${todayCount || 0}</strong>
+        ${appVersionLabel ? `<span class="home-v4__version">${esc(appVersionLabel)}</span>` : ""}
+      </header>
+
+      <div class="home-v4__sync is-${esc(syncTone)}" data-home-sync="${esc(syncTone)}" role="status" aria-live="polite">
+        <span class="home-v4__sync-dot" aria-hidden="true"></span>
+        <strong>${esc(syncLabel)}</strong>
+        <span>${esc(syncDetail)}</span>
+      </div>
+
+      <section class="home-v4__grid" aria-label="오늘의 안전 업무">
+        <article class="home-v4__card">
+          <div class="home-v4__card-top">
+            <span class="home-v4__icon is-teal">${navIcon("noteCheck")}</span>
           </div>
-          <div class="ops-progress" role="progressbar" aria-label="오늘 점검 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${todayCompletion}">
-            <span style="width:${todayCompletion}%"></span>
+          <h2>지금 해야 할 일</h2>
+          <p class="home-v4__metric">미점검 <strong>${esc(checkPending)}</strong>건</p>
+          <small>${esc(checkDetail)}</small>
+          <button class="home-v4__action is-teal" data-view="${checkAction.view}" type="button" ${checkAction.disabled ? `disabled title="${esc(myCheck?.lockMessage || "점검을 시작할 수 없습니다")}"` : ""}>${navIcon("noteCheck")}<span>${checkAction.label}</span></button>
+        </article>
+
+        <article class="home-v4__card">
+          <div class="home-v4__card-top">
+            <span class="home-v4__icon is-orange">${navIcon("warning")}</span>
           </div>
-          <div class="ops-today-grid">
-            <div><span>대기</span><strong>${todayPending}</strong></div>
-            <div><span>호선</span><strong>${activeShips}</strong></div>
-            <div><span>완료율</span><strong>${todayCompletion}%</strong></div>
+          <h2>즉시 확인</h2>
+          <div class="home-v4__dual-metric">
+            <span>불안전요소 <strong>${esc(unsafeCount)}</strong>건</span>
+            <span>자재누락 <strong>${esc(openMaterials)}</strong>건</span>
           </div>
-        </div>
+          <button class="home-v4__action is-orange" data-view="manage" type="button">${navIcon("warning")}<span>접수 처리</span></button>
+        </article>
+
+        <article class="home-v4__card">
+          <div class="home-v4__card-top">
+            <span class="home-v4__icon is-navy">${navIcon("ship")}</span>
+          </div>
+          <h2>오늘 작업</h2>
+          <div class="home-v4__work-metric">
+            <span>작업지시 <strong>${esc(todayWorkCount)}</strong>건</span>
+            <i aria-hidden="true"></i>
+            <span>진행 <strong>${esc(todayWorkProgress)}</strong>건</span>
+          </div>
+          <button class="home-v4__action is-navy" data-view="manage" data-manage-center-card="operations" type="button">${navIcon("ship")}<span>작업지시 보기</span></button>
+        </article>
+
+        <article class="home-v4__card">
+          <div class="home-v4__card-top">
+            <span class="home-v4__icon is-teal-soft">${navIcon("board")}</span>
+          </div>
+          <h2>현장 신고</h2>
+          <div class="home-v4__report-actions">
+            <button data-view="unsafe" type="button">${navIcon("warning")}<span>불안전요소 등록</span></button>
+            <button data-view="materials" type="button">${navIcon("board")}<span>자재누락 등록</span></button>
+          </div>
+        </article>
       </section>
-      <section class="ops-status-grid" aria-labelledby="dashboardStatusHeading">
-        ${sectionHeading("dashboardStatusHeading", "오늘 현장 상태")}
-        ${statPill("오늘 점검", todayCount, "건", "#0f766e", "shield", "", "today", { navIcon })}
-        ${statPill("불안전요소", unsafeCount, "건", "#dc2626", "warning", unsafeCount ? "즉시 확인" : "", "unsafe", { navIcon })}
-        ${statPill("누락 자재", openMaterials, "건", "#7c3aed", "board", "", "materials", { navIcon })}
-        ${statPill("인도 예정", deliverySoon, "척", "#f97316", "clock", deliverySoon ? "7일 이내" : "", "delivery", { navIcon })}
-      </section>
-      <section class="ops-grid" aria-labelledby="dashboardProcessHeading">
-        ${sectionHeading("dashboardProcessHeading", "공정 현황")}
-        <div class="panel panel-pad home-section ops-process-card ops-process-card-wide">
-          <div class="section-title">공정 현황 <button class="btn-light" data-view="ships" type="button">보기</button></div>
-          <div class="mini-process">
-            ${processStages.map(({ info = {}, count = 0 }) => `<div class="mini-stage" style="--dot:${esc(info.color)}">
-              <span class="mini-stage-dot"></span>
-              <div class="mini-stage-count">${count}</div>
-              <div class="small muted">${esc(info.label)}</div>
-            </div>`).join("")}
-          </div>
-        </div>
-      </section>`;
+
+      <button class="home-v4__management" data-view="items" type="button">
+        <span>${navIcon("settings")}<strong>관리 설정은 현장 실행과 분리</strong></span>
+        <span aria-hidden="true">›</span>
+      </button>
+    </main>`;
   }
 
   function defaultAnalyticsKpi(label, value, note, tone = "") {
@@ -219,28 +223,83 @@
     const hasTodayPending = typeof todayPending === "number" && Number.isFinite(todayPending);
     const todayPendingValue = hasTodayPending ? todayPending : "—";
     const todayPendingNote = hasTodayPending ? "오늘 대상 점검 중 미완료" : "대상 점검 집계 대기";
+    const priorityRows = [
+      {
+        key: "inspection",
+        label: "오늘 미점검",
+        count: hasTodayPending ? Math.max(0, todayPending) : null,
+        note: todayPendingNote,
+        tone: hasTodayPending ? (todayPending > 0 ? "high" : "clear") : "unknown",
+        status: hasTodayPending ? (todayPending > 0 ? "조치 필요" : "확인 완료") : "집계 대기",
+      },
+      {
+        key: "unsafe",
+        label: "미조치 불안전요소",
+        count: Math.max(0, Number(unsafeOpen) || 0),
+        note: unsafeSummary,
+        tone: unsafeOpen > 0 ? "high" : "clear",
+        status: unsafeOpen > 0 ? "조치 필요" : "확인 완료",
+      },
+      {
+        key: "material",
+        label: "미처리 자재 요청",
+        count: Math.max(0, Number(materialOpen) || 0),
+        note: materialSummary,
+        tone: materialOpen > 0 ? "medium" : "clear",
+        status: materialOpen > 0 ? "확인 필요" : "확인 완료",
+      },
+    ].sort((a, b) => {
+      if (a.count === null) return 1;
+      if (b.count === null) return -1;
+      return b.count - a.count;
+    });
+    const riskTotal = Number(riskNg.count || 0) + Number(riskWarn.count || 0) + Number(riskOk.count || 0);
 
     if (blockingDataState) {
-      return `<section class="admin-board analytics-board"${analyticsStateAttribute}>
+      return `<section class="admin-board analytics-board analytics-v4"${analyticsStateAttribute}>
         ${dataContextHtml}
         ${dataStateHtml}
       </section>`;
     }
 
-    return `<section class="admin-board analytics-board"${analyticsStateAttribute}>
+    return `<section class="admin-board analytics-board analytics-v4"${analyticsStateAttribute}>
         ${dataContextHtml}
         ${dataStateHtml}
-        <div class="admin-board-top">
-          <div>
-            <p class="analytics-eyebrow">현장 우선순위</p>
-            <h2>오늘의 안전 브리핑</h2>
-            <p>${esc(dateLabel)} · ${esc(syncText)}</p>
+        <section class="analytics-priority" data-analytics-priority aria-labelledby="analyticsPriorityHeading">
+          <div class="analytics-v4-heading">
+            <div>
+              <h2 id="analyticsPriorityHeading">조치가 필요한 지점부터</h2>
+            </div>
+            <strong>${esc(todayDone)}건 점검 완료${todayDeltaText ? ` · ${esc(todayDeltaText)}` : ""}</strong>
           </div>
-        </div>
+          <div class="analytics-priority-layout">
+            <div class="analytics-priority-table" role="table" aria-label="조치 우선순위">
+              <div class="analytics-priority-row is-head" role="row">
+                <span role="columnheader">순위</span><span role="columnheader">대상</span><span role="columnheader">현재</span><span role="columnheader">판단</span>
+              </div>
+              ${priorityRows.map((row, index) => `<div class="analytics-priority-row is-${esc(row.tone)}" data-analytics-priority-row="${esc(row.key)}" role="row">
+                <span class="analytics-priority-rank" role="cell">${index + 1}</span>
+                <span class="analytics-priority-copy" role="cell"><strong>${esc(row.label)}</strong><small>${esc(row.note)}</small></span>
+                <strong class="analytics-priority-count" role="cell">${row.count === null ? "—" : esc(row.count)}건</strong>
+                <span class="analytics-priority-status" role="cell">${esc(row.status)}</span>
+              </div>`).join("")}
+            </div>
+            <section class="analytics-risk-distribution" aria-labelledby="analyticsRiskHeading">
+              <div class="analytics-risk-heading"><h3 id="analyticsRiskHeading">최근 7일 안전 신호</h3><span>${riskTotal}건</span></div>
+              <div class="analytics-risk-body">
+                <div class="analytics-risk-donut${riskTotal ? "" : " is-empty"}" style="--risk-ng:${riskNg.percent};--risk-warn:${riskWarn.percent}" role="img" aria-label="${riskTotal ? `위험 ${riskNg.percent}%, 주의 ${riskWarn.percent}%, 정상 ${riskOk.percent}%` : "최근 7일 안전 신호 없음"}"><span><strong>${riskTotal}</strong>총 신호</span></div>
+                <dl class="analytics-risk-legend">
+                  <div class="is-danger"><dt>위험 · NG</dt><dd>${riskNg.count}건 · ${riskNg.percent}%</dd></div>
+                  <div class="is-warn"><dt>주의 · Warn</dt><dd>${riskWarn.count}건 · ${riskWarn.percent}%</dd></div>
+                  <div class="is-ok"><dt>정상 · OK</dt><dd>${riskOk.count}건 · ${riskOk.percent}%</dd></div>
+                </dl>
+              </div>
+            </section>
+          </div>
+        </section>
         <section class="analytics-action-first" aria-labelledby="analyticsActionHeading">
           <div class="analytics-section-heading">
-            <div><p class="analytics-eyebrow">지금 확인</p><h3 id="analyticsActionHeading">오늘 남은 조치</h3></div>
-            <span>${esc(todayDone)}건 점검 완료${todayDeltaText ? ` · ${esc(todayDeltaText)}` : ""}</span>
+            <div><h2 id="analyticsActionHeading">오늘 조치 현황</h2><p>확정된 운영 데이터만 표시합니다.</p></div>
           </div>
           <div class="analytics-action-grid">
             ${analyticsKpi("오늘 미점검", todayPendingValue, todayPendingNote, "danger")}
@@ -258,18 +317,6 @@
             </dl>
           </details>
         </section>
-        <section class="analytics-priority" data-analytics-priority aria-labelledby="analyticsPriorityHeading">
-          <div class="analytics-section-heading">
-            <div><p class="analytics-eyebrow">우선 순위</p><h3 id="analyticsPriorityHeading">우선 조치 대상</h3></div>
-            <span>현장 대응이 필요한 항목</span>
-          </div>
-          <div class="analytics-priority-list">
-            <div class="analytics-priority-item danger"><span>NG 안전 신호</span><strong>${esc(riskNg.count)}건</strong><small>최근 7일 점검 결과</small></div>
-            <div class="analytics-priority-item danger"><span>미조치 불안전요소</span><strong>${esc(unsafeOpen)}건</strong><small>${esc(unsafeSummary)}</small></div>
-            <div class="analytics-priority-item warn"><span>미처리 자재 요청</span><strong>${esc(materialOpen)}건</strong><small>${esc(materialSummary)}</small></div>
-          </div>
-        </section>
-        ${monthlyWorkerAnalyticsHtml}
         <div class="analytics-grid">
           <section class="analytics-panel">
             <div class="material-table-head">
@@ -285,15 +332,6 @@
               </div>`).join("")}
             </div>
           </section>
-          <section class="analytics-panel">
-            <div class="material-table-head">
-              <div><strong>최근 안전 신호</strong><span>최근 7일 점검 결과</span></div>
-            </div>
-            <div class="risk-bars">
-              <div class="risk-row danger"><span>위험 · NG</span><i><b style="width:${riskNg.percent}%"></b></i><strong>${riskNg.count}건 · ${riskNg.percent}%</strong></div>
-              <div class="risk-row warn"><span>주의 · Warn</span><i><b style="width:${riskWarn.percent}%"></b></i><strong>${riskWarn.count}건 · ${riskWarn.percent}%</strong></div>
-              <div class="risk-row ok"><span>정상 · OK</span><i><b style="width:${riskOk.percent}%"></b></i><strong>${riskOk.count}건 · ${riskOk.percent}%</strong></div>
-            </div>
             <div class="risk-summary">
               <div><span>주간 평균</span><strong>${esc(weeklyAverage)}건/일</strong></div>
               <div><span>NG 비율</span><strong>${riskNg.percent}%</strong></div>
@@ -316,6 +354,7 @@
             </div>`).join("") : `<div class="empty">최근 활동이 없습니다.</div>`}
           </div>
         </section>
+        ${monthlyWorkerAnalyticsHtml ? `<details class="analytics-v4-monthly"><summary><span><strong>월간 작업자 점검 현황</strong><small>기간별 이행 현황과 작업자 달력</small></span><b>펼쳐 보기</b></summary><div class="analytics-v4-monthly-content">${monthlyWorkerAnalyticsHtml}</div></details>` : ""}
         <section class="analytics-utilities" aria-label="분석 도구">
           <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
           <button class="btn-light" data-action="open-analytics-filters" type="button">필터</button>

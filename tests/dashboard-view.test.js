@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260818-fix-1";
+const ASSET_TOKEN = "20260826-v4-1";
 const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`;
@@ -16,41 +16,61 @@ const html = dashboardView.renderDashboardView({
   todayPending: 1,
   todayCompletion: 75,
   unsafeCount: 2,
-  deliverySoon: 1,
   openMaterials: 5,
-  activeShips: 9,
-  processStages: [
-    { info: { label: "탑재", color: "#111111" }, count: 7 },
-    { info: { label: "L/C", color: "#222222" }, count: 3 },
-  ],
+  todayWorkCount: 6,
+  todayWorkProgress: 4,
+  appVersionLabel: "v1.12.4",
+  syncStatus: "online",
+  syncLabel: "온라인 · 동기화 완료",
+  myCheck: {
+    status: "ready",
+    pending: 3,
+    nextLabel: "H1201 · 탑재",
+  },
 }, {
   sectionHeading: (id, label) => `<h2 id="${id}">${label}</h2>`,
   navIcon: (name) => `<i data-icon="${name}"></i>`,
 });
 
-assert(html.includes('<section class="ops-hero" aria-labelledby="dashboardQuickHeading">'));
+assert(html.includes('<main class="home-v4" aria-labelledby="homeV4Title">'));
+assert(html.includes('<h1 id="homeV4Title">오늘의 안전 운영</h1>'));
+assert(html.includes('<span class="home-v4__version">v1.12.4</span>'));
+assert(html.includes('data-home-sync="online"'));
+assert(html.includes("온라인 · 동기화 완료"));
+assert.strictEqual((html.match(/<article class="home-v4__card">/g) || []).length, 4);
+assert(html.includes("미점검 <strong>3</strong>건"));
+assert(html.includes("다음 점검 · H1201 · 탑재"));
 assert(html.includes('data-view="check"'));
 assert(html.includes('data-view="unsafe"'));
 assert(html.includes('data-view="materials"'));
-assert(html.includes('aria-valuenow="75"'));
-assert(html.includes("<strong>3/4</strong>"));
-assert(html.includes('data-stat-scope="today" data-history-scope="today"'));
-assert(html.includes('data-stat-scope="unsafe" data-action="view-unsafe-received"'));
-assert(html.includes('data-stat-scope="materials" data-action="view-material-list"'));
-assert(html.includes('data-stat-scope="delivery" data-history-scope="delivery"'));
-assert(html.includes("불안전요소"));
-assert(html.includes("즉시 확인"));
-assert(html.includes("누락 자재"));
-assert(html.includes("인도 예정"));
-assert(html.includes('<div class="mini-stage" style="--dot:#111111">'));
-assert(html.includes('<div class="small muted">탑재</div>'));
-assert(html.includes('<i data-icon="board"></i>'));
+assert(html.includes('data-view="manage" data-manage-center-card="operations"'));
+assert(html.includes('data-view="items"'));
+assert(html.includes("불안전요소 <strong>2</strong>건"));
+assert(html.includes("자재누락 <strong>5</strong>건"));
+assert(html.includes("작업지시 <strong>6</strong>건"));
+assert(html.includes("진행 <strong>4</strong>건"));
+assert(html.includes("관리 설정은 현장 실행과 분리"));
+assert(html.includes('<i data-icon="settings"></i>'));
+assert(!html.includes("현장 안전 홈"));
+assert(!html.includes('class="home-v4__kicker'));
 
 const unsafeZero = dashboardView.renderDashboardView({
   unsafeCount: 0,
-  processStages: [],
+  openMaterials: 0,
 });
-assert(unsafeZero.includes('<div class="stat-foot is-empty">&nbsp;</div>'));
+assert(unsafeZero.includes("불안전요소 <strong>0</strong>건"));
+assert(unsafeZero.includes("자재누락 <strong>0</strong>건"));
+
+const completedCheck = dashboardView.renderDashboardView({
+  myCheck: { status: "done", pending: 0, total: 2 },
+});
+assert(completedCheck.includes('data-view="history"'));
+assert(completedCheck.includes("2건 제출 완료"));
+
+const lockedCheck = dashboardView.renderDashboardView({
+  myCheck: { status: "locked", pending: 1, lockMessage: "07:00부터 시작 가능합니다" },
+});
+assert(lockedCheck.includes('disabled title="07:00부터 시작 가능합니다"'));
 
 const analyticsHtml = dashboardView.renderAnalyticsDashboardView({
   dateLabel: "2026년 5월 28일",
@@ -84,17 +104,18 @@ const analyticsHtml = dashboardView.renderAnalyticsDashboardView({
   shortUnsafeTitle: (value) => `요약:${value}`,
   statusChip: (value) => `<i data-status="${value}">${value}</i>`,
 });
-assert(analyticsHtml.includes('<section class="admin-board analytics-board">'));
-assert(analyticsHtml.includes("2026년 5월 28일 · 동기화 완료"));
+assert(analyticsHtml.includes('<section class="admin-board analytics-board analytics-v4">'));
 assert(analyticsHtml.includes('data-export-records="analytics"'));
-assert(analyticsHtml.includes("오늘의 안전 브리핑"));
+assert(analyticsHtml.includes("조치가 필요한 지점부터"));
 assert(analyticsHtml.includes('class="analytics-action-grid"'));
 assert(analyticsHtml.includes("오늘 미점검"));
 assert(analyticsHtml.includes("미조치 불안전요소"));
 assert(analyticsHtml.includes("미처리 자재"));
 assert(analyticsHtml.includes("<strong>2</strong>"));
 assert(analyticsHtml.includes('data-analytics-priority'));
-assert(analyticsHtml.includes("우선 조치 대상"));
+assert(analyticsHtml.includes('data-analytics-priority-row="inspection"'));
+assert(analyticsHtml.includes('data-analytics-priority-row="unsafe"'));
+assert(analyticsHtml.includes('data-analytics-priority-row="material"'));
 assert(analyticsHtml.includes("지표 기준 보기"));
 assert(analyticsHtml.includes('class="analytics-utilities"'));
 assert(analyticsHtml.includes("어제 대비 +2건"));
@@ -103,15 +124,18 @@ assert(analyticsHtml.includes('aria-valuenow="25"'));
 assert(analyticsHtml.includes("<em>Mounting</em>"));
 assert(analyticsHtml.includes("위험 · NG"));
 assert(analyticsHtml.includes("2.4건/일"));
+assert(analyticsHtml.includes('class="analytics-risk-donut"'));
+assert(!analyticsHtml.includes("analytics-eyebrow"));
+assert(!analyticsHtml.includes("analytics-priority-item"));
 assert(analyticsHtml.includes('data-action="open-analytics-filters"'));
 assert(analyticsHtml.includes('data-analytics-record-kind="unsafe"'));
 assert(analyticsHtml.includes('data-analytics-record-id="unsafe-1"'));
 assert(analyticsHtml.includes("요약:긴 제목"));
 assert(analyticsHtml.includes('<i data-status="접수">접수</i>'));
-assert(analyticsHtml.indexOf('class="analytics-action-grid"') < analyticsHtml.indexOf('data-analytics-priority'));
-assert(analyticsHtml.indexOf('data-analytics-priority') < analyticsHtml.indexOf('<section data-test-monthly-worker>'));
-assert(analyticsHtml.indexOf('<section data-test-monthly-worker>') < analyticsHtml.indexOf("현장 진행 현황"));
-assert(analyticsHtml.indexOf('class="analytics-utilities"') > analyticsHtml.indexOf("최근 안전 신호"));
+assert(analyticsHtml.indexOf('data-analytics-priority') < analyticsHtml.indexOf('class="analytics-action-grid"'));
+assert(analyticsHtml.indexOf('class="analytics-action-grid"') < analyticsHtml.indexOf("현장 진행 현황"));
+assert(analyticsHtml.indexOf("최근 현장 안전 기록") < analyticsHtml.indexOf('<section data-test-monthly-worker>'));
+assert(analyticsHtml.indexOf('class="analytics-utilities"') > analyticsHtml.indexOf('<section data-test-monthly-worker>'));
 
 const analyticsUnknownPendingHtml = dashboardView.renderAnalyticsDashboardView({
   unsafeOpen: 0,
@@ -121,6 +145,7 @@ const analyticsUnknownPendingHtml = dashboardView.renderAnalyticsDashboardView({
 });
 assert(analyticsUnknownPendingHtml.includes("오늘 미점검"));
 assert(analyticsUnknownPendingHtml.includes("<strong>—</strong>"), "missing pending count stays explicitly unknown instead of using a synthetic value");
+assert(analyticsUnknownPendingHtml.includes('class="analytics-risk-donut is-empty"'), "zero recent safety signals use the neutral empty ring");
 
 const analyticsContextCalls = [];
 const analyticsStateCalls = [];

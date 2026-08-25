@@ -24,8 +24,14 @@ const html = manageCenterView.renderManageCenterView({
   dangerZone: { description: "영향을 다시 확인하세요.", html: '<button data-test-danger-action type="button">별도 확인</button>' },
 });
 
-assert(html.includes("관리센터"));
+assert(html.includes('class="manage-center manage-center-v4"'));
+assert(html.includes("관리 센터"));
 assert(html.includes("찾고, 선택하고, 안전하게 처리"));
+assert(html.includes("관리 업무"));
+assert(!html.includes("관리 흐름"), "the management shell must not repeat a decorative section kicker");
+assert(!html.includes("목록 보기"), "management lane buttons must not repeat their button behavior as copy");
+assert(!html.includes("선택 상세"), "the selected record title must not be preceded by a redundant kicker");
+assert(!html.includes("보호 구역"), "the danger boundary must be named directly");
 assert(html.includes('data-manage-center-search'));
 assert(html.includes('value="호선 100"'));
 assert(html.includes('data-manage-center-action-needed type="checkbox" checked'));

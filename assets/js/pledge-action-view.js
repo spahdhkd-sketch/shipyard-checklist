@@ -28,14 +28,14 @@
   function renderKpis(rawKpis) {
     const kpis = rawKpis || {};
     const rows = [
-      ["대상", count(kpis.target), "명"],
-      ["완료", count(kpis.completed), "명"],
-      ["즉시 확인", count(kpis.actionNeeded), "명"],
-      ["이행률", count(kpis.completionRate), "%"],
+      { label: "서약 대상", value: count(kpis.target), unit: "명", tone: "target" },
+      { label: "서약 완료", value: count(kpis.completed), unit: "명", tone: "complete" },
+      { label: "즉시 확인", value: count(kpis.actionNeeded), unit: "명", tone: "action" },
+      { label: "이행률", value: count(kpis.completionRate), unit: "%", tone: "rate" },
     ];
     return `<div class="pledge-action-kpis" aria-label="안전서약 핵심 지표">
-      ${rows.map(([label, value, unit]) => `<article class="pledge-action-kpi">
-        <span>${esc(label)}</span><strong>${esc(value)}<em>${esc(unit)}</em></strong>
+      ${rows.map((row) => `<article class="pledge-action-kpi is-${row.tone}">
+        <span>${esc(row.label)}</span><strong>${esc(row.value)}<em>${esc(row.unit)}</em></strong>
       </article>`).join("")}
     </div>`;
   }
@@ -59,14 +59,22 @@
   }
 
   function renderMobileRows(rows) {
-    return rows.map((row) => `<article class="pledge-action-mobile-card" data-row-id="${esc(row && row.id)}">
-      <header><strong>${esc(row && row.subjectLabel)}</strong><span>${esc(row && row.statusLabel)}</span></header>
-      <dl>
-        <div><dt>작업</dt><dd data-label="작업">${esc(row && row.assignmentLabel)}</dd></div>
-        <div><dt>확인 사유</dt><dd data-label="확인 사유">${esc(row && row.reasonLabel)}</dd></div>
-        <div><dt>갱신</dt><dd data-label="갱신">${esc(row && row.updatedLabel)}</dd></div>
-      </dl>
-    </article>`).join("");
+    return rows.map((row) => {
+      const details = [];
+      if (row && row.assignmentLabel && row.assignmentLabel !== "-") {
+        details.push(`<div><dt>작업</dt><dd data-label="작업">${esc(row.assignmentLabel)}</dd></div>`);
+      }
+      if (row && row.reasonLabel) {
+        details.push(`<div><dt>확인 사유</dt><dd data-label="확인 사유">${esc(row.reasonLabel)}</dd></div>`);
+      }
+      if (row && row.updatedLabel && row.updatedLabel !== "-") {
+        details.push(`<div><dt>갱신</dt><dd data-label="갱신">${esc(row.updatedLabel)}</dd></div>`);
+      }
+      return `<article class="pledge-action-mobile-card" data-row-id="${esc(row && row.id)}">
+        <header><strong>${esc(row && row.subjectLabel)}</strong><span>${esc(row && row.statusLabel)}</span></header>
+        ${details.length ? `<dl>${details.join("")}</dl>` : ""}
+      </article>`;
+    }).join("");
   }
 
   function renderActionRows(rawRows) {
@@ -80,6 +88,20 @@
       </table>
     </div>
     <div class="pledge-action-mobile-list" aria-label="즉시 확인 대상 카드">${renderMobileRows(rows)}</div>`;
+  }
+
+  function renderPledgePreview(rawModel) {
+    const model = rawModel || {};
+    const rules = Array.isArray(model.rules) ? model.rules.filter(Boolean) : [];
+    return `<aside class="pledge-v4__preview" aria-labelledby="pledge-v4-preview-title">
+      <header><h2 id="pledge-v4-preview-title">서약서 미리보기</h2><span>${esc(model.previewDateLabel || model.viewDate || "")}</span></header>
+      <div class="pledge-v4__paper">
+        <div><strong>안전 서약서</strong><span>${esc(model.previewDateLabel || model.viewDate || "")}</span></div>
+        <p>본인은 작업 전 안전수칙을 확인하고, 동료와 안전을 배려하며 무재해 작업을 위해 최선을 다할 것을 서약합니다.</p>
+        ${rules.length ? `<ol>${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol>` : `<p class="pledge-v4__paper-empty">게시된 서약 수칙이 없습니다.</p>`}
+        <dl><div><dt>성명</dt><dd>________________</dd></div><div><dt>서명</dt><dd>________________</dd></div></dl>
+      </div>
+    </aside>`;
   }
 
   function renderPreflight(rawPreflight, options = {}) {
@@ -160,22 +182,29 @@
     const sharedState = typeof deps.renderDataState === "function" ? deps.renderDataState(stateOptions) : null;
     const contextHtml = typeof sharedContext === "string" ? sharedContext : fallbackDataContext(freshness);
     const dataStateHtml = typeof sharedState === "string" ? sharedState : fallbackDataState(dataState);
-    return `<section class="pledge-action-view" data-pledge-action-state="${esc(dataState)}"${dataState === "loading" ? ' aria-busy="true"' : ""}>
-      ${contextHtml}
-      <div class="pledge-date-nav">
-        <button class="btn-light" data-action="pledge-prev-day" type="button" aria-label="이전 날 서약 보기">◀ 이전 날</button>
-        <input class="input pledge-date-input" type="date" data-pledge-view-date value="${esc(model.viewDate || "")}" max="${esc(model.maxDate || "")}" aria-label="서약 조회 날짜" />
-        <button class="btn-light" data-action="pledge-next-day" type="button" aria-label="다음 날 서약 보기" disabled>다음 날 ▶</button>
+    return `<section class="pledge-action-view pledge-v4" data-pledge-action-state="${esc(dataState)}"${dataState === "loading" ? ' aria-busy="true"' : ""}>
+      <div class="pledge-v4__context">${contextHtml}</div>
+      <div class="pledge-v4__toolbar">
+        <div class="pledge-date-nav">
+          <button class="btn-light" data-action="pledge-prev-day" type="button" aria-label="이전 날 서약 보기">◀ 이전 날</button>
+          <input class="input pledge-date-input" type="date" data-pledge-view-date value="${esc(model.viewDate || "")}" max="${esc(model.maxDate || "")}" aria-label="서약 조회 날짜" />
+          <button class="btn-light" data-action="pledge-next-day" type="button" aria-label="다음 날 서약 보기" disabled>다음 날 ▶</button>
+        </div>
+        ${blockingState ? "" : `<div class="pledge-action-basis"><span>오늘 작업지시 확정 기준</span><strong>${esc(model.denominatorLabel || "확정 작업지시 0명 기준")}</strong></div>`}
       </div>
       ${dataStateHtml}
       ${blockingState ? "" : `
-      <div class="pledge-action-basis"><span>확정 작업지시 기준</span><strong>${esc(model.denominatorLabel || "확정 작업지시 0명 기준")}</strong></div>
-      ${renderKpis(kpis)}
-      <section class="pledge-action-needed" aria-labelledby="pledge-action-needed-title">
-        <header><div><span>Action needed</span><h2 id="pledge-action-needed-title">즉시 확인</h2></div>${renderFilters(model.filters)}</header>
-        ${renderActionRows(rows)}
-        <div class="pledge-action-review"><p>대상과 상태를 확인한 뒤 알림 검토 단계로 이동합니다.</p><button data-action="review-pledge-notifications" type="button" ${reviewDisabled ? "disabled" : ""}>알림 대상 검토</button></div>
-      </section>
+      <div class="pledge-v4__dashboard">
+        <div class="pledge-v4__operations">
+          ${renderKpis(kpis)}
+          <section class="pledge-action-needed" aria-labelledby="pledge-action-needed-title">
+            <header><div><h2 id="pledge-action-needed-title">즉시 확인</h2><p>미서약과 알림 미등록 대상을 구분해 검토합니다.</p></div>${renderFilters(model.filters)}</header>
+            ${renderActionRows(rows)}
+            <div class="pledge-action-review"><p>대상과 상태를 확인한 뒤 알림 검토 단계로 이동합니다.</p><button data-action="review-pledge-notifications" type="button" ${reviewDisabled ? "disabled" : ""}>알림 대상 검토</button></div>
+          </section>
+        </div>
+        ${renderPledgePreview(model)}
+      </div>
       <section class="pledge-action-followup" aria-label="알림 완료 추적과 관리">
         <article class="pledge-action-recent"><span>완료 추적</span><h2>${esc(recent.title || "최근 발송")}</h2><p>${esc(recent.summary || "발송 기록이 없습니다.")}</p><strong>${esc(recent.statusLabel || "-")}</strong></article>
         <nav class="pledge-action-utilities" aria-label="안전서약 알림 관리"><h2>기록과 설정</h2><button data-action="open-pledge-history" type="button">${esc(utilities.historyLabel || "발송 이력")}</button><button data-action="open-pledge-settings" type="button">${esc(utilities.settingsLabel || "알림 설정")}</button></nav>

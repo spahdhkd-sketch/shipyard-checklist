@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const styles = fs.readFileSync(path.join(__dirname, "../assets/css/styles-v2.css"), "utf8");
 const analyticsStyles = fs.readFileSync(path.join(__dirname, "../assets/css/30-feature-monthly-worker.css"), "utf8");
+const app = fs.readFileSync(path.join(__dirname, "../assets/js/app-v2.js"), "utf8");
 const posterSystemStart = styles.lastIndexOf(".pledge-action-view,");
 const posterSystemEnd = styles.indexOf("\n    @media (max-width: 760px) {\n      .mobile-admin-shortcut,", posterSystemStart);
 assert(posterSystemStart >= 0 && posterSystemEnd > posterSystemStart, "P1 poster system boundaries must remain explicit");
@@ -74,31 +75,33 @@ assert.match(posterSystem, /--poster-touch-target:\s*var\(--ds-touch-target-min\
 assert.match(posterSystem, /\.pledge-action-table-wrap\s*\{[\s\S]*?overflow-x:\s*auto;/, "desktop pledge rows retain a contained table surface");
 assert.match(posterSystem, /@media \(max-width: 760px\)\s*\{[\s\S]*?\.pledge-action-table-wrap\s*\{\s*display:\s*none;/, "mobile pledge rows must not depend on an inner horizontal table");
 assert.match(posterSystem, /\.pledge-action-mobile-list\s*\{\s*display:\s*grid;/, "mobile pledge rows must render as labeled cards");
-assert.match(posterSystem, /\.manage-center__workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(300px, \.8fr\);/, "desktop management uses a list-detail layout");
-assert.match(posterSystem, /@media \(max-width: 900px\)\s*\{[\s\S]*?\.manage-center__workspace\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/, "management list-detail must stack before narrow mobile widths");
-assert.match(posterSystem, /\.manage-center__danger-zone\s*\{[\s\S]*?border-left:\s*var\(--poster-border-accent\) solid var\(--poster-red\);/, "danger actions need an isolated red zone");
+assert.match(styles, /\.manage-center-v4 \.manage-center__workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.3fr\) minmax\(280px, \.9fr\) minmax\(220px, \.62fr\);/, "desktop management uses a compact list-detail-history layout");
+assert.match(styles, /@media \(max-width: 920px\)\s*\{[\s\S]*?\.manage-center-v4 \.manage-center__workspace\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/, "management list-detail must stack at the tablet boundary");
+assert.match(styles, /\.manage-center-v4 \.manage-center__danger-zone\s*\{[\s\S]*?border-left:\s*var\(--poster-border-default\) solid var\(--poster-line-danger\);/, "danger actions need an isolated boundary without a decorative accent stripe");
+assert.match(app, /<section class="material-flow check-flow check-flow-v4">/, "inspection flow must use the approved responsive shell");
+assert.match(app, /<ol class="check-flow-steps" aria-label="점검 작성 단계">/, "inspection progress must use an ordered step contract");
+assert.doesNotMatch(app, /작업 전 점검 · STEP/, "inspection progress must not repeat an English step kicker");
+assert.match(styles, /\.check-flow-v4\s*\{[\s\S]*?width:\s*min\(100%, var\(--ds-layout-home-content-max\)\);/, "inspection flow must expand to the shared desktop content width");
+assert.match(styles, /\.check-flow-v4__workspace\s*\{[\s\S]*?grid-template-areas:\s*"form status";/, "inspection writing and submission status must use a desktop work-review layout");
+assert.match(styles, /@media \(max-width: 920px\)\s*\{[\s\S]*?\.check-flow-v4__workspace\s*\{[\s\S]*?grid-template-areas:\s*"status" "form";/, "inspection work-review layout must become one column before mobile widths");
 assert.match(posterSystem, /\.pledge-action-review button,[\s\S]*?\.pledge-action-utilities button\s*\{[\s\S]*?min-height:\s*var\(--poster-touch-target\);/, "pledge controls need the global touch target");
 assert.match(analyticsSystem, /--poster-navy:\s*var\(--ds-color-navy-800\);/, "action-first analytics must share the global navy contract");
 assert.match(analyticsSystem, /--poster-space-sm:\s*var\(--ds-space-8\);/, "action-first analytics must share the global spacing contract");
 assert.match(analyticsSystem, /--poster-radius-card:\s*var\(--ds-radius-16\);/, "action-first analytics must share the global card radius");
 assert.match(analyticsSystem, /--poster-radius-kpi:\s*var\(--ds-radius-14\);/, "action-first analytics must share the global KPI radius");
 assert.match(analyticsSystem, /--poster-shadow-card:\s*var\(--ds-shadow-card\);/, "action-first analytics must share the global card shadow");
-assert.match(analyticsSystem, /\.analytics-board \.admin-board-top h2\s*\{\s*color:\s*var\(--poster-on-dark\);/, "analytics masthead title must use the dark-surface foreground token");
-assert.match(analyticsSystem, /--poster-on-dark:\s*var\(--ds-color-on-dark\);/, "analytics masthead needs the global dark-surface foreground token");
-assert.match(analyticsSystem, /--poster-masthead-surface:\s*var\(--ds-color-navy-950\);/, "analytics masthead must use the global dark surface token");
-assert.match(analyticsSystem, /\.analytics-board \.admin-board-top\s*\{[\s\S]*?background:\s*var\(--poster-masthead-surface\);/, "analytics masthead must render its dark surface token");
-assert(contrastRatio("#FFFFFF", "#07162F") >= 4.5, "analytics masthead foreground must meet WCAG AA contrast on its dark surface");
+assert.match(analyticsSystem, /\.analytics-v4 > \.data-context\s*\{[\s\S]*?border-bottom:\s*var\(--poster-border-default\) solid var\(--poster-line\);[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/, "analytics uses one flat data context instead of a second masthead card");
+assert.match(analyticsSystem, /\.analytics-v4 > \.data-context h1,[\s\S]*?color:\s*var\(--poster-navy\);/, "analytics context title must use the operational navy token");
 assert.match(analyticsSystem, /padding:\s*var\(--poster-space-lg\);/, "action-first analytics must consume spacing tokens");
 assert.match(analyticsSystem, /border-radius:\s*var\(--poster-radius-card\);/, "action-first analytics must consume radius tokens");
-assert.match(analyticsSystem, /box-shadow:\s*var\(--poster-shadow-card\);/, "action-first analytics must consume shadow tokens");
+assert.match(analyticsSystem, /\.analytics-v4 \.analytics-priority,[\s\S]*?box-shadow:\s*none;/, "analytics v4 surfaces must not stack borders with decorative card shadows");
 assert.deepStrictEqual(
   rawAnalyticsPrimitives(),
   [],
   "all active analytics action/poster selectors must be token-driven across the full cascade",
 );
-assert.match(analyticsSystem, /\.analytics-action-first\s*\{[\s\S]*?border-top-color:\s*var\(--poster-teal\);/, "action-first analytics must lead with teal");
-assert.match(analyticsSystem, /\.analytics-action-grid \.analytics-kpi\.danger\s*\{\s*border-top-color:\s*var\(--poster-red\);/, "analytics danger cards must use restrained red");
-assert.match(analyticsSystem, /\.analytics-action-grid \.analytics-kpi\.warn\s*\{\s*border-top-color:\s*var\(--poster-amber\);/, "analytics warning cards must use amber");
+assert.match(analyticsSystem, /\.analytics-v4 \.analytics-action-grid \.analytics-kpi\s*\{[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;/, "analytics KPI cells must share one 2x2 surface without nested cards");
+assert.match(analyticsSystem, /\.analytics-risk-donut\s*\{[\s\S]*?background:\s*conic-gradient\([\s\S]*?var\(--poster-danger-text\)[\s\S]*?var\(--poster-amber\)[\s\S]*?var\(--poster-teal\)/, "analytics risk distribution must use the approved semantic token sequence");
 assert.match(analyticsSystem, /\.analytics-utilities \.btn,[\s\S]*?\.analytics-board \.monthly-worker-toolbar \.btn-light\s*\{[\s\S]*?min-height:\s*var\(--ds-touch-target-min\);/, "analytics controls need the documented touch-target token");
 
 console.log("p1 poster visual static tests passed");

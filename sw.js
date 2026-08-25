@@ -1,5 +1,5 @@
-const APP_VERSION = "1.12.4-20260814-editor-safety";
-const ASSET_TOKEN = "20260818-fix-1";
+const APP_VERSION = "1.13.0-20260826-v4";
+const ASSET_TOKEN = "20260826-v4-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
@@ -15,6 +15,14 @@ const SHELL = [
   `/assets/dist/css/30-feature-push-management.min.css?v=${ASSET_TOKEN}`,
   `/assets/dist/css/30-feature-monthly-worker.min.css?v=${ASSET_TOKEN}`,
   `/assets/dist/css/20-component-disabled-reason.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-ships-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-history-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-quick-menu-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-unsafe-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-materials-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-manage-tabs-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-governance-v4.min.css?v=${ASSET_TOKEN}`,
+  `/assets/dist/css/30-feature-auxiliary-v4.min.css?v=${ASSET_TOKEN}`,
   "/assets/js/vendor/supabase-js-2.105.3.min.js",
   `/assets/dist/js/checklist-rules.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/inspection-rules.min.js?v=${ASSET_TOKEN}`,
@@ -40,6 +48,14 @@ const SHELL = [
   `/assets/dist/js/navigation-model.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/pledge-action-view.min.js?v=${ASSET_TOKEN}`,
   `/assets/dist/js/manage-center-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/ships-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/history-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/quick-menu-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/unsafe-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/materials-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/manage-tabs-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/governance-v4-view.min.js?v=${ASSET_TOKEN}`,
+  `/assets/dist/js/auxiliary-v4-view.min.js?v=${ASSET_TOKEN}`,
   "/assets/dist/js/admin-v2.js",
   `/assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`
 ];

@@ -118,7 +118,7 @@ assert(!archiveHandler.includes(".delete("), "archive handler never directly per
 includesAll(app, [
   '"archive-work-prep-record"',
   "soft-delete 경계",
-  ">보관<",
+  ">보관 요청<",
 ], "work-prep archive presentation");
 assert(!app.includes('"delete-work-prep-record": () =>'), "work-prep destructive control is not dispatched as ordinary delete");
 

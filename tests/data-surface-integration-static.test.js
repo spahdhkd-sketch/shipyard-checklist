@@ -60,7 +60,7 @@ includesAll(manageRender, [
   "contentReadOnly: actionsDisabled",
   "selectedRecord",
   "mobileDetailOpen: Boolean(selectedRecord && isNarrowViewport())",
-  'detailEnabled: ["unsafe", "materials", "workPrep"].includes(state.manageTab)',
+  'detailEnabled: !moduleOwnsDetail && ["unsafe", "materials", "workPrep"].includes(state.manageTab)',
   "renderDataContext: SCREEN_VIEWS.renderDataContext",
   "renderDataState: SCREEN_VIEWS.renderDataState",
 ], "manage model and shared renderer deps");
@@ -104,6 +104,7 @@ assert.ok(renderFunction.includes("enforceManageReadOnlyControls()"), "every ren
 const readOnlyControls = section("function enforceManageReadOnlyControls()", "function applyScreenMode()");
 includesAll(readOnlyControls, [
   'data-manage-content-read-only="true"',
+  'data-action="back-material-list"',
   "control.disabled = true",
   'control.setAttribute("aria-disabled", "true")',
 ], "stale and offline manage content keeps record navigation while disabling native mutation controls");

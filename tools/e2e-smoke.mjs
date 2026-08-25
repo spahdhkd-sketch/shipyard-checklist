@@ -11,6 +11,7 @@ const PORT = 8917;
 const PRE = "shipyardSafetyV1.";
 const PWA_ONLY = process.argv.includes("--pwa-only");
 const DESIGN_TOKEN_VISUAL = process.argv.includes("--design-token-visual");
+const HOME_VISUAL_ONLY = process.argv.includes("--home-visual-only");
 
 async function resolveChrome() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -218,6 +219,12 @@ async function main() {
         updated_at: record.updatedAt,
         deleted_at: null,
       })),
+      unsafe_issues: options.mockVisualRecords ? [{
+        id: "visual-unsafe-1", ship_no: "2401", content: "통로 적치물 확인", worker_id: "w-hong", worker_name_snapshot: "홍길동", worker_team_snapshot: "선행", status: "접수", admin_memo: "", created_at: new Date(testNowMs).toISOString(), updated_at: new Date(testNowMs).toISOString(), completed_at: null, status_history: [],
+      }] : [],
+      missing_materials: options.mockVisualRecords ? [{
+        id: "visual-material-1", ship_no: "2401", material_name: "안전 난간", quantity: 2, unit: "EA", worker_id: "w-hong", worker_name_snapshot: "홍길동", worker_team_snapshot: "선행", status: "접수", admin_memo: "", created_at: new Date(testNowMs).toISOString(), updated_at: new Date(testNowMs).toISOString(), completed_at: null, status_history: [],
+      }] : [],
     };
     await newPage.emulateTimezone(tz);
     await newPage.evaluateOnNewDocument((nowMs) => {
@@ -469,34 +476,76 @@ async function main() {
       { label: "390", width: 390, height: 844, mobile: true },
       { label: "360", width: 360, height: 800, mobile: true },
     ];
-    const routes = [
+    const visualRoutes = [
+      { label: "홈", path: "index.html", selector: ".home-v4", kpiSelector: ".home-v4__grid", home: true },
+      { label: "작업 전 점검", path: "check.html", selector: ".check-flow-v4", kpiSelector: ".check-flow-steps", flow: true, kpiCount: 3, mobileColumns: 3 },
       { label: "서약", path: "pledge.html", selector: ".pledge-action-view", kpiSelector: ".pledge-action-kpis" },
       { label: "통계", path: "analytics.html", selector: ".analytics-board", kpiSelector: ".analytics-action-grid" },
       { label: "관리", path: "manage.html", selector: ".manage-center", kpiSelector: ".manage-center__card-grid" },
+      { label: "호선", path: "ships.html", selector: ".ships-v4", surfaceOnly: true },
+      { label: "점검 이력", path: "history.html", selector: ".history-v4", surfaceOnly: true },
+      { label: "빠른 메뉴", path: "items.html", selector: ".quick-menu-v4", surfaceOnly: true },
+      { label: "관리 불안전요소", path: "manage.html", query: "?__admin=0", manageTab: "unsafe", selector: ".unsafe-v4", surfaceOnly: true, screenshotKey: "manage-unsafe" },
+      { label: "관리 자재 누락", path: "manage.html", manageTab: "materials", selector: ".materials-v4", surfaceOnly: true, screenshotKey: "manage-materials" },
+      { label: "관리 푸시", path: "manage.html", manageTab: "push", selector: ".governance-v4--push", surfaceOnly: true, screenshotKey: "manage-push" },
+      { label: "관리 안전수칙", path: "manage.html", manageTab: "safetySettings", selector: ".governance-v4--safety", surfaceOnly: true, screenshotKey: "manage-safety" },
     ];
+    const routes = HOME_VISUAL_ONLY ? visualRoutes.filter((route) => route.home) : visualRoutes;
     const evidenceDir = join(ROOT, ".omo", "evidence", "design-token");
     if (DESIGN_TOKEN_VISUAL) mkdirSync(evidenceDir, { recursive: true });
     const results = [];
     for (const viewport of viewports) {
-      const visualPage = await makePage({ mockSupabaseWrites: true, mockSupabaseReads: true });
+      const visualPage = await makePage({ mockSupabaseWrites: true, mockSupabaseReads: true, mockVisualRecords: true });
       await visualPage.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
       await visualPage.evaluateOnNewDocument((storagePrefix, screenMode) => {
+        const visualParams = new URLSearchParams(window.location.search);
+        const visualManageTab = visualParams.get("__manageTab") || "workers";
+        const visualAdminEnabled = visualParams.get("__admin") !== "0";
         localStorage.setItem(storagePrefix + "screenMode", screenMode);
-        localStorage.setItem(storagePrefix + "manageTab", JSON.stringify("workers"));
+        localStorage.setItem(storagePrefix + "manageTab", JSON.stringify(visualManageTab));
         const workPrepRecords = JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]");
         localStorage.setItem(storagePrefix + "workPrepRecords", JSON.stringify(workPrepRecords.map((record) => ({ ...record, status: "confirmed" }))));
-        sessionStorage.setItem(storagePrefix + "adminMode", "true");
-        sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
-        sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
-          token: "e2e-admin-session",
-          workerId: "w-hong",
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        }));
+        localStorage.setItem(storagePrefix + "unsafeIssues", JSON.stringify([{
+          id: "visual-unsafe-1", shipNo: "2401", content: "통로 적치물 확인", workerNameSnapshot: "홍길동", status: "접수", createdAt: new Date().toISOString(), statusHistory: [],
+        }]));
+        localStorage.setItem(storagePrefix + "missingMaterials", JSON.stringify([{
+          id: "visual-material-1", shipNo: "2401", materialName: "안전 난간", quantity: 2, unit: "EA", workerNameSnapshot: "홍길동", status: "접수", createdAt: new Date().toISOString(), statusHistory: [],
+        }]));
+        if (visualAdminEnabled) {
+          sessionStorage.setItem(storagePrefix + "adminMode", "true");
+          sessionStorage.setItem(storagePrefix + "adminAuthSource", "worker");
+          sessionStorage.setItem(storagePrefix + "adminSession", JSON.stringify({
+            token: "e2e-admin-session",
+            workerId: "w-hong",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          }));
+        } else {
+          sessionStorage.removeItem(storagePrefix + "adminMode");
+          sessionStorage.removeItem(storagePrefix + "adminAuthSource");
+          sessionStorage.removeItem(storagePrefix + "adminSession");
+        }
       }, PRE, viewport.mobile ? "mobile" : "desktop");
       try {
         for (const route of routes) {
-          await visualPage.goto(`http://localhost:${PORT}/${route.path}`, { waitUntil: "domcontentloaded", timeout: 25000 });
+          await visualPage.goto(`http://localhost:${PORT}/${route.path}${route.query || ""}`, { waitUntil: "domcontentloaded", timeout: 25000 });
           await wait(900);
+          if (route.manageTab) {
+            const selected = await visualPage.evaluate((tab) => {
+              const button = [...document.querySelectorAll(`[data-manage-center-tab="${tab}"]`)]
+                .find((candidate) => candidate.getClientRects().length > 0);
+              button?.click();
+              return Boolean(button);
+            }, route.manageTab);
+            if (!selected) throw new Error(`manage visual tab unavailable: ${route.manageTab}`);
+            await visualPage.waitForSelector(route.selector, { visible: true, timeout: 8000 });
+            await wait(1000);
+            const stayedSelected = await visualPage.$eval(route.selector, (surface) => surface.getClientRects().length > 0).catch(() => false);
+            if (!stayedSelected) {
+              await visualPage.evaluate((tab) => document.querySelector(`[data-manage-center-tab="${tab}"]`)?.click(), route.manageTab);
+              await visualPage.waitForSelector(route.selector, { visible: true, timeout: 8000 });
+              await wait(300);
+            }
+          }
           const pledgeReady = route.path !== "pledge.html" || await visualPage.waitForFunction(() => {
             const surface = document.querySelector(".pledge-action-view");
             return Boolean(
@@ -544,10 +593,15 @@ async function main() {
               viewportWidth: window.innerWidth,
               navVisible,
               navClear: !mobile || mainBottomPadding >= navHeight,
+              homeTitleCount: surface ? surface.querySelectorAll("#homeV4Title").length : 0,
+              homeSyncVisible: visible(surface?.querySelector("[data-home-sync]")),
+              flowTitleCount: surface ? surface.querySelectorAll("h1").length : 0,
+              surfaceTitleCount: surface ? surface.querySelectorAll("h1").length : 0,
+              surfaceHeadingCount: surface ? surface.querySelectorAll(":scope > header h1, :scope > header h2").length : 0,
               contextVisible: visible(context),
               contextTitleCount: context ? context.querySelectorAll("h1").length : 0,
-              hasBusinessDate: [...(context?.querySelectorAll("dt") || [])].some((node) => node.textContent.includes("기준 날짜")),
-              hasAsOf: [...(context?.querySelectorAll("dt") || [])].some((node) => node.textContent.includes("최종 반영")),
+          hasBusinessDate: [...(context?.querySelectorAll("dt") || [])].some((node) => /기준 날짜|서약 기준일/.test(node.textContent)),
+          hasAsOf: [...(context?.querySelectorAll("dt") || [])].some((node) => /최종 반영|데이터 기준/.test(node.textContent)),
               kpiItemCount: kpiGrid ? [...kpiGrid.children].filter(visible).length : 0,
               kpiColumnCount: kpiGrid ? getComputedStyle(kpiGrid).gridTemplateColumns.split(/\s+/).filter(Boolean).length : 0,
               fontFamily: bodyStyle.fontFamily,
@@ -558,7 +612,7 @@ async function main() {
             };
           }, route.selector, route.kpiSelector, viewport.mobile);
           let manageDetail = null;
-          if (viewport.mobile && route.path === "manage.html") {
+          if (viewport.mobile && route.path === "manage.html" && !route.manageTab) {
             const tabSelection = await visualPage.evaluate((storagePrefix) => {
               const candidates = [...document.querySelectorAll('[data-manage-center-tab="workPrep"]')];
               const element = candidates.find((candidate) => {
@@ -710,6 +764,12 @@ async function main() {
                 bodyUnlocked: !document.body.classList.contains("manage-mobile-detail-open"),
                 focusRestored: document.activeElement === trigger,
                 bottomNavVisible: navVisible,
+                activeElement: {
+                  tag: document.activeElement?.tagName || "",
+                  action: document.activeElement?.getAttribute("data-action") || "",
+                  recordId: document.activeElement?.getAttribute("data-work-prep-record-detail") || "",
+                },
+                triggerCount: document.querySelectorAll(`[data-work-prep-record-detail="${CSS.escape(expectedId)}"]`).length,
               };
             }, recordId);
             manageDetail = {
@@ -733,17 +793,24 @@ async function main() {
                 && returned.bottomNavVisible,
             };
           }
+          const headingContractOk = route.home
+            ? observation.homeTitleCount === 1 && observation.homeSyncVisible
+            : route.flow
+              ? observation.flowTitleCount === 1
+            : route.surfaceOnly
+              ? observation.surfaceTitleCount === 1 || observation.surfaceHeadingCount === 1
+            : observation.contextVisible
+              && observation.contextTitleCount === 1
+              && observation.hasBusinessDate
+              && observation.hasAsOf;
           const ok = pledgeReady
             && observation.surfaceVisible
             && !observation.overflow
             && observation.navVisible === viewport.mobile
             && observation.navClear
-            && observation.contextVisible
-            && observation.contextTitleCount === 1
-            && observation.hasBusinessDate
-            && observation.hasAsOf
-            && observation.kpiItemCount === 4
-            && (!viewport.mobile || observation.kpiColumnCount === 2)
+            && headingContractOk
+            && (route.surfaceOnly || observation.kpiItemCount === (route.kpiCount || 4))
+            && (route.surfaceOnly || !viewport.mobile || observation.kpiColumnCount === (route.mobileColumns || 2))
             && observation.fontFamily.startsWith('"Noto Sans KR"')
             && observation.navy === "#07162F"
             && observation.teal === "#0F766E"
@@ -752,7 +819,7 @@ async function main() {
             && (!manageDetail || manageDetail.ok);
           results.push({ label: `${viewport.label} ${route.label}`, viewport, route: route.path, ok, pledgeReady, observation, manageDetail });
           if (DESIGN_TOKEN_VISUAL) {
-            await visualPage.screenshot({ path: join(evidenceDir, `${route.path.replace(".html", "")}-${viewport.width}.png`), fullPage: true });
+            await visualPage.screenshot({ path: join(evidenceDir, `${route.screenshotKey || route.path.replace(".html", "")}-${viewport.width}.png`), fullPage: true });
           }
         }
       } finally {
@@ -830,9 +897,13 @@ async function main() {
       return selfToggle && targetToggle && !selfToggle.disabled && !targetToggle.disabled;
     }, { timeout: 8000 });
     await wait(1000);
-    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-kim"]')?.click());
+    await workerPage.evaluate(() => document.querySelector('.manage-tabs-v4__master [data-worker-card-toggle="w-kim"]')?.click());
+    await workerPage.waitForSelector('.manage-tabs-v4__detail-head [data-worker-card-toggle="w-kim"]');
+    await workerPage.click('.manage-tabs-v4__detail-head [data-worker-card-toggle="w-kim"]');
     const selfDeleteDisabled = await workerPage.$eval('[data-delete-worker="w-kim"]', (button) => button.disabled);
-    await workerPage.evaluate(() => document.querySelector('[data-worker-card-toggle="w-lee"]')?.click());
+    await workerPage.evaluate(() => document.querySelector('.manage-tabs-v4__master [data-worker-card-toggle="w-lee"]')?.click());
+    await workerPage.waitForSelector('.manage-tabs-v4__detail-head [data-worker-card-toggle="w-lee"]');
+    await workerPage.click('.manage-tabs-v4__detail-head [data-worker-card-toggle="w-lee"]');
     await workerPage.click('[data-delete-worker="w-lee"]');
     await wait(250);
     const targetRemovedFromView = await workerPage.waitForFunction(
@@ -940,26 +1011,48 @@ async function main() {
       await wait(250);
     };
 
-    const openAndReturn = async (rowSelector, selectedId) => {
+    const openAndReturn = async (rowSelector, selectedId, detailSelector, backSelector) => {
       if (!await clickCurrent(rowSelector)) {
         throw new Error(`관리 저장본 행을 찾을 수 없습니다: ${rowSelector}`);
       }
-      await readOnlyPage.waitForFunction((recordId) => (
+      const detailOpened = await readOnlyPage.waitForFunction((recordId) => (
         document.body.classList.contains("manage-mobile-detail-open")
-        && Boolean(document.querySelector(`[data-manage-center-selected="${recordId}"]`))
-      ), { timeout: 5000 }, selectedId);
-      const detailReadOnly = await readOnlyPage.evaluate(() => {
-        const guarded = document.querySelector('.manage-center__detail-body[data-manage-content-read-only="true"]');
-        const controls = [...(guarded?.querySelectorAll("button,input,select,textarea") || [])];
+        && Boolean(document.querySelector(recordId))
+      ), { timeout: 5000 }, detailSelector).then(() => true).catch(() => false);
+      if (!detailOpened) {
+        const diagnostic = await readOnlyPage.evaluate((selector) => ({
+          bodyClass: document.body.className,
+          selector,
+          selectorCount: document.querySelectorAll(selector).length,
+          visibleDetails: [...document.querySelectorAll('.manage-center__detail.is-mobile-fullscreen,.unsafe-v4__detail.is-mobile-fullscreen,.materials-v4__detail.is-mobile-fullscreen')]
+            .map((node) => ({ className: node.className, id: node.getAttribute('data-manage-center-selected') || node.getAttribute('data-unsafe-v4-detail') || node.getAttribute('data-material-detail') || '' })),
+        }), detailSelector);
+        throw new Error(`관리 저장본 상세 열기 실패: ${JSON.stringify(diagnostic)}`);
+      }
+      const detailReadOnly = await readOnlyPage.evaluate((selector, navigationSelector) => {
+        const guarded = document.querySelector(selector);
+        const controls = [...(guarded?.querySelectorAll("button,input,select,textarea") || [])]
+          .filter((control) => !control.matches(navigationSelector));
         return Boolean(guarded) && controls.length > 0 && controls.every((control) => control.disabled);
-      });
-      if (!await clickCurrent('button[data-action="back-manage-center-list"]')) {
+      }, detailSelector, backSelector);
+      if (!await clickCurrent(backSelector)) {
         throw new Error("관리 저장본 상세의 뒤로 버튼을 찾을 수 없습니다.");
       }
-      await readOnlyPage.waitForFunction((recordId) => (
+      const detailClosed = await readOnlyPage.waitForFunction((selector) => (
         !document.body.classList.contains("manage-mobile-detail-open")
-        && !document.querySelector(`[data-manage-center-selected="${recordId}"]`)
-      ), { timeout: 5000 }, selectedId);
+        && !document.querySelector(selector)
+      ), { timeout: 5000 }, detailSelector).then(() => true).catch(() => false);
+      if (!detailClosed) {
+        const diagnostic = await readOnlyPage.evaluate((selector) => ({
+          bodyClass: document.body.className,
+          selectorCount: document.querySelectorAll(selector).length,
+          selectedMaterial: document.querySelector('.materials-v4__record-button[aria-pressed="true"]')?.getAttribute('data-material-record-detail') || '',
+          visibleBackActions: [...document.querySelectorAll('[data-action^="back-"]')]
+            .filter((node) => node.getClientRects().length > 0)
+            .map((node) => node.getAttribute('data-action')),
+        }), detailSelector);
+        throw new Error(`관리 저장본 상세 닫기 실패: ${JSON.stringify(diagnostic)}`);
+      }
       return detailReadOnly;
     };
 
@@ -978,14 +1071,29 @@ async function main() {
           && mutationControls.length > 0
           && mutationControls.every((control) => control.disabled);
       }, unsafeId);
-      const unsafeDetail = await openAndReturn(`[data-unsafe-record-detail="${unsafeId}"]`, unsafeId);
+      const unsafeDetail = await openAndReturn(
+        `[data-unsafe-record-detail="${unsafeId}"]`,
+        unsafeId,
+        `[data-manage-center-selected="${unsafeId}"].is-mobile-fullscreen`,
+        '[data-action="back-manage-center-list"]',
+      );
 
       await selectCachedTab("materials", `[data-material-record-detail="${materialId}"]`);
-      const materialDetail = await openAndReturn(`[data-material-record-detail="${materialId}"]`, materialId);
+      const materialDetail = await openAndReturn(
+        `[data-material-record-detail="${materialId}"]`,
+        materialId,
+        `[data-material-detail="${materialId}"].is-mobile-fullscreen`,
+        '[data-action="back-material-list"]',
+      );
 
       await selectCachedTab("workPrep", "[data-work-prep-record-detail]");
       const workPrepId = await readOnlyPage.$eval("[data-work-prep-record-detail]", (row) => row.dataset.workPrepRecordDetail);
-      const workPrepDetail = await openAndReturn(`[data-work-prep-record-detail="${workPrepId}"]`, workPrepId);
+      const workPrepDetail = await openAndReturn(
+        `[data-work-prep-record-detail="${workPrepId}"]`,
+        workPrepId,
+        `[data-manage-center-selected="${workPrepId}"].is-mobile-fullscreen`,
+        '[data-action="back-manage-center-list"]',
+      );
 
       return unsafeGuard && unsafeDetail && materialDetail && workPrepDetail;
     } finally {
@@ -1305,19 +1413,22 @@ async function main() {
 
   check("작업지시서: 즉시 로컬 표시 후 서버 반영 완료 전환", await runWorkPrepSyncFlow());
 
-  // 1. 홈 — 오늘 내 점검 카드
   await goto("index.html");
-  let text = await bodyText(page);
-  check("홈: '오늘 내 점검' 카드 표시", text.includes("오늘 내 점검"));
-  check("홈: 로그인 작업자 미점검 안내", /홍길동님, 미점검 1건/.test(text));
+  const initialHome = await page.evaluate(() => ({
+    title: document.querySelector("#homeV4Title")?.textContent?.trim() || "",
+    cardCount: document.querySelectorAll(".home-v4__card").length,
+    checkMetric: document.querySelector(".home-v4__metric")?.textContent?.replace(/\s+/g, " ").trim() || "",
+  }));
+  check("홈: 승인 v4 안전 운영 보드 표시", initialHome.title === "오늘의 안전 운영" && initialHome.cardCount === 4);
+  check("홈: 로그인 작업자 미점검 수치 표시", initialHome.checkMetric === "미점검 1건");
 
   // 1-2. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
   await goto("ships.html");
-  check("호선: 공정 현황 보드 렌더", (await bodyText(page)).includes("호선 공정 현황"));
+  check("호선: v4 목록·상세 화면 렌더", await page.$(".ships-v4") !== null);
   await goto("pledge.html");
   check("서약: 오늘 작업 전 안전서약 화면 렌더", (await bodyText(page)).includes("오늘 작업 전 안전서약"));
   await goto("history.html");
-  check("이력: 점검 현황 요약 렌더", (await bodyText(page)).includes("오늘 작업자 점검 현황"));
+  check("이력: v4 검색·상세 화면 렌더", await page.$(".history-v4") !== null);
   await goto("manage.html");
   check("관리: 접수 현황 화면 렌더", (await bodyText(page)).includes("불안전요소"));
 
@@ -1338,13 +1449,68 @@ async function main() {
     el.blur();
   });
   await wait(700);
+  const checkSubmitEvidenceDir = join(ROOT, ".omo", "evidence", "check-submit-mobile");
+  mkdirSync(checkSubmitEvidenceDir, { recursive: true });
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+  await wait(350);
+  const checkSubmitMobile = await page.evaluate(() => {
+    const rect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const bounds = element.getBoundingClientRect();
+      return { top: bounds.top, bottom: bounds.bottom, width: bounds.width, height: bounds.height };
+    };
+    const statusGrid = document.querySelector(".check-flow-mobile-status-grid");
+    const pledgeDetail = document.querySelector(".pledge-mobile-detail");
+    const submitDock = document.querySelector(".check-flow-v4 .material-flow-footer");
+    const bottomNav = document.querySelector(".bottom-nav");
+    const order = [
+      ".check-flow-v4__context",
+      ".check-flow-status-card",
+      ".check-flow-v4__form",
+      ".check-flow-v4__pledge",
+    ].map((selector) => rect(selector)?.top ?? Number.POSITIVE_INFINITY);
+    return {
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      ordered: order.every((top, index) => index === 0 || top >= order[index - 1]),
+      contextCompact: (rect(".check-flow-v4__context")?.height ?? Number.POSITIVE_INFINITY) <= 110,
+      statusCells: document.querySelectorAll(".check-flow-mobile-status-cell").length,
+      statusColumns: statusGrid ? getComputedStyle(statusGrid).gridTemplateColumns.split(" ").length : 0,
+      pledgeCollapsed: pledgeDetail ? getComputedStyle(pledgeDetail).display === "none" : false,
+      submitFixed: submitDock ? getComputedStyle(submitDock).position === "fixed" : false,
+      submitClearsNav: submitDock && bottomNav
+        ? submitDock.getBoundingClientRect().bottom <= bottomNav.getBoundingClientRect().top + 1
+        : false,
+    };
+  });
+  const checkSubmitMobilePassed = Object.values(checkSubmitMobile).every((value) => value === true || value === 4 || value === 2);
+  if (!checkSubmitMobilePassed) console.log(`  모바일 Step 3 진단: ${JSON.stringify(checkSubmitMobile)}`);
+  check("점검: 모바일 Step 3 정보 순서·2x2 상태·접힌 서약·고정 제출", checkSubmitMobilePassed);
+  await page.screenshot({ path: join(checkSubmitEvidenceDir, "check-submit-390.png"), fullPage: true });
+
+  await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 });
+  await wait(350);
+  const checkSubmitDesktop = await page.evaluate(() => {
+    const workspace = document.querySelector(".check-flow-v4__workspace");
+    const mobileStatus = document.querySelector(".check-flow-mobile-status-grid");
+    const mobilePledgeSummary = document.querySelector(".pledge-mobile-summary");
+    const submitDock = document.querySelector(".check-flow-v4 .material-flow-footer");
+    return {
+      workspaceGrid: workspace ? getComputedStyle(workspace).display === "grid" : false,
+      mobileStatusHidden: mobileStatus ? getComputedStyle(mobileStatus).display === "none" : false,
+      mobilePledgeHidden: mobilePledgeSummary ? getComputedStyle(mobilePledgeSummary).display === "none" : false,
+      submitStatic: submitDock ? getComputedStyle(submitDock).position === "static" : false,
+    };
+  });
+  check("점검: PC Step 3 기존 작업공간·제출 배치 유지", Object.values(checkSubmitDesktop).every(Boolean));
+  await page.screenshot({ path: join(checkSubmitEvidenceDir, "check-submit-1366.png"), fullPage: true });
   check("점검: [제출하기] 클릭", await clickBtn(page, "제출하기")); await wait(2200);
   const inspectionCompletionText = await bodyText(page);
   check("점검: 제출 완료 화면", inspectionCompletionText.includes("점검이 제출되었습니다"));
   check("점검: 제출 즉시 홈·이력 반영 안내", inspectionCompletionText.includes("홈과 점검 이력에 즉시 반영되었습니다"));
   const inspectionServerState = await page.evaluate(() => {
-    const status = document.querySelector("[data-inspection-sync-state]");
-    return { state: status?.dataset.inspectionSyncState || "missing", text: status?.innerText.replace(/\s+/g, " ").trim() || "" };
+    const status = document.querySelector('[data-sync-kind="server"]');
+    return { state: status?.dataset.syncState || "missing", text: status?.innerText.replace(/\s+/g, " ").trim() || "" };
   });
   check(`점검: 서버 반영 완료 안내 (${inspectionServerState.state}: ${inspectionServerState.text})`, inspectionServerState.state === "synced" && inspectionCompletionText.includes("서버 반영 완료"));
   check("점검: 삭제 tombstone capability 확인 후 submitInspection 계약", inspectionDeletionProbeRequests > 0 && inspectionSubmitMutationRequests > 0);
@@ -1354,9 +1520,12 @@ async function main() {
   });
   check("점검: 완료 화면 하단 메뉴 미노출", completionBottomNavHidden);
 
-  // 3. 홈 카드가 '완료'로 바뀌는지
   await goto("index.html");
-  check("홈: 점검 후 '모두 마쳤습니다' 표시", (await bodyText(page)).includes("오늘 점검을 모두 마쳤습니다"));
+  const completedHome = await page.evaluate(() => ({
+    checkMetric: document.querySelector(".home-v4__metric")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    actionView: document.querySelector(".home-v4__card .home-v4__action")?.getAttribute("data-view") || "",
+  }));
+  check("홈: 점검 후 완료 상태 표시", completedHome.checkMetric === "미점검 0건" && completedHome.actionView === "history");
 
   // 4. 불안전요소 등록 플로우
   await goto("unsafe.html");

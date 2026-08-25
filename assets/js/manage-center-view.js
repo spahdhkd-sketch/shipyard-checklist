@@ -99,16 +99,15 @@
 
   function renderCards(cards, showCounts = true) {
     return `<section class="manage-center__lanes" aria-labelledby="manageCenterLanesHeading">
-        <div class="manage-center__section-heading"><p>관리 흐름</p><h2 id="manageCenterLanesHeading">지금 처리할 업무</h2></div>
+        <div class="manage-center__section-heading"><h2 id="manageCenterLanesHeading">관리 업무</h2><p>필요한 영역으로 바로 이동합니다.</p></div>
         <div class="manage-center__card-grid">
           ${cards.map((card) => {
             const count = showCounts && Number.isFinite(Number(card.count)) ? `<strong class="manage-center__card-count">${esc(card.count)}<small>건</small></strong>` : "";
             const tone = token(card.tone || card.id, card.id);
             return `<button class="manage-center__card is-${tone}" data-manage-center-card="${esc(card.id)}" type="button">
-                <span class="manage-center__card-kicker">${esc(card.label)}</span>
+                <span class="manage-center__card-label">${esc(card.label)}</span>
                 ${count}
                 <span class="manage-center__card-copy">${esc(card.description)}</span>
-                <span class="manage-center__card-link">목록 보기</span>
               </button>`;
           }).join("")}
         </div>
@@ -136,7 +135,7 @@
           <button class="btn-light"${pageAction ? ` data-action="${esc(pageAction)}" data-collection-cursor="${esc(list.nextCursor)}"` : ' data-manage-center-page="next"'} type="button"${nextDisabled}>다음</button>
         </div>` : "";
     return `<section class="manage-center__list-summary" aria-labelledby="manageCenterListHeading">
-        <div><p>선택된 목록</p><h2 id="manageCenterListHeading">${esc(list.label || "관리 항목")}</h2></div>
+        <h2 id="manageCenterListHeading">${esc(list.label || "관리 항목")}</h2>
         <p class="manage-center__list-count"><strong>${summary.from}–${summary.to}</strong> / ${summary.resultCount}건${summary.totalCount > summary.resultCount ? ` (전체 ${summary.totalCount}건)` : ""}</p>
         ${paginationHtml}
       </section>`;
@@ -145,14 +144,13 @@
   function renderSelectedDetail(rawSelected, options = {}) {
     const selected = rawSelected || null;
     if (!selected) {
-      return `<aside class="manage-center__detail is-empty" aria-labelledby="manageCenterDetailHeading"><p>선택 상세</p><h2 id="manageCenterDetailHeading">항목을 선택하세요</h2><span>목록에서 한 항목을 선택하면 필요한 정보와 다음 조치를 확인할 수 있습니다.</span></aside>`;
+      return `<aside class="manage-center__detail is-empty" aria-labelledby="manageCenterDetailHeading"><h2 id="manageCenterDetailHeading">항목을 선택하세요</h2><p>목록에서 한 항목을 선택하면 필요한 정보와 다음 조치를 확인할 수 있습니다.</p></aside>`;
     }
     const mobileDetailOpen = Boolean(options.mobileDetailOpen);
     const readOnly = Boolean(options.contentReadOnly);
     return `<aside class="manage-center__detail${mobileDetailOpen ? " is-mobile-fullscreen" : ""}" data-manage-center-selected="${esc(selected.id || "selected")}" aria-labelledby="manageCenterDetailHeading"${mobileDetailOpen ? ' tabindex="-1"' : ""}>
         ${mobileDetailOpen ? '<button class="btn-light manage-center__mobile-back" data-action="back-manage-center-list" type="button">목록으로</button>' : ""}
-        <p>선택 상세</p><h2 id="manageCenterDetailHeading">${esc(selected.title || "선택한 관리 항목")}</h2>
-        ${selected.meta ? `<span class="manage-center__detail-meta">${esc(selected.meta)}</span>` : ""}
+        <header class="manage-center__detail-heading"><h2 id="manageCenterDetailHeading">${esc(selected.title || "선택한 관리 항목")}</h2>${selected.meta ? `<span class="manage-center__detail-meta">${esc(selected.meta)}</span>` : ""}</header>
         <div class="manage-center__detail-body"${readOnly ? ' data-manage-content-read-only="true"' : ""}>${typeof selected.html === "string" ? selected.html : typeof selected.detailHtml === "string" ? selected.detailHtml : ""}</div>
       </aside>`;
   }
@@ -161,8 +159,8 @@
     const history = rawHistory || {};
     const count = Number.isFinite(Number(history.count)) ? `${esc(history.count)}건` : "최근 변경";
     return `<section class="manage-center__history" aria-labelledby="manageCenterHistoryHeading">
-        <div><p>변경 이력</p><h2 id="manageCenterHistoryHeading">${esc(history.label || count)}</h2></div>
-        <span>${esc(history.summary || "선택한 항목의 변경 내역을 확인합니다.")}</span>
+        <header><h2 id="manageCenterHistoryHeading">변경 이력</h2><span>${esc(history.label || count)}</span></header>
+        <p>${esc(history.summary || "선택한 항목의 변경 내역을 확인합니다.")}</p>
         ${typeof history.html === "string" ? `<div class="manage-center__history-body"${contentReadOnly ? ' data-manage-content-read-only="true"' : ""}>${history.html}</div>` : ""}
       </section>`;
   }
@@ -170,7 +168,7 @@
   function renderDangerZone(rawDangerZone) {
     const dangerZone = rawDangerZone || {};
     return `<section class="manage-center__danger-zone" aria-labelledby="manageCenterDangerHeading">
-        <div><p>보호 구역</p><h2 id="manageCenterDangerHeading">위험 작업</h2></div>
+        <h2 id="manageCenterDangerHeading">위험 작업</h2>
         <p>${esc(dangerZone.description || "복구하기 어려운 작업은 대상과 영향을 다시 확인한 뒤 진행하세요.")}</p>
         ${typeof dangerZone.html === "string" ? `<div class="manage-center__danger-actions">${dangerZone.html}</div>` : ""}
       </section>`;
@@ -204,9 +202,8 @@
     const mobileDetailOpen = Boolean(detailEnabled && selectedRecord && model.mobileDetailOpen);
     const contextHtml = typeof deps.renderDataContext === "function" ? text(deps.renderDataContext(model.context)) : "";
     const mastheadHtml = contextHtml || `<header class="manage-center__masthead">
-          <p class="manage-center__eyebrow">관리센터</p>
-          <h1>찾고, 선택하고, 안전하게 처리</h1>
-          <p class="manage-center__intro">중요한 현장 관리 업무를 한 흐름으로 확인합니다.</p>
+          <h1>관리 센터</h1>
+          <p class="manage-center__intro">찾고, 선택하고, 안전하게 처리합니다.</p>
         </header>`;
     const visibleContentHtml = contentReadOnly && contentHtml
       ? `<div class="manage-center__read-only-content" data-manage-content-read-only="true">${contentHtml}</div>`
@@ -217,7 +214,8 @@
       return `<section class="manage-center__panel" id="${inactivePanelId}" role="tabpanel" aria-labelledby="${inactiveTabId}" hidden inert></section>`;
     }).join("");
 
-    return `<section class="manage-center" data-manage-center-state="${esc(dataState)}">
+    const historyHtml = hasResolvedData ? renderHistory(model.changeHistory, contentReadOnly) : "";
+    return `<section class="manage-center manage-center-v4" data-manage-center-state="${esc(dataState)}">
         ${mastheadHtml}
         ${showToolbar ? `<div class="manage-center__toolbar">
           <label class="manage-center__search"><span class="sr-only">통합 검색</span><input class="input" data-manage-center-search type="search" value="${esc(query)}" placeholder="호선, 작업, 구성원, 기록 검색" autocomplete="off" /></label>
@@ -233,8 +231,9 @@
             <div class="manage-center__panel-content">${blockingStateHtml || emptyPanel || visibleContentHtml}</div>
           </section>
           ${hasResolvedData && detailEnabled ? renderSelectedDetail(selectedRecord, { mobileDetailOpen, contentReadOnly }) : ""}
+          ${detailEnabled ? historyHtml : ""}
         </div>
-        ${hasResolvedData ? renderHistory(model.changeHistory, contentReadOnly) : ""}
+        ${detailEnabled ? "" : historyHtml}
         ${hasResolvedData && !contentReadOnly ? renderDangerZone(model.dangerZone) : ""}
       </section>`;
   }
