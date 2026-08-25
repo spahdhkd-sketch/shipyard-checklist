@@ -3119,7 +3119,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       setSyncStatus(isSyncConfigured() ? "동기화 대기" : "로컬 저장", isSyncConfigured() ? "pending" : "offline");
       if (isSyncConfigured()) {
-        await startRemoteSync();
+        // 로그인 전에는 원격 동기화를 시작하지 않는다. 로그인 성공 시 시작한다.
+        if (isWorkerLoggedIn()) await startRemoteSync();
         syncServerClock();
         await flushPendingSyncQueue();
         await flushPendingMissingMaterialNotifications();
@@ -12637,7 +12638,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           toast(`${worker.name}님 로그인되었습니다.`);
         }
         scrollScreenTop();
-        // 부팅에서 로그인 전 키만 당겼으므로 로그인 성공 직후 나머지 원격 데이터를 채운다.
+        // 로그인 전에는 원격 동기화를 시작하지 않았으므로 여기서 시작하고,
+        // 로그인 전 키만 당겨 둔 나머지 원격 데이터를 채운다.
+        if (isSyncConfigured()) {
+          try { await startRemoteSync(); } catch (error) { console.warn("start remote sync failed", error); }
+        }
         pullRemote({ force: true, silent: true, reason: "post-login" })
           .catch((error) => console.warn("post-login pull failed", error));
         flushPendingSyncQueue();
@@ -12691,6 +12696,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.historyDetailId = null;
       clearCompletionStateForView("dashboard");
       clearWorkerSession();
+      stopRemoteSync();
       saveJson("issuePhotos", state.issuePhotos);
       toast("로그아웃되었습니다.");
       render();
@@ -15586,7 +15592,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     async function handleSyncWake() {
       if (!isSyncConfigured()) return;
-      ensureRemoteRealtimeConnection();
+      // 로그인 전에는 원격 동기화를 다시 켜지 않는다. pullRemote는 아래에서
+      // 로그인 전 허용 키로만 걸러져 실행된다.
+      if (isWorkerLoggedIn()) ensureRemoteRealtimeConnection();
       await flushPendingSyncQueue();
       await flushPendingMissingMaterialNotifications();
       await pullRemote({ force: true, silent: true, reason: "wake" });
@@ -15693,6 +15701,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return inspectionDeletionRealtimeReady;
     }
 
+    // 로그인 전에는 원격 동기화를 아예 시작하지 않는다. realtime 구독, 삭제 감지 채널,
+    // 폴백 폴링이 모두 startRemoteSync에서 시작되고 각각 독립적으로 서버를 조회하므로
+    // pullRemote만 제한해서는 로그인 전 조회를 없앨 수 없다.
+    function stopRemoteSync() {
+      stopRemotePolling();
+      clearRemoteRealtimeChannel();
+      clearInspectionDeletionRealtimeChannel();
+      if (state.remoteRealtimeRetryTimer) {
+        clearTimeout(state.remoteRealtimeRetryTimer);
+        state.remoteRealtimeRetryTimer = null;
+      }
+    }
+
     function remoteErrorMessage(error) {
       const raw = String(error?.message || error?.details || error || "알 수 없는 오류").trim();
       return raw.slice(0, 180);
@@ -15774,7 +15795,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       if (!options.silent) setSyncStatus("서버 확인 중", "pending");
       try {
         const requestedKeys = Array.isArray(options.keys) ? new Set(options.keys) : null;
-        const pullConfigs = REMOTE_TABLES.filter((config) => config.pullOnStartup !== false && (!requestedKeys || requestedKeys.has(config.key)));
+        // 로그인 전에는 호출자가 무엇을 요청하든 로그인 화면에 필요한 키로 제한한다.
+        // 부팅, realtime 폴백, wake, 작업자 목록 새로고침이 모두 이 지점을 지나므로
+        // 개인정보와 현장 운영 기록은 로그인 전에 어떤 경로로도 내려오지 않는다.
+        const allowedKeys = isWorkerLoggedIn() ? null : new Set(PRE_LOGIN_REMOTE_KEYS);
+        const pullConfigs = REMOTE_TABLES.filter((config) => config.pullOnStartup !== false
+          && (!requestedKeys || requestedKeys.has(config.key))
+          && (!allowedKeys || allowedKeys.has(config.key)));
         if (!pullConfigs.length) return;
         const settled = await Promise.allSettled(pullConfigs.map((config) => selectTable(client, config)));
         const failures = [];
@@ -15805,16 +15832,20 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           || options.reason === "realtime-fallback"
           || options.reason === "inspection-deletion-realtime-fallback"
           || options.reason === "load-more-history";
-        if (!state.lastRemoteDeleteReconcileAt
-          || Date.now() - state.lastRemoteDeleteReconcileAt >= REMOTE_DELETE_RECONCILE_MS
-          || reconcileReason) {
-          await reconcileDeletedInspectionRows(client);
+        // 정합성 조정은 점검·불안전요소·자재·호선 등 기록 테이블을 직접 조회하므로
+        // allowedKeys 필터를 우회한다. 로그인 전에는 조정 대상 자체가 없으니 건너뛴다.
+        if (!allowedKeys) {
+          if (!state.lastRemoteDeleteReconcileAt
+            || Date.now() - state.lastRemoteDeleteReconcileAt >= REMOTE_DELETE_RECONCILE_MS
+            || reconcileReason) {
+            await reconcileDeletedInspectionRows(client);
+          }
         }
         normalizeDataShape();
         state.inspections = state.inspections.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         dedupeShips();
         cleanupDeliveredShips(true);
-        await reconcileRemoteIds(client);
+        if (!allowedKeys) await reconcileRemoteIds(client);
         state.lastRemotePullAt = Date.now();
         persist();
         setSyncStatus(failures.length ? "일부 데이터 동기화 실패" : "온라인", failures.length ? "error" : "online");

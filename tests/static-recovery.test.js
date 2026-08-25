@@ -229,7 +229,9 @@ assert.match(app, /function pendingSyncRowsForKey\(key\)/);
 assert.match(app, /function authoritativeRemoteRows\(key, remoteRows\)/);
 assert.match(app, /function applyRemoteTableRows\(key, rows\)/);
 assert.match(app, /REMOTE_AUTHORITATIVE_KEYS\.has\(key\)/);
-assert.match(app, /const pullConfigs = REMOTE_TABLES\.filter\(\(config\) => config\.pullOnStartup !== false && \(!requestedKeys \|\| requestedKeys\.has\(config\.key\)\)\)/);
+// pullRemote는 요청 키와 로그인 전 허용 키를 함께 적용해 테이블을 고른다.
+// pullRemote는 요청 키와 로그인 전 허용 키를 함께 적용해 테이블을 고른다.
+assert.ok(app.includes("&& (!allowedKeys || allowedKeys.has(config.key)))"), "pullRemote가 allowedKeys로도 필터링해야 합니다.");
 assert.match(app, /Promise\.allSettled\(pullConfigs\.map/);
 assert.match(app, /pullRemote\(\{ force: true \}\)/);
 assert.match(app, /function startRemoteRealtime\(\)/);

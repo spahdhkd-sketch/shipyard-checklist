@@ -69,6 +69,17 @@ assert.ok(preLoginKeys, "PRE_LOGIN_REMOTE_KEYS 선언이 있어야 합니다.");
 });
 assert.match(preLoginKeys[1], /"workers"/, "로그인 드롭다운을 위해 workers는 로그인 전에도 필요합니다.");
 
+// pullRemote 자체가 로그인 전 키 제한을 강제해야 한다. 부팅 게이트만으로는
+// realtime 폴백, wake, 작업자 목록 새로고침 경로가 전체를 당겨 버린다.
+assert.ok(
+  app.includes("const allowedKeys = isWorkerLoggedIn() ? null : new Set(PRE_LOGIN_REMOTE_KEYS);"),
+  "pullRemote가 로그인 전 허용 키를 직접 계산해야 합니다.",
+);
+assert.ok(
+  app.includes("&& (!allowedKeys || allowedKeys.has(config.key)))"),
+  "pullRemote의 테이블 선택이 allowedKeys로도 걸러져야 합니다.",
+);
+
 // 로그인 성공 직후 나머지 원격 데이터를 채워야 한다.
 assert.match(app, /reason: "post-login"/, "로그인 성공 후 전체 원격 풀이 있어야 합니다.");
 
