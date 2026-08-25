@@ -9,7 +9,7 @@ Updated: 2026-08-26 (Asia/Seoul)
 - Production URL: `https://gs-safety-checklist.vercel.app`
 - Application version: `1.13.0-20260826-v4`
 - Asset token: `20260826-v4-1`
-- GitHub branch and application release commit match.
+- GitHub branch contains the application release commit; its newer branch head only adds release handoff documentation.
 - Production HTML, service worker, version record, minified JavaScript, and minified CSS were fetched after alias promotion and matched the release worktree.
 
 ## Supabase state
