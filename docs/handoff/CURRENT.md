@@ -60,15 +60,20 @@ Updated: 2026-08-26 (Asia/Seoul)
 
 ## Pre-login remote pull restriction
 
-- Commit `453ea37d747a1be3d184c13b7888bc16c6f590b4` on `feat/claude-batch`, pushed to origin. Not deployed to Preview or production.
-- Before this change the boot sequence pulled all 13 remote tables before any login, so an anonymous browser fetched inspections, inspection items, unsafe issues, missing materials, work preparation records, issue photos and ships into local storage from the login screen alone. Measured against production v1.13.0 on 2026-08-26: 17 anonymous Supabase REST requests with no auth session present.
-- `PRE_LOGIN_REMOTE_KEYS` now limits the pre-login boot pull to `workers`, `categories`, `sections`, `items`, `tools` and `pictograms`. A saved worker session still triggers the full pull at boot, so offline boot and session resume behaviour are unchanged.
-- `submitWorkerLogin` pulls the remaining tables after a successful login, silently and without blocking the login flow when it fails.
-- `tests/release-safety-regressions.test.js` previously pinned the literal boot call `await pullRemote({ force: true })`. The assertion now enforces the flush-before-pull ordering and the login gate, and additionally asserts that the pre-login key list excludes every record table and that a post-login pull exists.
-- Reads remain anon-level in PostgREST. Anonymous SELECT on the record tables is unchanged. This reduces the exposure surface of the login screen and is not a substitute for row level security.
-- Gates run at this commit: 82/82 tests, `npm run verify`, `npm run build:assets`, the non-main quality harness, `npm run e2e`, `npm run e2e:design-tokens`, `npm run e2e:pwa`, and `git diff --check`.
-- Editing note: rewriting `assets/js/app-v2.js` with an editor that replaces the whole file can convert it from LF to CRLF. `.gitattributes` uses `text=auto`, so the conversion produces no visible `git diff` but breaks source-fragment tests that match `},
-`. Check line endings after editing.
+- Commits `453ea37` and `c0df61c` on `feat/claude-batch`. Not deployed to Preview or production.
+- Measured against production v1.13.0 on 2026-08-26: an anonymous visit with no auth session issued 17 Supabase REST requests and stored workers, inspections, unsafe issues, missing materials, work preparation records and ships in local storage.
+- `453ea37` gated only the boot `pullRemote` call. **That was not sufficient.** A clean-origin measurement still showed 116 requests covering every record table, because `startRemoteSync()` (realtime subscription, deletion channel, polling fallback), `handleSyncWake()`, `reconcileDeletedInspectionRows()` and `reconcileRemoteIds()` all query outside the `pullRemote` key filter.
+- `c0df61c` defers the whole remote sync until a worker session exists: boot starts sync only when logged in, `submitWorkerLogin` starts it, `logoutWorker` calls the new `stopRemoteSync()`, `handleSyncWake` only reconnects when logged in, and `pullRemote` applies `allowedKeys` to both the table filter and the reconcile steps.
+- Verified on a clean origin (`http://127.0.0.1:4173`, empty local storage, login screen shown, no worker session): only `workers_public`, `safety_categories`, `safety_sections`, `safety_items`, `safety_tools` and `safety_pictograms` are fetched. Every record table is absent. Requests drop from 116 to 73.
+- Reads remain anon-level in PostgREST. Anonymous SELECT on the record tables is unchanged. This removes the pre-login fetches and is not a substitute for row level security.
+- Gates at `c0df61c`: 82/82 tests, `npm run verify`, `npm run build:assets`, the non-main quality harness, `npm run e2e`, `npm run e2e:design-tokens`, `npm run e2e:pwa`, and `git diff --check`.
+
+### Observations recorded while making this change
+
+- The allowed tables are still each pulled about 12 times during startup and then settle. The same repetition exists on the previous code (9 times per table across all 13 tables), so it predates this change, but it is worth its own investigation as an egress cost.
+- `e2e:design-tokens` failed the `360 관리` focus-restoration assertion on 2 of 6 runs with this change and 0 of 2 runs on the previous commit. The failing assertion is `returned.focusRestored` with `activeElement: BODY`, which is the already-open item in this document. The sample is too small to attribute the flake to this change, but the change does move record loading later, which affects the same re-render race.
+- Editing note: rewriting `assets/js/app-v2.js` with an editor that replaces the whole file, and `git stash pop` under `core.autocrlf`, both convert it from LF to CRLF. `.gitattributes` uses `text=auto`, so the conversion produces no visible `git diff` but breaks source-fragment tests that match `},
+`. Check line endings after either operation.
 
 ## Preserved local inputs
 
