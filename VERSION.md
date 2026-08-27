@@ -1,14 +1,15 @@
 # Version
 
-Current version: `1.13.1-20260827`
+Current version: `1.13.2-20260828`
 
-Recorded at: `2026-08-27 (v1 work-order archive and pre-login sync release)`
+Recorded at: `2026-08-28 (v1 work-order delete wording correction)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Presents the registered work-order destructive action as `삭제` in buttons, accessibility labels, confirmation copy, permission errors, and completion feedback while retaining the authenticated soft-delete boundary.
 - Routes registered work-order cards through the authenticated soft-delete archive action so administrators can remove them from the active list.
 - Defers operational record sync until a worker session exists while retaining the public master-data reads required for sign-in.
 - Adds hermetic browser coverage for work-order archive removal, local deletion tombstones, and card disappearance.
@@ -27,7 +28,7 @@ Notes:
 - Opens section editing directly below the selected section row without leaving the work-type manager.
 - Preserves danger-sign image proportions in the selection preview.
 - Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
-- Uses `20260827-v1-1` to refresh PWA assets after deployment.
+- Uses `20260828-v1-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -59,5 +60,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260827-v1-1` and service-worker version
-  `1.13.1-20260827-v1` so installed clients refresh safely.
+- Issues asset token `20260828-v1-1` and service-worker version
+  `1.13.2-20260828-v1` so installed clients refresh safely.

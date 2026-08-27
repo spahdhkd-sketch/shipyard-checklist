@@ -117,8 +117,8 @@ assert(archiveRemoteIndex >= 0 && archiveRemoteIndex < archiveLocalIndex, "archi
 assert(!archiveHandler.includes(".delete("), "archive handler never directly performs a hard delete");
 includesAll(app, [
   '"archive-work-prep-record"',
-  "soft-delete 경계",
-  ">보관 요청<",
+  "작업지시서를 삭제할까요?",
+  ">삭제<",
 ], "work-prep archive presentation");
 assert(!app.includes('"delete-work-prep-record": () =>'), "work-prep destructive control is not dispatched as ordinary delete");
 

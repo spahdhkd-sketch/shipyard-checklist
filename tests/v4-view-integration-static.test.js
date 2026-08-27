@@ -89,6 +89,6 @@ test("unsupported safety publishing and retention mutations render read-only, an
   assert.doesNotMatch(app, /"governance-safety-(?:publish|request-review|create-rollback-draft)":/);
   assert.doesNotMatch(app, /"governance-retention-confirm":/);
   assert.match(app, /replace\(\/delete-work-prep-record\/g, "archive-work-prep-record"\)/);
-  assert.match(app, /">보관 요청<"/);
+  assert.match(app, /">삭제<"/);
   assert.match(app, /"archive-work-prep-record": \(\) => archiveWorkPrepRecord/);
 });

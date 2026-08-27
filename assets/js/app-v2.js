@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.13.1-20260827-v1";
+    const APP_VERSION = "1.13.2-20260828-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -1740,10 +1740,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     async function archiveWorkPrepRecord(recordId) {
       const record = workPrepRecordById(recordId);
       if (!record) return toast("보관할 작업지시서를 찾을 수 없습니다.");
-      if (!canOpenWorkPrepRegister()) return toast("작업지시서를 보관할 권한이 없습니다.");
+      if (!canOpenWorkPrepRegister()) return toast("작업지시서를 삭제할 권한이 없습니다.");
       const category = categoryById(record.categoryId);
       const title = `${record.shipNo || "-"} ${category ? workLabel(category) : "작업지시서"}`;
-      if (!window.confirm(`${title} 작업지시서를 보관할까요?\n활성 목록에서 숨겨지며 서버의 soft-delete 경계로 처리됩니다.`)) return;
+      if (!window.confirm(`${title} 작업지시서를 삭제할까요?\n삭제하면 활성 목록에서 사라집니다.`)) return;
       if (isSyncConfigured() && !(await deleteRemoteRows("workPrepRecords", [record.id]))) return;
       rememberDeletedWorkPrepRecordId(record.id);
       state.workPrepRecords = state.workPrepRecords.filter((row) => row.id !== record.id);
@@ -1752,7 +1752,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       saveWorkPrepRecords();
       renderPreservingScroll();
-      toast("작업지시서를 보관했습니다.");
+      toast("작업지시서를 삭제했습니다.");
     }
 
     const deleteWorkPrepRecord = archiveWorkPrepRecord;
@@ -7812,8 +7812,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function relabelWorkPrepArchiveControl(html) {
       return String(html || "")
         .replace(/delete-work-prep-record/g, "archive-work-prep-record")
-        .replace(/>(?:삭제|보관)</g, ">보관 요청<")
-        .replace(/작업지시서 삭제/g, "작업지시서 보관 요청");
+        .replace(/>(?:삭제|보관)</g, ">삭제<")
+        .replace(/작업지시서 (?:삭제|보관 요청)/g, "작업지시서 삭제");
     }
 
     function renderWorkPrepAdminTimelineSummary(record) {

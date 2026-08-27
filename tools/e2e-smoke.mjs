@@ -1301,12 +1301,14 @@ async function main() {
         };
       }, PRE);
       const archiveRecordId = seed[PRE + "workPrepRecords"]?.[0]?.id || "";
-      let archived = { controlPresent: false, localRemoved: false, tombstoneRemembered: false, cardRemoved: false };
+      let archived = { controlPresent: false, deleteLabel: false, localRemoved: false, tombstoneRemembered: false, cardRemoved: false };
       if (archiveRecordId) {
         await workPrepPage.goto(`http://localhost:${PORT}/check.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
         await workPrepPage.waitForSelector(`[data-work-prep-record="${archiveRecordId}"]`, { visible: true });
         const archiveSelector = `[data-action="archive-work-prep-record"][data-work-prep-record-id="${archiveRecordId}"]`;
-        archived.controlPresent = Boolean(await workPrepPage.$(archiveSelector));
+        const archiveControl = await workPrepPage.$eval(archiveSelector, (button) => ({ label: button.textContent.trim() })).catch(() => null);
+        archived.controlPresent = Boolean(archiveControl);
+        archived.deleteLabel = archiveControl?.label === "삭제";
         if (archived.controlPresent) {
           const acceptArchive = (dialog) => dialog.accept().catch(() => {});
           workPrepPage.on("dialog", acceptArchive);
@@ -1317,16 +1319,17 @@ async function main() {
             return !records.some((record) => record.id === recordId) && deletedIds.includes(recordId);
           }, { timeout: 5000 }, PRE, archiveRecordId).catch(() => {});
           workPrepPage.off("dialog", acceptArchive);
-          archived = await workPrepPage.evaluate((storagePrefix, recordId) => {
+          archived = await workPrepPage.evaluate((storagePrefix, recordId, deleteLabel) => {
             const records = JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]");
             const deletedIds = JSON.parse(localStorage.getItem(storagePrefix + "deletedWorkPrepRecordIds") || "[]");
             return {
               controlPresent: true,
+              deleteLabel,
               localRemoved: !records.some((record) => record.id === recordId),
               tombstoneRemembered: deletedIds.includes(recordId),
               cardRemoved: !document.querySelector(`[data-work-prep-record="${recordId}"]`),
             };
-          }, PRE, archiveRecordId);
+          }, PRE, archiveRecordId, archived.deleteLabel);
         }
       }
       const archiveCompleted = Object.values(archived).every(Boolean);
