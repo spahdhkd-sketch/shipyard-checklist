@@ -527,7 +527,10 @@ async function main() {
       }, PRE, viewport.mobile ? "mobile" : "desktop");
       try {
         for (const route of routes) {
-          await visualPage.goto(`http://localhost:${PORT}/${route.path}${route.query || ""}`, { waitUntil: "domcontentloaded", timeout: 25000 });
+          const routeParams = new URLSearchParams(route.query || "");
+          if (route.manageTab) routeParams.set("__manageTab", route.manageTab);
+          const routeQuery = routeParams.toString();
+          await visualPage.goto(`http://localhost:${PORT}/${route.path}${routeQuery ? `?${routeQuery}` : ""}`, { waitUntil: "domcontentloaded", timeout: 25000 });
           await wait(900);
           if (route.manageTab) {
             const selected = await visualPage.evaluate((tab) => {
@@ -1297,8 +1300,38 @@ async function main() {
           adminDenied: toastText.includes("관리자"),
         };
       }, PRE);
-      const ok = syncCompleted && pendingState.includes("서버 반영 중") && completed.syncedCount >= 2 && completed.serverToast;
-      if (!ok) console.log("  작업지시서 동기화 진단:", JSON.stringify({ syncCompleted, pendingState, completed }));
+      const archiveRecordId = seed[PRE + "workPrepRecords"]?.[0]?.id || "";
+      let archived = { controlPresent: false, localRemoved: false, tombstoneRemembered: false, cardRemoved: false };
+      if (archiveRecordId) {
+        await workPrepPage.goto(`http://localhost:${PORT}/check.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+        await workPrepPage.waitForSelector(`[data-work-prep-record="${archiveRecordId}"]`, { visible: true });
+        const archiveSelector = `[data-action="archive-work-prep-record"][data-work-prep-record-id="${archiveRecordId}"]`;
+        archived.controlPresent = Boolean(await workPrepPage.$(archiveSelector));
+        if (archived.controlPresent) {
+          const acceptArchive = (dialog) => dialog.accept().catch(() => {});
+          workPrepPage.on("dialog", acceptArchive);
+          await workPrepPage.click(archiveSelector);
+          await workPrepPage.waitForFunction((storagePrefix, recordId) => {
+            const records = JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]");
+            const deletedIds = JSON.parse(localStorage.getItem(storagePrefix + "deletedWorkPrepRecordIds") || "[]");
+            return !records.some((record) => record.id === recordId) && deletedIds.includes(recordId);
+          }, { timeout: 5000 }, PRE, archiveRecordId).catch(() => {});
+          workPrepPage.off("dialog", acceptArchive);
+          archived = await workPrepPage.evaluate((storagePrefix, recordId) => {
+            const records = JSON.parse(localStorage.getItem(storagePrefix + "workPrepRecords") || "[]");
+            const deletedIds = JSON.parse(localStorage.getItem(storagePrefix + "deletedWorkPrepRecordIds") || "[]");
+            return {
+              controlPresent: true,
+              localRemoved: !records.some((record) => record.id === recordId),
+              tombstoneRemembered: deletedIds.includes(recordId),
+              cardRemoved: !document.querySelector(`[data-work-prep-record="${recordId}"]`),
+            };
+          }, PRE, archiveRecordId);
+        }
+      }
+      const archiveCompleted = Object.values(archived).every(Boolean);
+      const ok = syncCompleted && pendingState.includes("서버 반영 중") && completed.syncedCount >= 2 && completed.serverToast && archiveCompleted;
+      if (!ok) console.log("  작업지시서 동기화·보관 진단:", JSON.stringify({ syncCompleted, pendingState, completed, archived }));
       return ok;
     } finally {
       try { await workPrepPage.close(); } catch {}
@@ -1403,7 +1436,7 @@ async function main() {
     return;
   }
   if (process.argv.includes("--work-prep-sync-only")) {
-    check("작업지시서: 즉시 로컬 표시 후 서버 반영 완료 전환", await runWorkPrepSyncFlow());
+    check("작업지시서: 즉시 서버 반영 후 카드 보관", await runWorkPrepSyncFlow());
     try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
     srv.close();
     if (failures) throw new Error(`작업지시서 동기화 E2E 실패: ${failures}건`);
@@ -1411,7 +1444,7 @@ async function main() {
     return;
   }
 
-  check("작업지시서: 즉시 로컬 표시 후 서버 반영 완료 전환", await runWorkPrepSyncFlow());
+  check("작업지시서: 즉시 서버 반영 후 카드 보관", await runWorkPrepSyncFlow());
 
   await goto("index.html");
   const initialHome = await page.evaluate(() => ({

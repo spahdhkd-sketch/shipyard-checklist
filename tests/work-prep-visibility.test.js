@@ -134,6 +134,14 @@ assert.match(app, /renderWorkPrepDateSection\(selectedDate, selectedRecords, \{ 
 assert.doesNotMatch(app, /const nextDate = addDaysToLocalDate\(todayDate, 1\)/);
 
 assert.match(app, /async function archiveWorkPrepRecord\(recordId\)/);
+const workPrepCardStart = app.indexOf("function renderWorkPrepCard(record)");
+const workPrepCardEnd = app.indexOf("function renderWorkPrepDateSection", workPrepCardStart);
+const workPrepCardBlock = app.slice(workPrepCardStart, workPrepCardEnd);
+assert.match(
+  workPrepCardBlock,
+  /return relabelWorkPrepArchiveControl\(SCREEN_VIEWS\.renderWorkPrepCardView\(\{/,
+  "the work-prep card must route its destructive control through the canonical archive action",
+);
 assert.match(screenViews, /data-action="delete-work-prep-record"/);
 assert.match(app, /deleteRemoteRows\("workPrepRecords", \[record\.id\]\)/);
 assert.match(app, /rememberDeletedWorkPrepRecordId\(record\.id\)/);

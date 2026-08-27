@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.13.0-20260826-v4";
+    const APP_VERSION = "1.13.1-20260827-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -5651,7 +5651,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             : canStartCheck
               ? "점검 시작"
               : "점검 대기";
-      return SCREEN_VIEWS.renderWorkPrepCardView({
+      return relabelWorkPrepArchiveControl(SCREEN_VIEWS.renderWorkPrepCardView({
         status,
         recordId: record.id,
         ariaLabel: `${record.shipNo || "-"} 작업지시서 수정`,
@@ -5676,7 +5676,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         buttonHelp: !startAvailability.canStart ? startAvailability.message : "",
         buttonAction: status === "ordered" ? "start-work-prep-record" : "start-check-from-work-prep",
         buttonLabel,
-      });
+      }));
     }
 
     function renderWorkPrepDateSection(date, records, options = {}) {

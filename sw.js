@@ -1,5 +1,5 @@
-const APP_VERSION = "1.13.0-20260826-v4";
-const ASSET_TOKEN = "20260826-v4-1";
+const APP_VERSION = "1.13.1-20260827-v1";
+const ASSET_TOKEN = "20260827-v1-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
