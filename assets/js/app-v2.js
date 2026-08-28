@@ -2843,6 +2843,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       workTypeManagerSelectedId: null,
       workTypeManagerTab: "summary",
       workTypeManagerMobileDetailOpen: false,
+      riskAssessmentWidgetOpen: false,
       workTypeSearchQuery: "",
       categoryToolSearchQuery: "",
       editCategoryId: null,
@@ -3472,10 +3473,78 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     let adminModulePromise = null;
+    let riskAssessmentWidgetInstance = null;
+    let riskAssessmentWidgetLoadPromise = null;
 
     function loadAdminModule() {
       if (!adminModulePromise) adminModulePromise = import("./admin-v2.js");
       return adminModulePromise;
+    }
+
+    function destroyRiskAssessmentWidget() {
+      if (!riskAssessmentWidgetInstance) return;
+      try {
+        riskAssessmentWidgetInstance.destroy();
+      } catch (error) {
+        console.warn("Risk assessment widget cleanup failed", error);
+      }
+      riskAssessmentWidgetInstance = null;
+    }
+
+    function loadRiskAssessmentWidget() {
+      if (window.HisafeRA?.mount) return Promise.resolve(window.HisafeRA);
+      if (riskAssessmentWidgetLoadPromise) return riskAssessmentWidgetLoadPromise;
+      riskAssessmentWidgetLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "/assets/js/vendor/hisafe-ra-widget.js";
+        script.async = true;
+        script.dataset.hisafeRaWidget = "true";
+        script.addEventListener("load", () => {
+          if (window.HisafeRA?.mount) resolve(window.HisafeRA);
+          else reject(new Error("hisafe_ra_widget_unavailable"));
+        }, { once: true });
+        script.addEventListener("error", () => reject(new Error("hisafe_ra_widget_load_failed")), { once: true });
+        document.head.appendChild(script);
+      }).catch((error) => {
+        riskAssessmentWidgetLoadPromise = null;
+        throw error;
+      });
+      return riskAssessmentWidgetLoadPromise;
+    }
+
+    function setupRiskAssessmentWidget() {
+      if (!state.riskAssessmentWidgetOpen || state.view !== "items" || !state.adminMode) return;
+      const host = $("hisafeRaWidgetHost");
+      if (!host) return;
+      host.setAttribute("aria-busy", "true");
+      loadRiskAssessmentWidget()
+        .then((HisafeRA) => {
+          if (!state.riskAssessmentWidgetOpen || !host.isConnected) return;
+          riskAssessmentWidgetInstance = HisafeRA.mount(host, {
+            title: "위험성평가 점검표",
+            subtitle: "작업표준 엑셀을 이 기기에서만 분석해 점검항목을 만듭니다.",
+            onLoad: (result) => toast(`위험성평가 점검항목 ${Number(result?.items?.length || 0)}개를 만들었습니다.`),
+          });
+          host.removeAttribute("aria-busy");
+        })
+        .catch((error) => {
+          console.error(error);
+          if (host.isConnected) host.innerHTML = '<div class="ra-widget-shell__error" role="alert">위험성평가 도구를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.</div>';
+        });
+    }
+
+    function openRiskAssessmentWidget() {
+      if (!requireAdminWrite()) return;
+      state.riskAssessmentWidgetOpen = true;
+      render();
+      requestAnimationFrame(() => document.querySelector('[data-action="close-ra-widget"]')?.focus());
+    }
+
+    function closeRiskAssessmentWidget() {
+      state.riskAssessmentWidgetOpen = false;
+      destroyRiskAssessmentWidget();
+      renderPreservingScroll();
+      requestAnimationFrame(() => document.querySelector('[data-action="open-ra-widget"]')?.focus());
     }
 
     function changeView(view, options = {}) {
@@ -3486,6 +3555,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const enteringCheckView = view === "check" && state.view !== "check";
       const changed = state.view !== view || state.selectedCategoryId || state.historyDetailId;
       state.view = view;
+      if (view !== "items") {
+        state.riskAssessmentWidgetOpen = false;
+        destroyRiskAssessmentWidget();
+      }
       if (enteringCheckView) {
         state.selectedWorkPrepDate = "";
         state.workPrepDateManuallySelected = false;
@@ -3784,9 +3857,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       renderNav();
       renderAppHeader();
       const page = $("page");
+      destroyRiskAssessmentWidget();
       const loggedIn = isWorkerLoggedIn();
       document.body.classList.toggle("login-required", !loggedIn);
       document.body.classList.toggle("home-v4-active", loggedIn && state.view === "dashboard");
+      document.body.classList.toggle("ra-widget-open", loggedIn && state.view === "items" && state.riskAssessmentWidgetOpen);
       if (!loggedIn) {
         page.innerHTML = renderLogin();
         page.insertAdjacentHTML("beforeend", renderSyncDetailsPanel());
@@ -3819,6 +3894,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       enforceManageReadOnlyControls();
       setupSignaturePad();
       setupPictogramImageFallbacks();
+      setupRiskAssessmentWidget();
       ensureRenderedAccessibility();
       restoreFocusedFieldState(focusedFieldState);
       if (state.view === "manage"
@@ -6802,6 +6878,23 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function renderRiskAssessmentWidgetPanel() {
+      if (!state.riskAssessmentWidgetOpen) return "";
+      return `<section class="ra-widget-shell" role="dialog" aria-modal="true" aria-labelledby="raWidgetTitle">
+        <header class="ra-widget-shell__head">
+          <div>
+            <span>관리자 도구</span>
+            <h2 id="raWidgetTitle">위험성평가 엑셀 가져오기</h2>
+            <p>파일은 서버로 전송하지 않고 현재 기기에서만 분석합니다.</p>
+          </div>
+          <button class="btn-light ra-widget-shell__close" data-action="close-ra-widget" type="button" aria-label="위험성평가 도구 닫기">닫기</button>
+        </header>
+        <div class="ra-widget-shell__host" id="hisafeRaWidgetHost" aria-label="위험성평가 점검표 생성 도구">
+          <div class="ra-widget-shell__loading" role="status">위험성평가 도구를 불러오는 중입니다.</div>
+        </div>
+      </section>`;
+    }
+
     function renderItemsV4() {
       const routes = Array.isArray(NAVIGATION_MODEL.ROUTES) ? NAVIGATION_MODEL.ROUTES : NAV;
       const role = state.adminMode ? "admin" : "worker";
@@ -6828,7 +6921,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         dataState: entries.length ? "ready" : "empty",
       })}`;
       if (!state.adminMode) return menu;
-      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></header>${renderWorkTypesV4()}</section>`;
+      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><div><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></div><button class="btn ra-widget-launch" data-action="open-ra-widget" type="button">RA 엑셀로 추가</button></header>${renderWorkTypesV4()}</section>${renderRiskAssessmentWidgetPanel()}`;
     }
 
     function renderItems() {
@@ -10907,6 +11000,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function dispatchV4Action(action, event) {
       return runActionMap({
+        "open-ra-widget": openRiskAssessmentWidget,
+        "close-ra-widget": closeRiskAssessmentWidget,
         "retry-ships": () => pullRemote({ force: true, keys: ["ships"], reason: "ships-v4-retry" }),
         "retry-history": () => pullRemote({ force: true, keys: ["inspections", "inspectionItems"], reason: "history-v4-retry" }),
         "select-ship-v4": () => openShipsV4Detail(event.target.closest("[data-ship-id]")?.dataset.shipId || ""),
@@ -11794,6 +11889,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.riskAssessmentWidgetOpen) {
+        event.preventDefault();
+        closeRiskAssessmentWidget();
+        return;
+      }
       if (event.key === "Escape" && state.pushTemplateEditorKind) {
         event.preventDefault();
         closePushTemplateEditor();
@@ -12870,6 +12970,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.adminPushEditing = false;
         state.adminPushGovernanceAcknowledged = false;
         state.workerEditCardId = "";
+        state.riskAssessmentWidgetOpen = false;
+        destroyRiskAssessmentWidget();
         setAdminMode(false);
         toast("관리자 수정 모드가 꺼졌습니다.");
         render();
