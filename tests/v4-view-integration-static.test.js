@@ -43,6 +43,22 @@ test("home management shortcuts navigate before the management tab consumes the 
   assert.match(dashboard, /data-view="manage" data-manage-center-card="operations"/);
 });
 
+test("management navigation defaults to the Workers tab", () => {
+  const navigation = app.slice(
+    app.indexOf("function handleViewNavigationClick(button)"),
+    app.indexOf("function handleHistoryManageButtonClick(button)"),
+  );
+  assert.match(navigation, /button\.dataset\.view === "manage"[\s\S]*state\.manageTab = "workers"[\s\S]*changeView\("manage"\)/);
+  assert.doesNotMatch(navigation, /state\.manageTab = "unsafe"/);
+});
+
+test("desktop navigation follows the exact route while mobile navigation follows its parent", () => {
+  assert.match(app, /function renderNavButtons\(items, useMobileParent = false\)/);
+  assert.match(app, /let activeView = state\.view;[\s\S]*if \(useMobileParent\)[\s\S]*getActiveMobileParentId\(state\.view\)/);
+  assert.match(app, /renderNavButtons\(visibleNavItems\(\)\)/);
+  assert.match(app, /renderNavButtons\(mobileNavItems\(\), true\)/);
+});
+
 test("mobile detail selections participate in route history and restore visible list focus", () => {
   assert.match(app, /shipV4SelectedId: state\.view === "ships"/);
   assert.match(app, /manageDetailId: state\.view === "manage"/);
@@ -90,5 +106,7 @@ test("unsupported safety publishing and retention mutations render read-only, an
   assert.doesNotMatch(app, /"governance-retention-confirm":/);
   assert.match(app, /replace\(\/delete-work-prep-record\/g, "archive-work-prep-record"\)/);
   assert.match(app, /">삭제<"/);
+  assert.doesNotMatch(app, /deleteAriaLabel: `\$\{record\.shipNo \|\| "-"\} 작업지시서 보관`/);
+  assert.doesNotMatch(app, /보관할 작업지시서를 찾을 수 없습니다/);
   assert.match(app, /"archive-work-prep-record": \(\) => archiveWorkPrepRecord/);
 });

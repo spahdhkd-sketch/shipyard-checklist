@@ -86,8 +86,10 @@ includesAll(manageBack, [
   "getClientRects().length > 0",
   'trigger?.scrollIntoView({ block: "nearest" })',
   "trigger?.focus()",
-  "(back || heading)?.focus()",
+  "(back || sectionBack || heading)?.focus({ preventScroll: true })",
+  "requestAnimationFrame(focusVisibleTarget)",
 ], "manage mobile focus lifecycle");
+assert.ok(app.includes("document.activeElement === document.body || document.activeElement === page"), "manage detail focus is restored after rerender");
 assert.ok(app.includes('button.dataset.action === "back-manage-center-list"'), "manage back action is delegated");
 assert.ok(app.includes("button.dataset.manageCenterTab || button.dataset.manageTab"), "manage-center tab controls reach the existing tab state transition");
 assert.ok(app.includes('pullRemote({ force: true, keys, reason: "manage-center-retry" })'), "manage retry remains active-tab scoped");

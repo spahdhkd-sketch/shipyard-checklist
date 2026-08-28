@@ -123,6 +123,7 @@
     const selectedRecord = model.selectedRecord || records.find((record) => String(record.id || "") === selectedId) || null;
     const dataState = String(model.dataState || "");
     const canEdit = Boolean(model.canEdit);
+    const selectedCount = records.filter((record) => record && record.selected).length;
     const countText = typeof model.visibleCount === "number" ? `${model.visibleCount}건` : `${records.length}건`;
     const showEmpty = !records.length && !["loading", "error", "offline-empty"].includes(dataState);
     return `<section class="materials-v4${model.mobileDetailOpen && selectedRecord ? " is-mobile-detail-open" : ""}" data-materials-v4-state="${esc(dataState || "ready")}">
@@ -130,7 +131,7 @@
       ${renderDataState(dataState)}
       <div class="materials-v4__toolbar">${model.filterHtml || ""}<span aria-live="polite">${esc(countText)} 표시</span></div>
       <div class="materials-v4__workspace">
-        <section class="materials-v4__list" aria-label="자재 누락 목록"><header><h2>요청 목록</h2>${canEdit ? `<button data-action="bulk-material-status" type="button">상태 일괄 변경</button>` : ""}</header>
+        <section class="materials-v4__list" aria-label="자재 누락 목록"><header><h2>요청 목록</h2>${canEdit && selectedCount ? `<button data-action="bulk-material-status" type="button">선택 ${selectedCount}건 상태 변경</button>` : ""}</header>
           <div class="materials-v4__records">${records.map((record) => renderRecord(record, { selectedId, canEdit })).join("") || (showEmpty ? `<p class="materials-v4__empty">표시할 자재 누락 기록이 없습니다.</p>` : "")}</div>
         </section>
         ${renderDetail(selectedRecord, { statuses: model.statuses, canEdit, mobileDetailOpen: Boolean(model.mobileDetailOpen), controlsHtml: model.detailControlsHtml })}

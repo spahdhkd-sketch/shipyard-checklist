@@ -624,15 +624,17 @@
   //          shipGroups: [{ shipNo, active, progressText, count }], filteredCount, rowsHtml }
   function renderWorkPrepManagerView(model = {}) {
     const shipGroups = Array.isArray(model.shipGroups) ? model.shipGroups : [];
+    const statusOptions = Array.isArray(model.statusOptions) ? model.statusOptions : [];
     return `<section class="admin-board work-prep-board">
         <div class="admin-board-top">
           <div>
             <h2>작업지시서 관리</h2>
             <p>${model.totalCount}건 등록 · ${model.progressCount}건 진행 · ${model.usedCount}건 사용됨</p>
           </div>
-          <div class="admin-board-actions">
-            <button class="btn" data-action="open-work-prep-register" ${model.canEdit ? "" : "disabled"} type="button">+ 신규 등록</button>
-          </div>
+        </div>
+        <div class="work-prep-mobile-filter-bar" aria-label="작업지시서 목록 필터">
+          <label><span>호선</span><select class="select" data-record-filter="workPrep:shipNo"><option value=""${model.activeShipNo ? "" : " selected"}>전체 호선</option>${shipGroups.map((group) => `<option value="${esc(group.shipNo)}"${model.activeShipNo === group.shipNo ? " selected" : ""}>${esc(group.shipNo)} · ${group.count}건</option>`).join("")}</select></label>
+          <label><span>상태</span><select class="select" data-record-filter="workPrep:status"><option value=""${model.activeStatus ? "" : " selected"}>전체 상태</option>${statusOptions.map((status) => `<option value="${esc(status.value)}"${model.activeStatus === status.value ? " selected" : ""}>${esc(status.label)} · ${status.count}건</option>`).join("")}</select></label>
         </div>
         <div class="material-kpi-grid work-prep-kpi-grid">
           ${model.kpiHtml || ""}
@@ -671,6 +673,7 @@
             <div class="work-prep-admin-card-title">
               <strong>${esc(model.shipNo)}</strong>
               <em>${esc(model.categoryLabel)}</em>
+              <span class="work-prep-admin-card-status-label">${esc(model.statusLabel || model.status)}</span>
             </div>
             <div class="work-prep-admin-card-meta">
               <span><strong>${esc(model.leaderName)}</strong>${model.leaderBadgeHtml || ""}</span>

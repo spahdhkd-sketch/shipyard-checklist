@@ -857,6 +857,51 @@ async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization
   return { rows: securedRows };
 }
 
+async function updateWorkPrepStatus(payload: Record<string, unknown>) {
+  const authorization = await verifyMutationSession(payload, "workPrep");
+  if (authorization.error) return authorization.error;
+
+  const recordId = cleanText(payload.recordId, 120);
+  const status = normalizeWorkPrepStatus(payload.status);
+  if (!recordId || !status) return jsonResponse({ error: "work_prep_status_invalid" }, 400);
+
+  const { data: existing, error: existingError } = await supabase
+    .from("work_prep_records")
+    .select("id,leader_worker_id,status,status_history,deleted_at")
+    .eq("id", recordId)
+    .maybeSingle();
+  if (existingError) {
+    console.error("work prep status lookup failed", existingError);
+    return jsonResponse({ error: "work_prep_lookup_failed" }, 500);
+  }
+  if (!existing) return jsonResponse({ error: "work_prep_not_found" }, 404);
+  if (existing.deleted_at) return jsonResponse({ error: "work_prep_deleted" }, 409);
+
+  const actor = (authorization as AuthorizedMutationSession).worker;
+  const actorId = cleanText(actor.id, 120);
+  const actorName = cleanText(actor.name, 180);
+  const leaderId = cleanText(existing.leader_worker_id, 120);
+  if (!isPrivilegedWorker(actor) && leaderId !== actorId) {
+    return jsonResponse({ error: "work_prep_forbidden" }, 403);
+  }
+
+  const now = new Date().toISOString();
+  const statusHistory = workPrepStatusHistory(existing, status, now, actorName, leaderId, "");
+  const { data, error } = await supabase
+    .from("work_prep_records")
+    .update({ status, status_history: statusHistory, updated_at: now })
+    .eq("id", recordId)
+    .is("deleted_at", null)
+    .select("id,status,status_history,updated_at")
+    .maybeSingle();
+  if (error) {
+    console.error("work prep status update failed", error);
+    return jsonResponse({ error: "work_prep_status_update_failed" }, 500);
+  }
+  if (!data) return jsonResponse({ error: "work_prep_not_found" }, 404);
+  return jsonResponse({ ok: true, mutated: 1, result: data });
+}
+
 async function upsertRows(payload: Record<string, unknown>) {
   const key = cleanText(payload.key, 80);
   const config = ADMIN_TABLES.get(key);
@@ -2071,6 +2116,7 @@ Deno.serve(async (req) => {
   if (action === "revokeSession") return revokeSession(payload);
   if (action === "createWorker") return createWorker(payload);
   if (action === "deleteWorker") return deleteWorker(payload);
+  if (action === "updateWorkPrepStatus") return updateWorkPrepStatus(payload);
   if (action === "upsertRows") return upsertRows(payload);
   if (action === "submitInspection") return submitInspection(payload);
   if (action === "submitRows") return submitRows(payload);

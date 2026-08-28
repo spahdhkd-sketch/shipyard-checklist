@@ -1,14 +1,19 @@
 # Version
 
-Current version: `1.13.2-20260828`
+Current version: `1.13.3-20260829`
 
-Recorded at: `2026-08-28 (v1 work-order delete wording correction)`
+Recorded at: `2026-08-29 (v4 work-order status and management action release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Removes the Management Work Orders new-registration action and deploys the dedicated authenticated status mutation for all five work-order states.
+- Defaults the Management Work Orders filter to all ships and persists status changes without showing a false synchronization failure.
+- Keeps desktop route navigation active on Ships, Pledge, Analytics, and Management while preserving the existing mobile parent-group activation.
+- Removes duplicate Management shortcut cards and reorganizes Work Orders, History, Ships, Materials, and Analytics for readable 360–430 px mobile layouts.
+- Removes the two Home-only informational banners without changing synchronization, error handling, or Management entry paths.
 - Presents the registered work-order destructive action as `삭제` in buttons, accessibility labels, confirmation copy, permission errors, and completion feedback while retaining the authenticated soft-delete boundary.
 - Routes registered work-order cards through the authenticated soft-delete archive action so administrators can remove them from the active list.
 - Defers operational record sync until a worker session exists while retaining the public master-data reads required for sign-in.
@@ -28,7 +33,7 @@ Notes:
 - Opens section editing directly below the selected section row without leaving the work-type manager.
 - Preserves danger-sign image proportions in the selection preview.
 - Places item save, cancel, and delete actions on a compact horizontal row and removes oversized item-card whitespace.
-- Uses `20260828-v1-1` to refresh PWA assets after deployment.
+- Uses `20260829-v4-1` to refresh PWA assets after deployment.
 - Keeps the entire site on the light theme regardless of the device color-scheme preference.
 - Replaces stacked work-type cards with a searchable desktop master-detail layout and a mobile list-to-detail flow.
 - Separates basic information, tool assignments, and section/item administration into focused tabs.
@@ -60,5 +65,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260828-v1-1` and service-worker version
-  `1.13.2-20260828-v1` so installed clients refresh safely.
+- Issues asset token `20260829-v4-1` and service-worker version
+  `1.13.3-20260829-v4` so installed clients refresh safely.

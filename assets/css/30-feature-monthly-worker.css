@@ -1036,6 +1036,10 @@
   padding: 0 0 var(--poster-space-lg);
 }
 
+.analytics-v4-monthly:not([open]) > .analytics-v4-monthly-content {
+  display: none;
+}
+
 .analytics-v4-monthly-content .monthly-worker-analytics {
   margin: 0;
   box-shadow: none;

@@ -39,12 +39,19 @@ assert.match(html, /data-material-bulk-select="m-1"/);
 assert.match(html, /data-record-status="materials:m-1"/);
 assert.match(html, /data-record-memo="materials:m-1"/);
 assert.match(html, /data-save-record="materials:m-1"/);
-assert.match(html, /data-action="bulk-material-status"/);
+assert.doesNotMatch(html, /data-action="bulk-material-status"/);
 assert.match(html, /aria-label="자재 누락 목록"/);
 assert.match(html, /<ol>/);
 assert.match(html, /작업 시작 전 반입이 필요합니다/);
 assert.strictEqual((html.match(/2026-08-24 09:00/g) || []).length, 3, "timeline entries are rendered once each, including faithful duplicates");
 assert.match(html, /담당자 이력/);
+
+const bulkSelection = materialsView.renderMissingMaterialsV4({
+  records: [{ ...records[0], selected: true }, records[1]],
+  canEdit: true,
+});
+assert.match(bulkSelection, /data-action="bulk-material-status"/);
+assert.match(bulkSelection, /선택 1건 상태 변경/);
 
 const readOnly = materialsView.renderMissingMaterialsV4({ records, selectedId: "m-1", canEdit: false });
 assert.doesNotMatch(readOnly, /data-material-bulk-select=/);

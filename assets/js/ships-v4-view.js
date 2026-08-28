@@ -104,10 +104,11 @@
     if (model.showControls === false) return "";
     const sortOptions = Array.isArray(model.sortOptions) ? model.sortOptions : [];
     const exportDisabled = model.ships.length ? "" : " disabled";
+    const utilitiesHtml = `${model.importAction ? `<button class="btn-light" data-action="${esc(model.importAction)}" type="button">엑셀 불러오기</button>` : ""}${model.exportAction ? `<button class="btn-light" data-action="${esc(model.exportAction)}"${exportDisabled} type="button">엑셀 내보내기</button>` : ""}${model.saveOrderAction ? `<button class="btn-light" data-action="${esc(model.saveOrderAction)}"${model.contentReadOnly || !model.ships.length ? " disabled" : ""} type="button">현재 순서 저장</button>` : ""}`;
     return `<section class="ships-v4__controls" aria-label="호선 목록 조건">
         <label class="ships-v4__search"><span>호선 검색</span><input class="input search-input" id="shipSearch" data-ship-search type="search" value="${esc(model.searchQuery)}" placeholder="예) H3481" autocomplete="off" /></label>
         ${sortOptions.length ? `<label class="ships-v4__sort"><span>정렬</span><select class="select" id="shipSortMode" data-ship-sort-mode>${sortOptions.map((option) => `<option value="${esc(option.value)}"${option.value === model.sortMode ? " selected" : ""}>${esc(option.label)}</option>`).join("")}</select></label>` : ""}
-        <div class="ships-v4__utilities">${model.importAction ? `<button class="btn-light" data-action="${esc(model.importAction)}" type="button">엑셀 불러오기</button>` : ""}${model.exportAction ? `<button class="btn-light" data-action="${esc(model.exportAction)}"${exportDisabled} type="button">엑셀 내보내기</button>` : ""}${model.saveOrderAction ? `<button class="btn-light" data-action="${esc(model.saveOrderAction)}"${model.contentReadOnly || !model.ships.length ? " disabled" : ""} type="button">현재 순서 저장</button>` : ""}</div>
+        ${utilitiesHtml ? `<details class="ships-v4__utility-details"${model.mobile ? "" : " open"}><summary><strong>목록 도구</strong><span>추가·가져오기·내보내기</span></summary><div class="ships-v4__utilities">${utilitiesHtml}</div></details>` : ""}
       </section>`;
   }
 
@@ -166,6 +167,7 @@
       ships,
       selectedId: selected ? selected.id : "",
       selectAction: text(raw.selectAction) || "select-ship-v4",
+      mobile: Boolean(raw.mobile),
       mobileDetailOpen: Boolean(selected && raw.mobileDetailOpen),
       editable: Boolean(raw.editable),
       contentReadOnly: Boolean(raw.contentReadOnly),

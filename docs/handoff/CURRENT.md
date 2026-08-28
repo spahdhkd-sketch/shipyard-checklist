@@ -1,21 +1,23 @@
 # Current handoff
 
-Updated: 2026-08-26 (Asia/Seoul)
+Updated: 2026-08-29 (Asia/Seoul)
 
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Application release commit: `804f51e37038703e74623173730051f7e21404b3`
+- Release candidate base commit: `d0d27469d40874874328e993f79d5896daeffba1` with preserved local changes
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.13.0-20260826-v4`
-- Asset token: `20260826-v4-1`
-- GitHub branch contains the application release commit; its newer branch head only adds release handoff documentation.
-- Production HTML, service worker, version record, minified JavaScript, and minified CSS were fetched after alias promotion and matched the release worktree.
+- Application version: `1.13.3-20260829-v4`
+- Asset token: `20260829-v4-1`
+- Production deployment: `dpl_3TMBtVYsDFjrq6R3B3qgTWr25Tyv` (`READY`, target `production`)
+- Deployment URL: `https://index-html-4zvbznx1r-spahdhkd-3161s-projects.vercel.app`
+- The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
+- Cache-bypassed live checks confirmed `1.13.3-20260829-v4`, asset token `20260829-v4-1`, and cache name `gs-safety-20260829-v4-1`. Local and live SHA-256 hashes match for `assets/dist/js/app-v2.min.js` (`dbbe61486054fbedf8333911d7e5c7f77d1711acae32bb9970ff7ab112a5a97d`), `assets/dist/js/screen-views.min.js` (`fa6fb81b2b93d934e9e77343f1cb80b8b962ee08e33fad70867c4ff0454306b4`), and `assets/dist/css/styles-v2.min.css` (`88cb6e18619a09e8d33f84086bacaf16c4998d397aff04b8f5a97507788cc405`).
 
 ## Supabase state
 
 - Applied the record-retention foundation, safety-setting versions, and durable worker-push delivery idempotency migrations.
-- `admin-mutations` version 17 is ACTIVE with JWT verification enabled.
+- `admin-mutations` version 18 is ACTIVE with JWT verification enabled.
 - `record-retention` version 1 is ACTIVE with JWT verification enabled.
 - `worker-push` version 12 is ACTIVE with JWT verification enabled.
 - Post-migration security and performance advisor checks reported no notices.
@@ -31,6 +33,37 @@ Updated: 2026-08-26 (Asia/Seoul)
 - `node tools/quality-harness.mjs --skip-verify --allow-non-main`
 - `git diff --check`
 
+## 2026-08-29 mobile Management master-detail (local, not deployed)
+
+- Mobile Management now follows the Quick Menu Work Type Management structure: a six-row management menu opens the selected area as a full-screen workspace, and Work Orders keeps its nested full-screen record detail.
+- The first Back action returns a Work Order detail to the Work Orders list; the second returns the list to the Management menu. Desktop underline tabs and the existing desktop list-detail workspace are unchanged.
+- Hermetic browser checks passed at 430, 390, and 360 px with no horizontal overflow, undersized controls, or exposed bottom navigation while either mobile workspace is open. Focused worker deletion, cached read-only navigation, and Work Order status/delete scenarios also pass with the new hierarchy.
+- Evidence is under `artifacts/mobile-design/`. `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, focused Management browser E2E, and `git diff --check` pass. The full responsive suite retains only the four pre-existing Safety Pledge failures at PC, 430 px, 390 px, and 360 px.
+- This mobile Management change has not been committed, pushed, previewed, or deployed. The production version and deployment listed above remain unchanged.
+
+## 2026-08-29 work-order status production correction
+
+- Management Work Orders no longer exposes the `+ 신규 등록` action. The five existing status values remain available: `확정`, `점검 대기`, `작업지시`, `미등록`, and `점검 완료`.
+- The frontend persists status changes through the dedicated authenticated `updateWorkPrepStatus` mutation. `admin-mutations` version 18 adds the missing dispatcher and updates only the authoritative status, status history, and timestamp.
+- A non-mutating production probe reached the deployed action and returned `admin_session_required` instead of the former `unknown_action`, proving the production dispatcher recognizes the action without changing a work-order row.
+- The production alias was explicitly moved to `dpl_3TMBtVYsDFjrq6R3B3qgTWr25Tyv`; cache-bypassed version markers and JavaScript hashes match the local deploy artifacts.
+- The logged-in production Management screen showed the Work Orders list with no new-registration action and exposed all five status choices across the existing status controls. No live work-order status was changed during verification.
+- `npm.cmd run verify`, `npm.cmd run build:assets`, the non-main quality harness, the focused Work Orders browser E2E, PWA E2E, and `git diff --check` passed. Full E2E retained the four pre-existing Safety Pledge design-token failures at PC, 430 px, 390 px, and 360 px; all Work Orders scenarios passed.
+- No commit or push was performed. Existing unrelated tracked and untracked work remains preserved.
+
+## v1.13.2 work-order delete wording correction
+
+- Registered work-order cards route their destructive control through the canonical authenticated archive action, but every user-facing control, accessibility label, confirmation, permission error, and completion message now says `삭제`.
+- The server boundary continues to use soft-delete semantics so the field wording is clear without weakening the data-safety boundary.
+- The release includes the previously verified `453ea37` and `c0df61c` pre-login synchronization restrictions from `feat/claude-batch`.
+- Hermetic browser coverage confirms delete confirmation, local record removal, deletion tombstone storage, and card disappearance.
+- The responsive visual harness now preloads the requested Management tab through the test URL so accumulated full-suite state cannot reset the Safety Settings surface during viewport checks.
+- Release gates passed: `npm.cmd run build:assets`, `npm.cmd run verify`, the 335-check quality harness, full browser E2E, the 48-surface responsive visual gate, PWA E2E, and `git diff --check`.
+- Vercel Preview deployment `dpl_6AjTFnmhZUvhvxsK2Mc7SNBUPaWJ` reported `READY` for exact Git SHA `6cecb51cd0d52d37d811bac000946676c9d7ee82` before production promotion.
+- Production deployment `dpl_EgG33De81KBMr7qfiqUAwvyHmug9` is `READY`, targets production, and the `gs-safety-checklist.vercel.app` alias was explicitly assigned to it.
+- A fresh anonymous production browser observed only `workers_public`, `safety_categories`, `safety_sections`, `safety_items`, `safety_tools`, and `safety_pictograms`; no operational record table was requested.
+- A 390 px production browser rendered the synthetic work-order `삭제` control, `작업지시서 삭제` accessibility label, and `삭제할까요?` confirmation copy. The dialog was dismissed, so no live production row was changed.
+
 ## v4 responsive operations release
 
 - The approved v4 visual direction is deployed to the Home `오늘의 안전 운영` screen and the related operational routes.
@@ -40,8 +73,8 @@ Updated: 2026-08-26 (Asia/Seoul)
 - The same v4 direction is now applied locally to Safety Pledge: the operational flow remains `대상 확인 → 알림 검토 → 완료 추적`, KPI values use one 2×2 surface, desktop pairs the action list with the live safety-rule preview, and mobile omits empty row fields.
 - Analytics now follows the approved `오늘의 안전 브리핑` direction: one data context, actual-count priority rows first, a token-driven recent-signal distribution, one shared 2×2 KPI surface, compact process indicators, and an explicitly expandable monthly worker section.
 - Analytics shows an unknown pending count as `—`, uses a neutral ring when the recent-signal total is zero, and keeps loading/error/empty data from appearing as plausible metrics.
-- Management now follows the approved compact operations-console direction: a flat data context, four concise live-count shortcuts, underline tabs, a desktop list-detail-history workspace, an isolated danger boundary, and no repeated section kickers or decorative action copy.
-- Management preserves read-only and stale/offline guards. At 360–430 px it keeps the 2×2 shortcut grid and opens a selected record as a full-screen detail, hides the bottom navigation, and restores focus to the originating list record after returning.
+- Management now follows the approved compact operations-console direction: a flat data context followed immediately by underline tabs, a desktop list-detail-history workspace, an isolated danger boundary, and no duplicate live-count shortcut cards or decorative action copy.
+- Management preserves read-only and stale/offline guards. At 360–430 px it uses sticky horizontal tabs, a two-filter Work Order row, compact list cards, full-screen selected-record detail, collapsed history/danger panels, a hidden bottom navigation while detail is open, and list-focus restoration after returning.
 - Fresh Home, Pledge, Analytics, and Management evidence is under `.omo/evidence/design-token/{index,pledge,analytics,manage}-{1366,430,390,360}.png`; management detail evidence is under `manage-detail-{430,390,360}.png`. The responsive token gate passes at all four widths.
 - Work Preparation Inspection now uses the approved field-operation flow: one ordered three-step header, a full-width desktop shell, a separate writing/status workspace, a one-column tablet/mobile flow, and no duplicated English `STEP` kicker. Existing category, tool, high-risk, signature, offline queue, and submit behavior is unchanged.
 - The inspection route now enforces 44 px targets for registration, date navigation, record deletion, and inspection start controls. The real browser scenario completes work-prep selection, tool confirmation, checklist/signature entry, submission, local completion, and server-sync presentation.
@@ -58,9 +91,19 @@ Updated: 2026-08-26 (Asia/Seoul)
 - Commit `804f51e37038703e74623173730051f7e21404b3` is pushed to `origin/feat/claude-batch`, its Vercel Preview passed the mobile work-order flow, and the same exact commit is deployed to the production alias.
 - Production browser verification passed the 430 px Home → Work Orders → full-screen detail → list-return flow and all five bottom navigation routes.
 
+## 2026-08-28 approved mobile layout simplification (production)
+
+- Removed the duplicate four-card Management shortcut section so the tabbed workspace begins directly after the data context.
+- Work Orders now keeps `전체 호선` and `전체 상태` as the two always-visible mobile filters, hides desktop KPI/sidebar chrome, compresses list rows, and uses the existing full-screen detail transition. The visible Work Order list-return button owns the Back action and receives focus after every relevant rerender.
+- Inspection History keeps search visible and moves the remaining filters into one expandable mobile panel with applied-filter chips. Ships keeps search/sort visible and collapses import/export/order tools plus the add form. Change History and Danger Zone are collapsed on mobile. Analytics no longer renders the duplicate filter-opening card, and Materials exposes bulk status change only after a row is selected.
+- Desktop list-detail behavior and navigation remain intact. Mobile horizontal overflow, bottom-navigation clearance, 44 px control sizing, detail focus/return focus, and the 48 responsive surfaces are covered at 1366, 430, 390, and 360 px.
+- Evidence is under `artifacts/mobile-layout-qa/` and `.omo/evidence/design-token/`. `npm run build:assets`, the focused view/static tests, `npm run verify`, the 335-check non-main quality harness, `npm run e2e:design-tokens`, and the full hermetic `npm run e2e` pass.
+- Production browser QA confirmed route-specific PC navigation for Ships, Safety Pledge, Analytics, and Management; the 390 px Management surface keeps the mobile `더보기` parent active, defaults Work Order filters to `전체 호선` and `전체 상태`, has no horizontal overflow, and exposes `H3600 작업지시서 삭제` without the previous `보관` accessibility wording.
+- The final v3 working tree was deployed as `dpl_6mu38Pf2jcsjoNvYV6dBZEmqvFEJ`. No commit, push, Preview deployment, or Supabase production mutation was performed; unrelated tracked and untracked work remains preserved.
+
 ## Pre-login remote pull restriction
 
-- Commits `453ea37` and `c0df61c` on `feat/claude-batch`. Not deployed to Preview or production.
+- Commits `453ea37` and `c0df61c` on `feat/claude-batch`, now included in production application commit `6cecb51cd0d52d37d811bac000946676c9d7ee82`.
 - Measured against production v1.13.0 on 2026-08-26: an anonymous visit with no auth session issued 17 Supabase REST requests and stored workers, inspections, unsafe issues, missing materials, work preparation records and ships in local storage.
 - `453ea37` gated only the boot `pullRemote` call. **That was not sufficient.** A clean-origin measurement still showed 116 requests covering every record table, because `startRemoteSync()` (realtime subscription, deletion channel, polling fallback), `handleSyncWake()`, `reconcileDeletedInspectionRows()` and `reconcileRemoteIds()` all query outside the `pullRemote` key filter.
 - `c0df61c` defers the whole remote sync until a worker session exists: boot starts sync only when logged in, `submitWorkerLogin` starts it, `logoutWorker` calls the new `stopRemoteSync()`, `handleSyncWake` only reconnects when logged in, and `pullRemote` applies `allowedKeys` to both the table filter and the reconcile steps.
@@ -90,7 +133,8 @@ Current comparison result: all three fail both forward and reverse `git apply --
 
 - No live push notification was sent during release verification. Function deployment, JWT enforcement, database authorization, and idempotency contracts were verified, but a controlled device receipt still requires an explicitly approved test recipient and send.
 - No pull request was created or merged. Production currently corresponds to the feature-branch application release commit above.
-- `docs/project/PROJECT_BRIEF.md` is absent from this recovery checkout and should be restored separately if it exists in the canonical project history.
-- The hermetic browser E2E blocks live Supabase requests, so the pre-login request reduction in `453ea37` is covered only by static and unit assertions. Counting the actual anonymous requests requires a Preview deployment and a private browsing window.
-- Work Preparation Inspection Step 2 and Step 3 were not re-verified after `453ea37`.
+- `docs/project/PROJECT_BRIEF.md` was restored on 2026-08-27 from the consolidated historical brief and revalidated against the current repository structure, release record, and GitHub branch state.
+- The pre-login request restriction was verified against production in a fresh browser after deployment; no operational record table was requested before login.
+- Work Preparation Inspection Step 2 and Step 3 were re-verified in the hermetic full browser E2E after the synchronization change.
+- No live production work-order deletion was executed during release verification; the deployed UI and exact asset hash were checked without mutating production data.
 - Supabase Realtime WebSocket connections were observed failing repeatedly against production v1.13.0, both before and after worker login. The cursor-based polling fallback is healthy and all 11 tables report successful pulls. Whether the failure reproduces outside the observing browser environment is unconfirmed.

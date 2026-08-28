@@ -44,6 +44,7 @@ assert.match(html, /data-ship-sort-mode/);
 assert.match(html, /data-action="import-ships"/);
 assert.match(html, /data-action="export-ships"/);
 assert.match(html, /data-action="save-ship-order"/);
+assert.match(html, /class="ships-v4__utility-details" open/);
 assert.match(html, /data-action="select-ship-v4" data-ship-id="ship-1"/);
 assert.match(html, /data-ship-search-item/);
 assert.match(html, /data-ship-date-field/);
@@ -57,7 +58,9 @@ assert.match(html, /data-action="page-ships-collection" data-collection-cursor="
 const unselected = renderShipsV4View({ ...model, selectedId: "" });
 assert.match(unselected, /호선을 선택하세요/);
 
-const mobile = renderShipsV4View({ ...model, mobileDetailOpen: true });
+const mobile = renderShipsV4View({ ...model, mobile: true, mobileDetailOpen: true });
+assert.match(mobile, /class="ships-v4__utility-details">/);
+assert.doesNotMatch(mobile, /class="ships-v4__utility-details" open/);
 assert.match(mobile, /is-mobile-fullscreen/);
 assert.match(mobile, /data-action="back-ships-v4-list"/);
 assert.match(mobile, /role="dialog" aria-modal="true"/);

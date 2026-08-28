@@ -58,9 +58,6 @@
       todayWorkCount = 0,
       todayWorkProgress = 0,
       appVersionLabel = "",
-      syncStatus = "offline",
-      syncLabel = "오프라인 · 로컬 저장",
-      syncDetail = "연결되면 자동으로 동기화합니다",
     } = model;
 
     const myCheck = model.myCheck || null;
@@ -77,8 +74,6 @@
           : todayCount
             ? "오늘 현장 전체 기준"
             : "등록된 오늘 점검이 없습니다";
-    const syncTone = ["online", "loading", "offline", "error"].includes(syncStatus) ? syncStatus : "offline";
-
     return `<main class="home-v4" aria-labelledby="homeV4Title">
       <header class="home-v4__heading">
         <div>
@@ -87,12 +82,6 @@
         </div>
         ${appVersionLabel ? `<span class="home-v4__version">${esc(appVersionLabel)}</span>` : ""}
       </header>
-
-      <div class="home-v4__sync is-${esc(syncTone)}" data-home-sync="${esc(syncTone)}" role="status" aria-live="polite">
-        <span class="home-v4__sync-dot" aria-hidden="true"></span>
-        <strong>${esc(syncLabel)}</strong>
-        <span>${esc(syncDetail)}</span>
-      </div>
 
       <section class="home-v4__grid" aria-label="오늘의 안전 업무">
         <article class="home-v4__card">
@@ -142,10 +131,6 @@
         </article>
       </section>
 
-      <button class="home-v4__management" data-view="items" type="button">
-        <span>${navIcon("settings")}<strong>관리 설정은 현장 실행과 분리</strong></span>
-        <span aria-hidden="true">›</span>
-      </button>
     </main>`;
   }
 
@@ -357,7 +342,6 @@
         ${monthlyWorkerAnalyticsHtml ? `<details class="analytics-v4-monthly"><summary><span><strong>월간 작업자 점검 현황</strong><small>기간별 이행 현황과 작업자 달력</small></span><b>펼쳐 보기</b></summary><div class="analytics-v4-monthly-content">${monthlyWorkerAnalyticsHtml}</div></details>` : ""}
         <section class="analytics-utilities" aria-label="분석 도구">
           <button class="btn-light" data-export-records="analytics" type="button">데이터 내보내기</button>
-          <button class="btn-light" data-action="open-analytics-filters" type="button">필터</button>
           <button class="btn-light" data-action="open-analytics-detail" type="button">상세 보기</button>
           <button class="btn" data-view="check" type="button"${freshActionsDisabled ? " disabled" : ""}>새 점검</button>
         </section>

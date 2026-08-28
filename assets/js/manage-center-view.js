@@ -89,6 +89,22 @@
       </div>`;
   }
 
+  function renderMobileMenu(tabs, activeId) {
+    return `<section class="manage-center__mobile-menu" aria-labelledby="manageCenterMobileMenuHeading">
+        <header class="manage-center__mobile-menu-head"><h2 id="manageCenterMobileMenuHeading">관리 메뉴</h2><p>확인하거나 처리할 업무를 선택하세요.</p></header>
+        <div class="manage-center__mobile-menu-list">
+          ${tabs.map((tab) => {
+            const active = tab.id === activeId;
+            const count = Number.isFinite(Number(tab.count)) ? `<em>${esc(tab.count)}<small>건</small></em>` : "";
+            return `<button class="manage-center__mobile-menu-row${active ? " is-active" : ""}" data-manage-center-tab="${esc(tab.id)}" type="button"${active ? ' aria-current="page"' : ""}>
+                <span><strong>${esc(tab.label)}</strong><small>${esc(tab.description || "선택한 항목을 확인합니다.")}</small></span>
+                ${count}
+              </button>`;
+          }).join("")}
+        </div>
+      </section>`;
+  }
+
   function normalizeCards(rawCards) {
     const provided = Array.isArray(rawCards) ? rawCards : [];
     return DEFAULT_CARDS.map((fallback) => {
@@ -155,27 +171,32 @@
       </aside>`;
   }
 
-  function renderHistory(rawHistory, contentReadOnly) {
+  function renderHistory(rawHistory, contentReadOnly, mobile = false) {
     const history = rawHistory || {};
     const count = Number.isFinite(Number(history.count)) ? `${esc(history.count)}건` : "최근 변경";
-    return `<section class="manage-center__history" aria-labelledby="manageCenterHistoryHeading">
-        <header><h2 id="manageCenterHistoryHeading">변경 이력</h2><span>${esc(history.label || count)}</span></header>
-        <p>${esc(history.summary || "선택한 항목의 변경 내역을 확인합니다.")}</p>
-        ${typeof history.html === "string" ? `<div class="manage-center__history-body"${contentReadOnly ? ' data-manage-content-read-only="true"' : ""}>${history.html}</div>` : ""}
-      </section>`;
+    return `<details class="manage-center__history"${mobile ? "" : " open"}>
+        <summary><strong id="manageCenterHistoryHeading">변경 이력</strong><span>${esc(history.label || count)}</span></summary>
+        <div class="manage-center__collapsible-body" aria-labelledby="manageCenterHistoryHeading">
+          <p>${esc(history.summary || "선택한 항목의 변경 내역을 확인합니다.")}</p>
+          ${typeof history.html === "string" ? `<div class="manage-center__history-body"${contentReadOnly ? ' data-manage-content-read-only="true"' : ""}>${history.html}</div>` : ""}
+        </div>
+      </details>`;
   }
 
-  function renderDangerZone(rawDangerZone) {
+  function renderDangerZone(rawDangerZone, mobile = false) {
     const dangerZone = rawDangerZone || {};
-    return `<section class="manage-center__danger-zone" aria-labelledby="manageCenterDangerHeading">
-        <h2 id="manageCenterDangerHeading">위험 작업</h2>
-        <p>${esc(dangerZone.description || "복구하기 어려운 작업은 대상과 영향을 다시 확인한 뒤 진행하세요.")}</p>
-        ${typeof dangerZone.html === "string" ? `<div class="manage-center__danger-actions">${dangerZone.html}</div>` : ""}
-      </section>`;
+    return `<details class="manage-center__danger-zone"${mobile ? "" : " open"}>
+        <summary><strong id="manageCenterDangerHeading">위험 작업</strong><span>보관·복구</span></summary>
+        <div class="manage-center__collapsible-body" aria-labelledby="manageCenterDangerHeading">
+          <p>${esc(dangerZone.description || "복구하기 어려운 작업은 대상과 영향을 다시 확인한 뒤 진행하세요.")}</p>
+          ${typeof dangerZone.html === "string" ? `<div class="manage-center__danger-actions">${dangerZone.html}</div>` : ""}
+        </div>
+      </details>`;
   }
 
   function renderManageCenterView(rawModel, deps = {}) {
     const model = rawModel || {};
+    const mobile = Boolean(model.mobile);
     const tabs = normalizeTabs(model.tabs);
     const activeId = activeTabId(tabs, model.activeTab);
     const activeTab = tabs.find((tab) => tab.id === activeId) || tabs[0];
@@ -200,6 +221,7 @@
     const detailEnabled = model.detailEnabled !== false;
     const selectedRecord = model.selectedRecord || model.selected;
     const mobileDetailOpen = Boolean(detailEnabled && selectedRecord && model.mobileDetailOpen);
+    const mobileSectionOpen = Boolean(model.mobileSectionOpen);
     const contextHtml = typeof deps.renderDataContext === "function" ? text(deps.renderDataContext(model.context)) : "";
     const mastheadHtml = contextHtml || `<header class="manage-center__masthead">
           <h1>관리 센터</h1>
@@ -214,27 +236,32 @@
       return `<section class="manage-center__panel" id="${inactivePanelId}" role="tabpanel" aria-labelledby="${inactiveTabId}" hidden inert></section>`;
     }).join("");
 
-    const historyHtml = hasResolvedData ? renderHistory(model.changeHistory, contentReadOnly) : "";
-    return `<section class="manage-center manage-center-v4" data-manage-center-state="${esc(dataState)}">
+    const historyHtml = hasResolvedData ? renderHistory(model.changeHistory, contentReadOnly, mobile) : "";
+    const activeDescription = text(activeTab.description || "선택한 관리 업무를 확인합니다.");
+    return `<section class="manage-center manage-center-v4${mobileSectionOpen ? " is-mobile-section-open" : ""}" data-manage-center-state="${esc(dataState)}">
         ${mastheadHtml}
         ${showToolbar ? `<div class="manage-center__toolbar">
           <label class="manage-center__search"><span class="sr-only">통합 검색</span><input class="input" data-manage-center-search type="search" value="${esc(query)}" placeholder="호선, 작업, 구성원, 기록 검색" autocomplete="off" /></label>
           <label class="manage-center__action-toggle"><input data-manage-center-action-needed type="checkbox"${actionNeededOnly ? " checked" : ""} /><span>조치 필요만 보기</span></label>
         </div>` : ""}
-        ${renderCards(normalizeCards(model.cards), hasResolvedData)}
         ${renderTabs(tabs, activeId)}
-        <div class="manage-center__workspace${detailEnabled ? "" : " is-single-pane"}${mobileDetailOpen ? " is-mobile-detail-open" : ""}">
-          ${inactivePanelsHtml}
-          <section class="manage-center__panel" id="${panelId}" role="tabpanel" aria-labelledby="${tabId}">
-            ${hasResolvedData ? renderListSummary(model.list) : ""}
-            ${nonBlockingState ? stateHtml : ""}
-            <div class="manage-center__panel-content">${blockingStateHtml || emptyPanel || visibleContentHtml}</div>
-          </section>
-          ${hasResolvedData && detailEnabled ? renderSelectedDetail(selectedRecord, { mobileDetailOpen, contentReadOnly }) : ""}
-          ${detailEnabled ? historyHtml : ""}
+        ${renderMobileMenu(tabs, activeId)}
+        <div class="manage-center__mobile-section${mobileSectionOpen ? " is-mobile-section-open" : ""}">
+          ${mobileSectionOpen ? `<button class="manage-tabs-v4__back manage-center__section-back" data-action="back-manage-center-menu" type="button">관리 메뉴</button>
+          <header class="manage-center__section-head"><h2>${esc(activeTab.label)}</h2><p>${esc(activeDescription)}</p></header>` : ""}
+          <div class="manage-center__workspace${detailEnabled ? "" : " is-single-pane"}${mobileDetailOpen ? " is-mobile-detail-open" : ""}">
+            ${inactivePanelsHtml}
+            <section class="manage-center__panel" id="${panelId}" role="tabpanel" aria-labelledby="${tabId}">
+              ${hasResolvedData ? renderListSummary(model.list) : ""}
+              ${nonBlockingState ? stateHtml : ""}
+              <div class="manage-center__panel-content">${blockingStateHtml || emptyPanel || visibleContentHtml}</div>
+            </section>
+            ${hasResolvedData && detailEnabled ? renderSelectedDetail(selectedRecord, { mobileDetailOpen, contentReadOnly }) : ""}
+            ${detailEnabled ? historyHtml : ""}
+          </div>
+          ${detailEnabled ? "" : historyHtml}
+          ${hasResolvedData && !contentReadOnly ? renderDangerZone(model.dangerZone, mobile) : ""}
         </div>
-        ${detailEnabled ? "" : historyHtml}
-        ${hasResolvedData && !contentReadOnly ? renderDangerZone(model.dangerZone) : ""}
       </section>`;
   }
 

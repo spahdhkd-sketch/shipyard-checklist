@@ -69,18 +69,36 @@
 
   function renderFilters(rawModel, disabled) {
     const filters = filterModel(rawModel);
+    const mobile = Boolean(rawModel && rawModel.mobile);
     const disabledAttr = disabled ? " disabled" : "";
     const shipOptions = selectOptions(filters.ships, filters.ship, "전체 호선");
     const typeOptions = selectOptions(filters.types, filters.type, "전체 작업 유형");
     const resultOptions = selectOptions(filters.results, filters.result, "전체 결과");
+    const optionLabel = (options, value) => {
+      const selected = array(options).find((option) => text(option && (option.value ?? option.id)) === text(value));
+      return text(selected && (selected.label ?? selected.name ?? selected.value ?? selected.id)) || text(value);
+    };
+    const activeFilters = [
+      filters.dateFrom ? `시작 ${filters.dateFrom}` : "",
+      filters.dateTo ? `종료 ${filters.dateTo}` : "",
+      filters.ship ? `호선 ${optionLabel(filters.ships, filters.ship)}` : "",
+      filters.type ? `유형 ${optionLabel(filters.types, filters.type)}` : "",
+      filters.result ? `결과 ${optionLabel(filters.results, filters.result)}` : "",
+    ].filter(Boolean);
     return `<form class="history-v4__filters" data-history-v4-filters aria-label="점검 이력 조회 조건">
       <label class="history-v4__search"><span>검색</span><input class="input" data-history-query type="search" value="${esc(filters.query)}" placeholder="호선, 작업자, 작업 유형 검색" autocomplete="off"${disabledAttr}></label>
-      <label><span>시작일</span><input class="input" data-history-date-from type="date" value="${esc(filters.dateFrom)}"${disabledAttr}></label>
-      <label><span>종료일</span><input class="input" data-history-date-to type="date" value="${esc(filters.dateTo)}"${disabledAttr}></label>
-      ${shipOptions ? `<label><span>호선</span><select class="input" data-history-ship-filter${disabledAttr}>${shipOptions}</select></label>` : ""}
-      ${typeOptions ? `<label><span>작업 유형</span><select class="input" data-history-type-filter${disabledAttr}>${typeOptions}</select></label>` : ""}
-      ${resultOptions ? `<label><span>점검 결과</span><select class="input" data-history-result-filter${disabledAttr}>${resultOptions}</select></label>` : ""}
-      <button class="btn-light history-v4__filter-reset" data-action="reset-history-v4-filters" type="button"${disabledAttr}>초기화</button>
+      <details class="history-v4__filter-details"${mobile ? "" : " open"}>
+        <summary><strong>필터</strong><span>${activeFilters.length ? `${activeFilters.length}개 적용` : "전체"}</span></summary>
+        <div class="history-v4__filter-fields">
+          <label><span>시작일</span><input class="input" data-history-date-from type="date" value="${esc(filters.dateFrom)}"${disabledAttr}></label>
+          <label><span>종료일</span><input class="input" data-history-date-to type="date" value="${esc(filters.dateTo)}"${disabledAttr}></label>
+          ${shipOptions ? `<label><span>호선</span><select class="input" data-history-ship-filter${disabledAttr}>${shipOptions}</select></label>` : ""}
+          ${typeOptions ? `<label><span>작업 유형</span><select class="input" data-history-type-filter${disabledAttr}>${typeOptions}</select></label>` : ""}
+          ${resultOptions ? `<label><span>점검 결과</span><select class="input" data-history-result-filter${disabledAttr}>${resultOptions}</select></label>` : ""}
+          <button class="btn-light history-v4__filter-reset" data-action="reset-history-v4-filters" type="button"${disabledAttr}>초기화</button>
+        </div>
+      </details>
+      ${activeFilters.length ? `<div class="history-v4__active-filters" aria-label="적용된 필터">${activeFilters.map((label) => `<span>${esc(label)}</span>`).join("")}</div>` : ""}
     </form>`;
   }
 

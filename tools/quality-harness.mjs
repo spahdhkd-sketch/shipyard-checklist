@@ -13,10 +13,10 @@ const skipVerify = args.has("--skip-verify");
 const strictGit = args.has("--strict-git");
 const allowNonMain = args.has("--allow-non-main");
 
-const APP_VERSION = "1.13.2-20260828-v1";
+const APP_VERSION = "1.13.3-20260829-v4";
 const VERSION_LOADING_COPY = "버전 확인 중";
-const ASSET_TOKEN = "20260828-v1-1";
-const SW_CACHE = "gs-safety-20260828-v1-1";
+const ASSET_TOKEN = "20260829-v4-1";
+const SW_CACHE = "gs-safety-20260829-v4-1";
 const SUPABASE_PROJECT_REF = "yuuroocvxvzgmsdeeiws";
 const PRODUCTION_ALIAS = "https://gs-safety-checklist.vercel.app";
 const DUPLICATE_VERCEL_ALIASES = [

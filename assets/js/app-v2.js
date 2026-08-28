@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.13.2-20260828-v1";
+    const APP_VERSION = "1.13.3-20260829-v4";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -1725,21 +1725,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
       state.workPrepRecords = state.workPrepRecords.map((row) => row.id === record.id ? updated : row);
       saveWorkPrepRecords();
-      const ok = await upsertAdminRows("workPrepRecords", [updated]);
-      if (!ok) {
+      try {
+        const response = await invokeAdminMutation("updateWorkPrepStatus", { recordId: record.id, status: normalized });
+        const remote = response?.result && typeof response.result === "object" ? response.result : {};
+        const confirmed = {
+          ...updated,
+          status: normalizeWorkPrepStatus(remote.status || updated.status),
+          statusHistory: Array.isArray(remote.status_history) ? remote.status_history : updated.statusHistory,
+          updatedAt: remote.updated_at || updated.updatedAt,
+        };
+        state.workPrepRecords = state.workPrepRecords.map((row) => row.id === record.id ? confirmed : row);
+        setSyncStatus("온라인", "online");
+        persist();
+        renderPreservingScroll();
+        toast("작업지시서 상태를 변경했습니다.");
+      } catch (error) {
+        console.error(error);
         state.workPrepRecords = state.workPrepRecords.map((row) => row.id === record.id ? previous : row);
         saveWorkPrepRecords();
+        setSyncStatus("동기화 오류", "error");
         render();
-        return;
+        toast("작업지시서 상태 변경 실패 — 권한과 연결 상태를 확인해주세요.");
       }
-      persist();
-      renderPreservingScroll();
-      toast("작업지시서 상태를 변경했습니다.");
     }
 
     async function archiveWorkPrepRecord(recordId) {
       const record = workPrepRecordById(recordId);
-      if (!record) return toast("보관할 작업지시서를 찾을 수 없습니다.");
+      if (!record) return toast("삭제할 작업지시서를 찾을 수 없습니다.");
       if (!canOpenWorkPrepRegister()) return toast("작업지시서를 삭제할 권한이 없습니다.");
       const category = categoryById(record.categoryId);
       const title = `${record.shipNo || "-"} ${category ? workLabel(category) : "작업지시서"}`;
@@ -2961,6 +2973,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       shipCollectionState: { filters: { status: "" }, cursor: null, selectedRecordId: null, editingRecordId: null },
       workPrepCollectionState: { filters: { status: "" }, cursor: null, selectedRecordId: null, editingRecordId: null },
       manageTab: loadJson("manageTab", "workers"),
+      manageCenterMobileSectionOpen: false,
       adminPushDraft: createAdminPushDraft(loadJson("adminPushDraft", {})),
       adminPushSending: false,
       adminPushEditing: false,
@@ -3073,6 +3086,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         const tab = routeQueryParam("tab");
         if (tab === "unsafe") {
           state.manageTab = "unsafe";
+          state.manageCenterMobileSectionOpen = true;
           state.unsafeDetailId = "";
           state.unsafeFilters = { ...state.unsafeFilters, shipNo, status: "" };
           saveJson("unsafeFilters", state.unsafeFilters);
@@ -3080,6 +3094,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }
         if (tab === "materials") {
           state.manageTab = "materials";
+          state.manageCenterMobileSectionOpen = true;
           state.materialFilters = { ...state.materialFilters, shipNo, status: "", materialName: "" };
           saveJson("materialFilters", state.materialFilters);
           saveJson("manageTab", state.manageTab);
@@ -3357,6 +3372,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         historyDetailId: state.historyDetailId,
         shipV4SelectedId: state.view === "ships" ? state.shipV4SelectedId : "",
         manageTab: state.view === "manage" ? state.manageTab : "",
+        manageSectionOpen: state.view === "manage" && state.manageCenterMobileSectionOpen,
         manageDetailId: state.view === "manage" ? manageCenterDetailId(state.manageTab) : "",
       };
     }
@@ -3377,6 +3393,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const previousShipId = state.view === "ships" ? state.shipV4SelectedId : "";
       const previousHistoryId = state.view === "history" ? state.historyDetailId : "";
       const previousManageTab = state.view === "manage" ? state.manageTab : "";
+      const previousManageSectionOpen = state.view === "manage" && state.manageCenterMobileSectionOpen;
       const previousManageDetailId = previousManageTab ? manageCenterDetailId(previousManageTab) : "";
       const route = event.state;
       if (!route || route.app !== "shipyardSafety") {
@@ -3390,6 +3407,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workPrepDetailId = "";
         state.workerV4SelectedId = "";
         state.workerEditCardId = "";
+        state.manageCenterMobileSectionOpen = false;
         clearCompletionStateForView("dashboard");
         render();
         scrollScreenTop();
@@ -3415,10 +3433,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.workPrepDetailId = "";
       state.workerV4SelectedId = "";
       state.workerEditCardId = "";
+      state.manageCenterMobileSectionOpen = false;
       const requestedManageTab = route.manageTab || state.manageTab;
       if (state.view === "manage" && (manageCenterRemoteKeys(requestedManageTab).length || requestedManageTab === "safetySettings")) {
         state.manageTab = requestedManageTab;
         const detailId = String(route.manageDetailId || "");
+        state.manageCenterMobileSectionOpen = Boolean(route.manageSectionOpen || detailId);
         if (state.manageTab === "unsafe" && state.unsafeIssues.some((row) => row.id === detailId)) state.unsafeDetailId = detailId;
         if (state.manageTab === "materials" && state.missingMaterials.some((row) => row.id === detailId)) state.materialDetailId = detailId;
         if (state.manageTab === "workPrep" && state.workPrepRecords.some((row) => row.id === detailId)) state.workPrepDetailId = detailId;
@@ -3440,6 +3460,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (previousManageDetailId && !manageCenterDetailId(previousManageTab)) {
         restoreManageCenterListFocus(previousManageTab, previousManageDetailId);
+      }
+      if (previousManageSectionOpen && !state.manageCenterMobileSectionOpen) {
+        restoreManageCenterMenuFocus(previousManageTab);
       }
     }
 
@@ -3471,6 +3494,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.selectedCategoryId = null;
         state.workPrepRegisterOpen = false;
       }
+      if (view !== "manage") state.manageCenterMobileSectionOpen = false;
       if (!["dashboard", "history"].includes(view)) state.historyDetailId = null;
       clearCompletionStateForView(view);
       render();
@@ -3614,7 +3638,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         && isNarrowViewport()
         && Boolean(state.workerV4SelectedId)
         && state.workers.some((row) => row.id === state.workerV4SelectedId);
-      const detailOpen = recordDetailOpen || workerDetailOpen;
+      const mobileSectionOpen = state.view === "manage"
+        && isNarrowViewport()
+        && state.manageCenterMobileSectionOpen;
+      const detailOpen = mobileSectionOpen || recordDetailOpen || workerDetailOpen;
       document.body.classList.toggle("manage-mobile-detail-open", detailOpen);
       const shipsDetailOpen = state.view === "ships"
         && isNarrowViewport()
@@ -3633,7 +3660,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function enforceManageReadOnlyControls() {
       document.querySelectorAll('[data-manage-content-read-only="true"] button, [data-manage-content-read-only="true"] input, [data-manage-content-read-only="true"] select, [data-manage-content-read-only="true"] textarea')
         .forEach((control) => {
-          if (control.matches('[data-unsafe-record-detail], [data-material-record-detail], [data-work-prep-record-detail], [data-manage-center-page], [data-record-filter], [data-action="back-unsafe-list"], [data-action="back-material-list"], [data-action="back-manage-center-list"]')) {
+          if (control.matches('[data-unsafe-record-detail], [data-material-record-detail], [data-work-prep-record-detail], [data-manage-center-page], [data-record-filter], [data-action="back-unsafe-list"], [data-action="back-material-list"], [data-action="back-manage-center-list"], [data-action="back-work-prep-list"]')) {
             control.disabled = false;
             control.removeAttribute("aria-disabled");
             return;
@@ -3794,6 +3821,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       setupPictogramImageFallbacks();
       ensureRenderedAccessibility();
       restoreFocusedFieldState(focusedFieldState);
+      if (state.view === "manage"
+        && (state.manageCenterMobileSectionOpen || manageCenterDetailId(state.manageTab))
+        && (document.activeElement === document.body || document.activeElement === page)) {
+        focusManageCenterMobileDetail();
+      }
       scheduleWorkerPushSubscriptionStatusRefresh();
     }
 
@@ -4288,11 +4320,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return LEGACY_NAV.filter((nav) => ["dashboard", "check", "ships", "history", "items"].includes(nav.id));
     }
 
-    function renderNavButtons(items) {
-      const activeParentId = typeof NAVIGATION_MODEL.getActiveMobileParentId === "function"
-        ? NAVIGATION_MODEL.getActiveMobileParentId(state.view)
-        : "";
-      const activeView = MOBILE_NAV_ROUTE_IDS[activeParentId] || (["unsafe", "materials"].includes(state.view) ? "items" : state.view);
+    function renderNavButtons(items, useMobileParent = false) {
+      let activeView = state.view;
+      if (useMobileParent) {
+        const activeParentId = typeof NAVIGATION_MODEL.getActiveMobileParentId === "function"
+          ? NAVIGATION_MODEL.getActiveMobileParentId(state.view)
+          : "";
+        activeView = MOBILE_NAV_ROUTE_IDS[activeParentId] || (["unsafe", "materials"].includes(state.view) ? "items" : state.view);
+      }
       return items.map((nav) => `
         <button class="nav-btn ${activeView === nav.id ? "active" : ""}" data-view="${nav.id}" type="button">
           <span class="nav-icon">${navIcon(nav.icon)}</span><span>${esc(nav.label)}</span>
@@ -4302,7 +4337,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function renderNav() {
       const loggedIn = isWorkerLoggedIn();
       $("desktopNav").innerHTML = loggedIn ? renderNavButtons(visibleNavItems()) : "";
-      $("mobileNav").innerHTML = loggedIn ? renderNavButtons(mobileNavItems()) : "";
+      $("mobileNav").innerHTML = loggedIn ? renderNavButtons(mobileNavItems(), true) : "";
       updateMobileAdminShortcut();
     }
 
@@ -4677,10 +4712,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveJson("materialFilters", state.materialFilters);
     }
 
+    function resetWorkPrepShipFilter() {
+      state.workPrepFilters = { ...state.workPrepFilters, shipNo: "" };
+      saveJson("workPrepFilters", state.workPrepFilters);
+    }
+
     function prepareInitialManageFilters() {
       if (state.view !== "manage") return;
       if (state.manageTab === "unsafe") setUnsafeStatusFilter(consumeUnsafeReceivedEntry() ? unsafeReceivedStatus() : "");
       if (state.manageTab === "materials") resetMaterialShipFilter();
+      if (state.manageTab === "workPrep") resetWorkPrepShipFilter();
     }
 
     function unsafeReceivedCount() {
@@ -6024,6 +6065,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       context.actionsHtml = adminToggleButton();
       return HISTORY_V4_VIEW.renderHistoryV4View({
         context,
+        mobile: isNarrowViewport(),
         dataState,
         retryAction: "retry-history",
         filters: {
@@ -6319,6 +6361,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderShipsV4() {
       const allShips = sortedShips();
+      const mobile = isNarrowViewport();
       state.shipCollectionState = {
         ...state.shipCollectionState,
         filters: { ...(state.shipCollectionState?.filters || {}), search: state.shipSearchQuery, status: "" },
@@ -6368,12 +6411,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           ],
         };
       });
-      const adminPanel = state.adminMode ? `<section class="panel panel-pad ship-v4-admin-add" aria-labelledby="shipV4AddHeading">
-        <div class="section-title" id="shipV4AddHeading">호선 일괄 추가</div>
-        <div class="grid-2"><div class="field"><label for="newShipNos">호선 번호</label><textarea class="textarea" id="newShipNos" placeholder="한 줄에 하나씩 입력"></textarea></div><div class="list"><div class="field"><label for="newShipType">기본 선종</label><select class="select" id="newShipType">${shipTypeOptions("")}</select></div><div class="field"><label for="newShipCustom">기타 선종</label><input class="input" id="newShipCustom" placeholder="기타 선택 시 입력" /></div><button class="btn" data-action="add-ship" type="button">일괄 추가</button></div></div>
-      </section>` : "";
+      const adminPanel = state.adminMode ? `<details class="ships-v4__admin-details"${mobile ? "" : " open"}>
+        <summary><strong>호선 일괄 추가</strong><span>새 호선 등록 도구</span></summary>
+        <section class="panel panel-pad ship-v4-admin-add" aria-labelledby="shipV4AddHeading">
+          <div class="section-title" id="shipV4AddHeading">호선 일괄 추가</div>
+          <div class="grid-2"><div class="field"><label for="newShipNos">호선 번호</label><textarea class="textarea" id="newShipNos" placeholder="한 줄에 하나씩 입력"></textarea></div><div class="list"><div class="field"><label for="newShipType">기본 선종</label><select class="select" id="newShipType">${shipTypeOptions("")}</select></div><div class="field"><label for="newShipCustom">기타 선종</label><input class="input" id="newShipCustom" placeholder="기타 선택 시 입력" /></div><button class="btn" data-action="add-ship" type="button">일괄 추가</button></div></div>
+        </section>
+      </details>` : "";
       return `<div class="ships-v4__app-actions">${adminToggleButton()}</div>${adminPanel}${SHIPS_V4_VIEW.renderShipsV4View({
         ships,
+        mobile,
         selectedId: state.shipV4SelectedId,
         mobileDetailOpen: Boolean(state.shipV4SelectedId && isNarrowViewport()),
         dataState,
@@ -7409,13 +7456,17 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function focusManageCenterMobileDetail() {
       if (!isNarrowViewport()) return;
-      requestAnimationFrame(() => {
+      const focusVisibleTarget = () => {
         const back = Array.from(document.querySelectorAll('[data-action="back-manage-center-list"], [data-action="back-unsafe-list"], [data-action="back-material-list"], [data-action="back-work-prep-list"]'))
+          .find((element) => element.getClientRects().length > 0);
+        const sectionBack = Array.from(document.querySelectorAll('[data-action="back-manage-center-menu"]'))
           .find((element) => element.getClientRects().length > 0);
         const heading = Array.from(document.querySelectorAll("#manageCenterDetailHeading"))
           .find((element) => element.getClientRects().length > 0);
-        (back || heading)?.focus();
-      });
+        (back || sectionBack || heading)?.focus({ preventScroll: true });
+      };
+      focusVisibleTarget();
+      requestAnimationFrame(focusVisibleTarget);
     }
 
     function focusV4MobileDetail(selector) {
@@ -7469,10 +7520,46 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       });
     }
 
+    function restoreManageCenterMenuFocus(tab) {
+      requestAnimationFrame(() => {
+        const trigger = Array.from(document.querySelectorAll(`[data-manage-center-tab="${cssEscape(tab)}"]`))
+          .find((element) => element.getClientRects().length > 0);
+        trigger?.scrollIntoView({ block: "nearest" });
+        trigger?.focus();
+      });
+    }
+
+    function closeManageCenterMobileSection() {
+      if (!state.manageCenterMobileSectionOpen) return false;
+      const tab = state.manageTab;
+      const currentRoute = history.state;
+      if (isNarrowViewport()
+        && currentRoute?.app === "shipyardSafety"
+        && currentRoute.view === "manage"
+        && currentRoute.manageSectionOpen
+        && !currentRoute.manageDetailId) {
+        history.back();
+        return true;
+      }
+      state.manageCenterMobileSectionOpen = false;
+      state.unsafeDetailId = "";
+      state.materialDetailId = "";
+      state.workPrepDetailId = "";
+      state.workerV4SelectedId = "";
+      state.workerEditCardId = "";
+      render();
+      scrollScreenTop();
+      restoreManageCenterMenuFocus(tab);
+      replaceRouteState();
+      return true;
+    }
+
     function selectManageCenterTab(tab) {
       if (!manageCenterRemoteKeys(tab).length && tab !== "safetySettings") return false;
       const shouldNavigate = state.view !== "manage";
+      const openingMobileSection = isNarrowViewport() && !state.manageCenterMobileSectionOpen;
       state.manageTab = tab;
+      state.manageCenterMobileSectionOpen = isNarrowViewport();
       state.unsafeDetailId = "";
       state.materialDetailId = "";
       state.workPrepDetailId = "";
@@ -7480,12 +7567,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       state.workerEditCardId = "";
       if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
       if (state.manageTab === "materials") resetMaterialShipFilter();
+      if (state.manageTab === "workPrep") resetWorkPrepShipFilter();
       saveJson("manageTab", state.manageTab);
       if (shouldNavigate) changeView("manage");
       else {
         render();
         scrollScreenTop();
-        replaceRouteState();
+        if (openingMobileSection) pushRouteState();
+        else replaceRouteState();
+        if (state.manageCenterMobileSectionOpen) focusManageCenterMobileDetail();
       }
       return true;
     }
@@ -7528,6 +7618,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         workPrep: state.workPrepRecords.length,
         safetySettings: 1,
       };
+      const tabDescriptions = {
+        workers: "작업자 정보와 알림 기기",
+        push: "현장 알림 작성과 발송",
+        unsafe: "접수된 불안전요소 확인",
+        materials: "누락 자재 접수와 상태",
+        workPrep: "호선별 작업 준비와 상태",
+        safetySettings: "게시된 안전수칙과 동기화",
+      };
       const lead = state.adminMode || previewAdmin ? "작업자와 접수 기록을 관리합니다." : "접수 현황을 확인합니다.";
       const context = dataSurfaceContext({
         title: "관리 센터",
@@ -7552,6 +7650,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         tabs: visibleTabs.map(([id, label]) => ({
           id,
           label,
+          description: tabDescriptions[id],
           count: hasManageData ? tabCounts[id] : undefined,
           active: state.manageTab === id,
         })),
@@ -7568,12 +7667,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           activeTab: state.manageTab,
           panelHtml: activePanel,
           context,
-          cards: [
-            { id: "intake", label: "접수 처리", count: hasManageData ? unsafeOpen + materialOpen : undefined },
-            { id: "operations", label: "작업 운영", count: hasManageData ? state.workPrepRecords.length : undefined },
-            { id: "people", label: "구성원", count: hasManageData ? state.workers.length : undefined },
-            { id: "records", label: "기록", count: hasManageData ? state.inspections.length : undefined },
-          ],
+          mobile: isNarrowViewport(),
           list: workPrepCollection && hasManageData ? {
             label: shellModel.tabs.find((tab) => tab.active)?.label || "관리 항목",
             resultCount: workPrepCollection.page.resultCount,
@@ -7595,6 +7689,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           dataState,
           actionsDisabled,
           contentReadOnly: actionsDisabled,
+          mobileSectionOpen: state.manageCenterMobileSectionOpen,
           detailEnabled: !moduleOwnsDetail && ["unsafe", "materials", "workPrep"].includes(state.manageTab),
           selectedRecord,
           mobileDetailOpen: Boolean(selectedRecord && isNarrowViewport()),
@@ -7699,6 +7794,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           workPrepKpi("완료", used, "건", "#64748b", "used"),
         ].join("\n          "),
         allShipsActive: !filters.shipNo,
+        activeShipNo: filters.shipNo,
+        activeStatus: filters.status,
+        statusOptions: [
+          { value: "preparing", label: "준비", count: preparing },
+          { value: "ordered", label: "지시", count: ordered },
+          { value: "confirmed", label: "진행", count: confirmed },
+          { value: "used", label: "완료", count: used },
+        ],
         filterPanelCount: filterPanelRows.length,
         shipGroups: shipGroups.map((group) => ({
           shipNo: group.shipNo,
@@ -7784,6 +7887,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const canEdit = state.adminMode || isRedesignPreviewPage();
       return relabelWorkPrepArchiveControl(SCREEN_VIEWS.renderWorkPrepAdminRowView({
         status,
+        statusLabel: WORK_PREP_STATUS_LABELS[status] || status,
         active,
         recordId: record.id,
         ariaLabel: `${record.shipNo || "-"} 작업지시서 상세 보기`,
@@ -7804,7 +7908,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         syncDetail: sync.detail,
         statusControlHtml: renderWorkPrepStatusControl(record, canEdit),
         canEdit,
-        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 보관`,
+        deleteAriaLabel: `${record.shipNo || "-"} 작업지시서 삭제`,
         timelineSummaryHtml: renderWorkPrepAdminTimelineSummary(record),
       }));
     }
@@ -10923,6 +11027,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         "open-pledge-history": () => changeView("history"),
         "open-pledge-settings": () => {
           state.manageTab = "safetySettings";
+          state.manageCenterMobileSectionOpen = true;
           saveJson("manageTab", state.manageTab);
           changeView("manage");
         },
@@ -11282,10 +11387,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function handleViewNavigationClick(button) {
       if (button.dataset.view) {
         if (button.dataset.view === "manage") {
-          state.manageTab = "unsafe";
+          state.manageTab = "workers";
+          state.manageCenterMobileSectionOpen = false;
           state.unsafeDetailId = "";
           state.materialDetailId = "";
-          setUnsafeStatusFilter("");
           saveJson("manageTab", state.manageTab);
           changeView("manage");
         } else {
@@ -11353,12 +11458,14 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       if (button.dataset.action === "view-unsafe-list") {
         state.manageTab = "unsafe";
+        state.manageCenterMobileSectionOpen = true;
         setUnsafeStatusFilter("");
         saveJson("manageTab", state.manageTab);
         changeView("manage");
       }
       if (button.dataset.action === "view-material-list") {
         state.manageTab = "materials";
+        state.manageCenterMobileSectionOpen = true;
         resetMaterialShipFilter();
         saveJson("manageTab", state.manageTab);
         changeView("manage");
@@ -11401,6 +11508,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workPrepDetailId = "";
         if (state.manageTab === "unsafe") setUnsafeStatusFilter("");
         if (state.manageTab === "materials") resetMaterialShipFilter();
+        if (state.manageTab === "workPrep") resetWorkPrepShipFilter();
         saveJson("manageTab", state.manageTab);
         render();
         scrollScreenTop();
@@ -11438,6 +11546,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     }
 
     function handleManageCenterButtonClick(button) {
+      if (button.dataset.action === "back-manage-center-menu") return closeManageCenterMobileSection();
       if (button.dataset.manageCenterTab) return selectManageCenterTab(button.dataset.manageCenterTab);
       if (button.dataset.action === "back-manage-center-list") return closeManageCenterMobileDetail();
       if (button.dataset.action === "back-unsafe-list" && state.manageTab === "unsafe") return closeManageCenterMobileDetail("unsafe");
@@ -11770,6 +11879,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         else replaceRouteState();
       } else {
         state.unsafeDetailId = id;
+        state.manageCenterMobileSectionOpen = true;
         shouldLoadPhotos = true;
         changeView("manage");
       }
@@ -11850,6 +11960,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.materialFilters.materialName = "";
         saveJson("materialFilters", state.materialFilters);
         state.materialDetailId = id;
+        state.manageCenterMobileSectionOpen = true;
         changeView("manage");
       }
     }
@@ -11873,6 +11984,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         state.workPrepFilters.status = normalizeWorkPrepStatus(row.status) || "";
         saveJson("workPrepFilters", state.workPrepFilters);
         state.workPrepDetailId = id;
+        state.manageCenterMobileSectionOpen = true;
         changeView("manage");
       }
     }
@@ -11892,6 +12004,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function openUnsafeReceivedList() {
       const willNavigate = currentPageName() !== pageForView("manage").toLowerCase();
       state.manageTab = "unsafe";
+      state.manageCenterMobileSectionOpen = true;
       state.unsafeDetailId = "";
       if (willNavigate) markUnsafeReceivedEntry();
       setUnsafeStatusFilter(unsafeReceivedStatus());
@@ -12159,7 +12272,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           event.target.dataset.materialBulkSelect,
           event.target.checked,
         );
-        if (state.materialBulkReviewOpen) renderPreservingScroll();
+        renderPreservingScroll();
         return;
       }
       if (event.target.matches("[data-material-bulk-status]")) {
@@ -13636,6 +13749,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function openAnalyticsFilters() {
       state.manageTab = "unsafe";
+      state.manageCenterMobileSectionOpen = true;
       state.unsafeFilters.status = ISSUE_MATERIAL_RULES.UNSAFE_STATUSES[0];
       saveJson("manageTab", state.manageTab);
       saveJson("unsafeFilters", state.unsafeFilters);
@@ -13644,6 +13758,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function openAnalyticsDetail() {
       state.manageTab = "unsafe";
+      state.manageCenterMobileSectionOpen = true;
       state.unsafeFilters.status = "";
       saveJson("manageTab", state.manageTab);
       saveJson("unsafeFilters", state.unsafeFilters);

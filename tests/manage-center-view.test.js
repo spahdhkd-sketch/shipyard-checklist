@@ -27,7 +27,8 @@ const html = manageCenterView.renderManageCenterView({
 assert(html.includes('class="manage-center manage-center-v4"'));
 assert(html.includes("관리 센터"));
 assert(html.includes("찾고, 선택하고, 안전하게 처리"));
-assert(html.includes("관리 업무"));
+assert(!html.includes("관리 업무"), "the tab navigation must not be duplicated by management cards");
+assert(!html.includes('data-manage-center-card='));
 assert(!html.includes("관리 흐름"), "the management shell must not repeat a decorative section kicker");
 assert(!html.includes("목록 보기"), "management lane buttons must not repeat their button behavior as copy");
 assert(!html.includes("선택 상세"), "the selected record title must not be preceded by a redundant kicker");
@@ -83,6 +84,8 @@ assert(html.includes("변경 이력"));
 assert(html.includes('data-test-history'));
 assert(html.includes("위험 작업"));
 assert(html.includes('data-test-danger-action'));
+assert(html.includes('class="manage-center__history" open'));
+assert(html.includes('class="manage-center__danger-zone" open'));
 assert(!html.includes("삭제"), "the renderer must not promote repeated deletion actions");
 assert(!html.includes("홍길동"), "the renderer must not hardcode a record or personal data");
 
@@ -99,6 +102,40 @@ assert(!sharedContextHtml.includes("찾고, 선택하고, 안전하게 처리"),
 
 const fallbackContextHtml = manageCenterView.renderManageCenterView({});
 assert(fallbackContextHtml.includes("찾고, 선택하고, 안전하게 처리"), "the masthead should remain usable without a shared context renderer");
+
+const mobileHtml = manageCenterView.renderManageCenterView({
+  mobile: true,
+  tabs: [
+    { id: "workers", label: "작업자", description: "작업자 정보와 알림 기기", count: 14, active: true },
+    { id: "workPrep", label: "작업지시서", description: "호선별 작업 준비와 상태", count: 215 },
+  ],
+  activeTab: "workers",
+  panels: { intake: "모바일 목록" },
+  changeHistory: { count: 1 },
+  dangerZone: { description: "보관·복구" },
+});
+assert(mobileHtml.includes('class="manage-center__history"'));
+assert(!mobileHtml.includes('class="manage-center__history" open'));
+assert(!mobileHtml.includes('class="manage-center__danger-zone" open'));
+assert(mobileHtml.includes('class="manage-center__mobile-menu"'), "mobile management must expose a master menu");
+assert(mobileHtml.includes('data-manage-center-tab="workers"'), "the mobile master menu must reuse management tab actions");
+assert(mobileHtml.includes("작업자 정보와 알림 기기"), "mobile management rows must explain their destination");
+assert(!mobileHtml.includes('is-mobile-section-open'), "the mobile management master must start with no section open");
+
+const mobileSectionHtml = manageCenterView.renderManageCenterView({
+  mobile: true,
+  mobileSectionOpen: true,
+  tabs: [
+    { id: "workers", label: "작업자", description: "작업자 정보와 알림 기기" },
+    { id: "workPrep", label: "작업지시서", description: "호선별 작업 준비와 상태", active: true },
+  ],
+  activeTab: "workPrep",
+  panels: { workPrep: '<div data-test-mobile-section>작업지시서 목록</div>' },
+});
+assert(mobileSectionHtml.includes('class="manage-center__mobile-section is-mobile-section-open"'), "the chosen management section must become the mobile detail plane");
+assert(mobileSectionHtml.includes('data-action="back-manage-center-menu"'), "the mobile section must return to the management master list");
+assert(mobileSectionHtml.includes('>관리 메뉴</button>'), "the mobile section back action must name its destination");
+assert(mobileSectionHtml.includes('data-test-mobile-section'), "the selected management panel must stay inside the mobile detail plane");
 
 const sharedLoadingHtml = manageCenterView.renderManageCenterView({
   dataState: "loading",
@@ -134,7 +171,7 @@ const staleHtml = manageCenterView.renderManageCenterView({
 });
 assert(staleHtml.includes("현재 기기에 저장된 마지막 확인 데이터를 표시합니다."));
 assert(staleHtml.includes('data-action="retry-manage-center"'));
-assert(staleHtml.includes("12<small>건</small>"), "stale state may show labeled cached counts");
+assert(!staleHtml.includes('data-manage-center-card='), "stale state must not restore removed management cards");
 assert(staleHtml.includes('data-test-offline-action'), "stale state must preserve offline management controls");
 
 const offlineReadOnlyHtml = manageCenterView.renderManageCenterView({
@@ -146,7 +183,7 @@ const offlineReadOnlyHtml = manageCenterView.renderManageCenterView({
   dangerZone: { html: '<button data-test-read-only-danger-action type="button">삭제</button>' },
 });
 assert(offlineReadOnlyHtml.includes("오프라인 상태"), "offline state must expose a nonblocking offline banner");
-assert(offlineReadOnlyHtml.includes("12<small>건</small>"), "offline state may show cached counts");
+assert(!offlineReadOnlyHtml.includes('data-manage-center-card='), "offline state must not restore removed management cards");
 assert(offlineReadOnlyHtml.includes('data-test-read-only-mutation'), "read-only content remains visible for operational context");
 assert(offlineReadOnlyHtml.includes('class="manage-center__read-only-content" data-manage-content-read-only="true"'), "read-only caller content must expose the native-control guard hook");
 assert(offlineReadOnlyHtml.includes('class="manage-center__detail-body" data-manage-content-read-only="true"'), "read-only selected detail must stay navigable while exposing the mutation guard hook");

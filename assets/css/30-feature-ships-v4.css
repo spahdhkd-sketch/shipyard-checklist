@@ -144,3 +144,68 @@
   .ships-v4__state.is-notice { align-items: start; flex-direction: column; }
   body.ships-v4-mobile-detail-open { overflow: hidden; }
 }
+
+.ships-v4__utility-details {
+  display: contents;
+}
+
+.ships-v4__utility-details > summary,
+.ships-v4__admin-details > summary {
+  display: none;
+}
+
+.ships-v4__admin-details {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 700px) {
+  .ships-v4__utility-details,
+  .ships-v4__admin-details {
+    display: block;
+    inline-size: 100%;
+    border: 1px solid var(--ships-v4-line);
+    background: var(--ships-v4-surface);
+  }
+
+  .ships-v4__utility-details {
+    flex: 1 1 100%;
+  }
+
+  .ships-v4__utility-details > summary,
+  .ships-v4__admin-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-block-size: 48px;
+    padding: 0 14px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .ships-v4__utility-details > summary::-webkit-details-marker,
+  .ships-v4__admin-details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ships-v4__utility-details > summary span,
+  .ships-v4__admin-details > summary span {
+    color: var(--ships-v4-muted);
+    font-size: 12px;
+  }
+
+  .ships-v4__utility-details .ships-v4__utilities {
+    padding: 0 12px 12px;
+  }
+
+  .ships-v4__utility-details:not([open]) > .ships-v4__utilities,
+  .ships-v4__admin-details:not([open]) > .ship-v4-admin-add {
+    display: none;
+  }
+
+  .ships-v4__admin-details .ship-v4-admin-add {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--ships-v4-line);
+    border-radius: 0;
+  }
+}
