@@ -5,14 +5,14 @@ Updated: 2026-08-29 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Release candidate base commit: `d0d27469d40874874328e993f79d5896daeffba1` with preserved local changes
+- Production release source commit: `2ce6cb7213a09551f05aa607c557ff9c426dbec5`
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.13.3-20260829-v4`
-- Asset token: `20260829-v4-1`
-- Production deployment: `dpl_3TMBtVYsDFjrq6R3B3qgTWr25Tyv` (`READY`, target `production`)
-- Deployment URL: `https://index-html-4zvbznx1r-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.0-20260829-v1`
+- Asset token: `20260829-v5-1`
+- Production deployment: `dpl_PVs39R7HWpsD3ZQTnBZKhNH4uzfF` (`READY`, target `production`)
+- Deployment URL: `https://index-html-89ulr8jxt-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.13.3-20260829-v4`, asset token `20260829-v4-1`, and cache name `gs-safety-20260829-v4-1`. Local and live SHA-256 hashes match for `assets/dist/js/app-v2.min.js` (`dbbe61486054fbedf8333911d7e5c7f77d1711acae32bb9970ff7ab112a5a97d`), `assets/dist/js/screen-views.min.js` (`fa6fb81b2b93d934e9e77343f1cb80b8b962ee08e33fad70867c4ff0454306b4`), and `assets/dist/css/styles-v2.min.css` (`88cb6e18619a09e8d33f84086bacaf16c4998d397aff04b8f5a97507788cc405`).
+- Cache-bypassed live checks confirmed `1.14.0-20260829-v1` and asset token `20260829-v5-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, `assets/images/control-map-4k.png`, and `assets/dist/js/app-v2.min.js`.
 
 ## Supabase state
 
@@ -33,13 +33,23 @@ Updated: 2026-08-29 (Asia/Seoul)
 - `node tools/quality-harness.mjs --skip-verify --allow-non-main`
 - `git diff --check`
 
-## 2026-08-29 mobile Management master-detail (local, not deployed)
+## 2026-08-29 control map, risk-assessment, and management release (production)
+
+- Management and responsive operations were fixed in `ed164a1cd2f38ba65c5cb63bb24782b1d0004e83`; the browser-only risk-assessment workbook was integrated in `c3133eb699c8830f96ca9c5efb8b8e2ce567873b`; the control-map dashboard was committed in `2d948b146ef81a952328eafbb9bbd5ef8d4a8333`.
+- The Home screen now displays the white-water 4096 x 3072 map, fits the full original image by default, keeps one touch-pannable map on mobile, and renders nine dock pins.
+- Work-order location matching accepts `placeId`, `place_id`, `locationId`, `location_id`, and location object/text aliases. Production work orders without one of these fields remain under `장소 미지정` until the upstream work-order data path supplies a location ID.
+- Administrators can reposition pins and the browser remembers coordinates in `shipyardSafetyV1.controlMapPinPositions.v1`. This release intentionally keeps that configuration device-local; cross-device pin configuration requires a separately authorized Supabase schema and mutation path.
+- `RA 엑셀로 추가` is available to administrators in Quick Menu Work Type Management. The workbook is parsed locally in the browser and is not uploaded by this integration.
+- Desktop and 390 px production checks confirmed the new version, the full-size map asset, full-map fit, 46 px pins, nine-pin rendering, place-ID matching, touch panning, no horizontal overflow, and the canonical production alias.
+- No Supabase migration, cutover, Edge Function deployment, or production data mutation was performed for this release.
+
+## 2026-08-29 mobile Management master-detail (production)
 
 - Mobile Management now follows the Quick Menu Work Type Management structure: a six-row management menu opens the selected area as a full-screen workspace, and Work Orders keeps its nested full-screen record detail.
 - The first Back action returns a Work Order detail to the Work Orders list; the second returns the list to the Management menu. Desktop underline tabs and the existing desktop list-detail workspace are unchanged.
 - Hermetic browser checks passed at 430, 390, and 360 px with no horizontal overflow, undersized controls, or exposed bottom navigation while either mobile workspace is open. Focused worker deletion, cached read-only navigation, and Work Order status/delete scenarios also pass with the new hierarchy.
-- Evidence is under `artifacts/mobile-design/`. `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, focused Management browser E2E, and `git diff --check` pass. The full responsive suite retains only the four pre-existing Safety Pledge failures at PC, 430 px, 390 px, and 360 px.
-- This mobile Management change has not been committed, pushed, previewed, or deployed. The production version and deployment listed above remain unchanged.
+- Evidence is under `artifacts/mobile-design/`. `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, full browser E2E, the full responsive design-token suite, and `git diff --check` pass.
+- This mobile Management change is part of production release `1.14.0-20260829-v1` at the deployment listed above. No Git push was performed in this task.
 
 ## 2026-08-29 work-order status production correction
 
