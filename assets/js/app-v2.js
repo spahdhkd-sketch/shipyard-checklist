@@ -81,6 +81,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     const DASHBOARD_VIEW = typeof window !== "undefined" && window.ShipyardDashboardView
       ? window.ShipyardDashboardView
       : {};
+    const CONTROL_MAP_VIEW = typeof window !== "undefined" && window.ShipyardControlMapView
+      ? window.ShipyardControlMapView
+      : {};
     const SCREEN_VIEWS = typeof window !== "undefined" && window.ShipyardScreenViews
       ? window.ShipyardScreenViews
       : {};
@@ -3543,6 +3546,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function closeRiskAssessmentWidget() {
       state.riskAssessmentWidgetOpen = false;
       destroyRiskAssessmentWidget();
+      if (typeof CONTROL_MAP_VIEW.destroy === "function") CONTROL_MAP_VIEW.destroy();
       renderPreservingScroll();
       requestAnimationFrame(() => document.querySelector('[data-action="open-ra-widget"]')?.focus());
     }
@@ -3895,6 +3899,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       setupSignaturePad();
       setupPictogramImageFallbacks();
       setupRiskAssessmentWidget();
+      if (typeof CONTROL_MAP_VIEW.hydrate === "function") CONTROL_MAP_VIEW.hydrate();
       ensureRenderedAccessibility();
       restoreFocusedFieldState(focusedFieldState);
       if (state.view === "manage"
@@ -4685,6 +4690,22 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const todayWorkRecords = workPrepRecordsForDate(today()).filter((record) => !record.deletedAt);
       const todayWorkProgress = todayWorkRecords
         .filter((record) => normalizeWorkPrepStatus(record.status) === "confirmed").length;
+      const controlMapHtml = typeof CONTROL_MAP_VIEW.render === "function"
+        ? CONTROL_MAP_VIEW.render({
+          canEdit: state.adminMode,
+          records: todayWorkRecords.map((record) => {
+            const progress = workPrepSubmissionProgress(record);
+            const category = categoryById(record.categoryId);
+            return {
+              ...record,
+              categoryLabel: category ? workLabel(category) : "작업지시",
+              statusLabel: WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(record.status)] || record.status || "확인 필요",
+              submitted: progress.submittedIds.length,
+              total: progress.total,
+            };
+          }),
+        })
+        : "";
       const homeSyncStatus = state.syncMode === "online"
         ? "online"
         : state.syncMode === "pending"
@@ -4740,6 +4761,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         processStages,
         todayWorkCount: todayWorkRecords.length,
         todayWorkProgress,
+        controlMapHtml,
         appVersionLabel: APP_VERSION_LABEL,
         syncStatus: homeSyncStatus,
         syncLabel: homeSyncLabel,

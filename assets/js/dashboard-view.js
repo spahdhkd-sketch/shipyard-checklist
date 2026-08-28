@@ -58,6 +58,7 @@
       todayWorkCount = 0,
       todayWorkProgress = 0,
       appVersionLabel = "",
+      controlMapHtml = "",
     } = model;
 
     const myCheck = model.myCheck || null;
@@ -130,6 +131,8 @@
           </div>
         </article>
       </section>
+
+      ${controlMapHtml}
 
     </main>`;
   }
