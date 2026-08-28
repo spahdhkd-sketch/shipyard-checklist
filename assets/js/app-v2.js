@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.13.3-20260829-v4";
+    const APP_VERSION = "1.14.0-20260829-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";

@@ -1,14 +1,19 @@
 # Version
 
-Current version: `1.13.3-20260829`
+Current version: `1.14.0-20260829`
 
-Recorded at: `2026-08-29 (v4 work-order status and management action release)`
+Recorded at: `2026-08-29 (v1 control-map, risk-assessment, and mobile-management release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Publishes the 4096 x 3072 control map on the main dashboard and fits the full original map inside both desktop and mobile viewports.
+- Keeps mobile navigation on one touch-pannable map surface instead of splitting the work area into horizontal zone pages.
+- Pre-registers nine dock pins, matches work orders by place ID, and lets administrators reposition pins with device-local persistence.
+- Adds the browser-only risk-assessment Excel tool to administrator work-type management without uploading workbook contents to a server.
+- Preserves the mobile Management Center master-menu and focused detail flow for reliable menu access at 360–430 px.
 - Removes the Management Work Orders new-registration action and deploys the dedicated authenticated status mutation for all five work-order states.
 - Defaults the Management Work Orders filter to all ships and persists status changes without showing a false synchronization failure.
 - Keeps desktop route navigation active on Ships, Pledge, Analytics, and Management while preserving the existing mobile parent-group activation.
@@ -65,5 +70,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260829-v4-1` and service-worker version
-  `1.13.3-20260829-v4` so installed clients refresh safely.
+- Issues asset token `20260829-v5-1` and service-worker version
+  `1.14.0-20260829-v1` so installed clients refresh safely.

@@ -214,7 +214,7 @@ async function main() {
         worker_ids: record.workerIds,
         other_team_worker_ids: record.otherTeamWorkerIds,
         tool_ids: record.toolIds,
-        status: record.status,
+        status: options.mockVisualRecords ? "confirmed" : record.status,
         status_history: record.statusHistory,
         created_at: record.createdAt,
         updated_at: record.updatedAt,

@@ -5,7 +5,7 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260829-v4-1";
+const ASSET_TOKEN = "20260829-v5-1";
 const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`;
