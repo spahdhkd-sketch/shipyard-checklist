@@ -5,14 +5,14 @@ Updated: 2026-08-29 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production release source commit: `209397a685d1a5dd76445c70fbd3e80fe84a1223`
+- Production release source commit: `4f9fd5276eed3b4ece07b2c6e4ba3a4b5c94ef94`
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.14.1-20260829-v1`
-- Asset token: `20260829-v6-1`
-- Production deployment: `dpl_GQ15NojWqTeLZL2wfbre4uPjPUSq` (`READY`, target `production`)
-- Deployment URL: `https://index-html-72un1wnyw-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.2-20260829-v1`
+- Asset token: `20260829-v7-1`
+- Production deployment: `dpl_Hwo58bKdH15gkwUUAKbbb3wotRAf` (`READY`, target `production`)
+- Deployment URL: `https://index-html-emp766tbt-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.1-20260829-v1` and asset token `20260829-v6-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, `assets/images/control-map-base-white.png`, the control-map CSS, and the app, control-map, dashboard, and issue-material minified runtimes.
+- Cache-bypassed live checks confirmed `1.14.2-20260829-v1` and asset token `20260829-v7-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, the control-map CSS, and the app and control-map minified runtimes.
 
 ## Supabase state
 
@@ -32,6 +32,14 @@ Updated: 2026-08-29 (Asia/Seoul)
 - `npm.cmd run e2e:pwa`
 - `node tools/quality-harness.mjs --skip-verify --allow-non-main`
 - `git diff --check`
+
+## 2026-08-29 1.14.2 label-free fullscreen realtime-map release (production)
+
+- Removed the visible A-U alphabet badges from all 21 dock and quay pins, selection details, and accessible pin labels. The alphabet aliases remain internal so existing work-order place IDs still resolve to the correct pin.
+- Added a desktop-only map fullscreen control. Fullscreen mode keeps only the map and exit control visible; the existing touch pan and zoom behavior remains available on mobile without exposing the desktop control.
+- Administrator pin moves and source-map edits now propagate immediately to other open tabs on the same browser and origin through `BroadcastChannel`, `localStorage`, and the shared IndexedDB map source. Existing Supabase Realtime work-order updates continue to refresh operational pin status across connected devices.
+- Production manual QA confirmed 21 pins, zero visible alphabet badges, map-only fullscreen entry and exit, cross-tab pin movement, editor paint and undo, mobile touch movement without page overflow, latest-intake routing, and no control map for worker roles. No page errors were reported.
+- No Supabase migration, Edge Function deployment, or production-data mutation was made for this release.
 
 ## 2026-08-29 1.14.1 21-zone control-map and latest-intake release (production)
 
