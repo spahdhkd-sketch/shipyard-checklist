@@ -2,7 +2,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const styles = fs.readFileSync(path.join(__dirname, "../assets/css/styles-v2.css"), "utf8");
+const styles = fs.readFileSync(path.join(__dirname, "../assets/css/styles-v2.css"), "utf8").replace(/\r\n/g, "\n");
 const analyticsStyles = fs.readFileSync(path.join(__dirname, "../assets/css/30-feature-monthly-worker.css"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "../assets/js/app-v2.js"), "utf8");
 const posterSystemStart = styles.lastIndexOf(".pledge-action-view,");
