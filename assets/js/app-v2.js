@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.14.1-20260829-v1";
+    const APP_VERSION = "1.14.2-20260829-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -3522,7 +3522,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function setupRiskAssessmentWidget() {
       if (!state.riskAssessmentWidgetOpen || state.view !== "items" || !state.adminMode) return;
       const host = $("hisafeRaWidgetHost");
-      if (!host) return;
+      if (!host || host.dataset.mounting === "true") return;
+      if (riskAssessmentWidgetInstance) return;
+      host.dataset.mounting = "true";
       host.setAttribute("aria-busy", "true");
       loadRiskAssessmentWidget()
         .then((HisafeRA) => {
@@ -3532,12 +3534,33 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             subtitle: "작업표준 엑셀을 이 기기에서만 분석해 점검항목을 만듭니다.",
             onLoad: (result) => toast(`위험성평가 점검항목 ${Number(result?.items?.length || 0)}개를 만들었습니다.`),
           });
+          delete host.dataset.mounting;
           host.removeAttribute("aria-busy");
         })
         .catch((error) => {
           console.error(error);
+          delete host.dataset.mounting;
+          host.removeAttribute("aria-busy");
           if (host.isConnected) host.innerHTML = '<div class="ra-widget-shell__error" role="alert">위험성평가 도구를 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.</div>';
         });
+    }
+
+    function syncRiskAssessmentWidgetPanel() {
+      const shouldOpen = isWorkerLoggedIn()
+        && state.view === "items"
+        && state.adminMode
+        && state.riskAssessmentWidgetOpen;
+      let shell = document.querySelector(".ra-widget-shell");
+      if (!shouldOpen) {
+        destroyRiskAssessmentWidget();
+        shell?.remove();
+        return;
+      }
+      if (!shell) {
+        document.body.insertAdjacentHTML("beforeend", renderRiskAssessmentWidgetPanel());
+        shell = document.querySelector(".ra-widget-shell");
+      }
+      if (shell) setupRiskAssessmentWidget();
     }
 
     function openRiskAssessmentWidget() {
@@ -3865,7 +3888,6 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       renderNav();
       renderAppHeader();
       const page = $("page");
-      destroyRiskAssessmentWidget();
       const loggedIn = isWorkerLoggedIn();
       document.body.classList.toggle("login-required", !loggedIn);
       document.body.classList.toggle("home-v4-active", loggedIn && state.view === "dashboard");
@@ -3877,6 +3899,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ensureRenderedAccessibility();
         applyLoginWorkerSearchFilter();
         restoreFocusedFieldState(focusedFieldState);
+        syncRiskAssessmentWidgetPanel();
         return;
       }
       applyLoggedInWorkerToDrafts();
@@ -3902,7 +3925,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       enforceManageReadOnlyControls();
       setupSignaturePad();
       setupPictogramImageFallbacks();
-      setupRiskAssessmentWidget();
+      syncRiskAssessmentWidgetPanel();
       if (typeof CONTROL_MAP_VIEW.hydrate === "function") CONTROL_MAP_VIEW.hydrate();
       ensureRenderedAccessibility();
       restoreFocusedFieldState(focusedFieldState);
@@ -6945,9 +6968,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         role,
         currentView: "items",
         dataState: entries.length ? "ready" : "empty",
+        showHeader: false,
       })}`;
       if (!state.adminMode) return menu;
-      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><div><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></div><button class="btn ra-widget-launch" data-action="open-ra-widget" type="button">RA 엑셀로 추가</button></header>${renderWorkTypesV4()}</section>${renderRiskAssessmentWidgetPanel()}`;
+      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><div><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></div><button class="btn ra-widget-launch" data-action="open-ra-widget" type="button">RA 엑셀로 추가</button></header>${renderWorkTypesV4()}</section>`;
     }
 
     function renderItems() {

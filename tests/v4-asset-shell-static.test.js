@@ -4,7 +4,7 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const assetToken = "20260829-v6-1";
+const assetToken = "20260829-v7-1";
 const appPages = [
   "index.html",
   "check.html",
@@ -68,7 +68,7 @@ appPages.forEach((file) => {
 });
 
 const sw = read("sw.js");
-assert.ok(sw.includes('const APP_VERSION = "1.14.1-20260829-v1"'), "v4 asset wiring must not change APP_VERSION");
+assert.ok(sw.includes('const APP_VERSION = "1.14.2-20260829-v1"'), "v4 asset wiring must not change APP_VERSION");
 assert.ok(sw.includes(`const ASSET_TOKEN = "${assetToken}"`), "v4 asset wiring must not change ASSET_TOKEN");
 v4Styles.forEach((name) => {
   assert.ok(

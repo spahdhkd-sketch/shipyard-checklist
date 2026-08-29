@@ -1,17 +1,20 @@
 # Version
 
-Current version: `1.14.1-20260829`
+Current version: `1.14.2-20260829`
 
-Recorded at: `2026-08-29 (v1.14.1 21-zone control-map and intake-routing release)`
+Recorded at: `2026-08-29 (v1.14.2 label-free fullscreen realtime-map release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- Replaces the embedded-label map with a white, label-free control-map base and renders 21 compact A-U zone banners with leader lines.
+- Renders all 21 control-map banners with dock or quay names only; internal A-U aliases remain available for place-ID matching but are no longer shown on the map or detail panel.
+- Adds a desktop-only map fullscreen control that presents the map surface alone while preserving pan, zoom, and a visible exit action.
+- Reflects pin and source-map edits immediately across open same-browser tabs through BroadcastChannel, localStorage, and the shared IndexedDB map asset.
+- Continues to reflect work-order and status changes across connected devices through the existing Supabase Realtime record flow without adding a new database schema.
 - Fits the full 4096 x 3072 map canvas inside desktop and mobile viewports, with touch pan and zoom on one continuous mobile surface.
-- Matches work orders by place ID, lets administrators reposition zone banners with device-local persistence, and provides a browser-local map editor with PNG and JSON export.
+- Matches work orders by place ID, lets administrators reposition zone banners with browser-local persistence, and provides a browser-local map editor with PNG and JSON export.
 - Shows the control map as the first administrator dashboard row above the 2 x 2 KPI grid while keeping it hidden from preceding and following workers.
 - Routes the home intake action to the newest record across unsafe-factor and missing-material categories, opening that exact detail.
 - Adds the browser-only risk-assessment Excel tool to administrator work-type management without uploading workbook contents to a server.
@@ -72,5 +75,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260829-v6-1` and service-worker version
-  `1.14.1-20260829-v1` so installed clients refresh safely.
+- Issues asset token `20260829-v7-1` and service-worker version
+  `1.14.2-20260829-v1` so installed clients refresh safely.

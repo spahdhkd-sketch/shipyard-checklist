@@ -4,6 +4,8 @@
   if (root) root.ShipyardControlMapView = api;
 }(typeof globalThis !== "undefined" ? globalThis : this, function buildControlMapView() {
   const PIN_STORAGE_KEY = "shipyardSafetyV1.controlMapPinPositions.v1";
+  const MAP_REALTIME_KEY = "shipyardSafetyV1.controlMapRealtime.v1";
+  const MAP_REALTIME_CHANNEL = "shipyard-control-map";
   const MAP_DATABASE = "shipyardSafetyControlMap";
   const MAP_STORE = "assets";
   const MAP_KEY = "baseMap.v1";
@@ -141,7 +143,7 @@
           <div><strong>${esc(order.task)}</strong><small>${esc(order.status)}${order.total ? ` · 점검 ${esc(order.submitted)}/${esc(order.total)}` : ""}</small></div>
         </article>`).join("")}${orders.length > 4 ? `<p>외 ${orders.length - 4}건</p>` : ""}</div>`
       : `<div class="control-map__empty">장소 ID가 연결된 오늘 작업지시서가 없습니다.</div>`;
-    return `<div class="control-map__detail-head"><span>선택 구역 · ${esc(location.label)}구역</span><h3>${esc(location.name)}</h3><em class="is-${esc(location.severity)}">${location.severity === "danger" ? "조치 필요" : location.severity === "warn" ? "확인 필요" : location.severity === "ok" ? "정상" : "작업 없음"}</em></div>
+    return `<div class="control-map__detail-head"><span>선택 위치</span><h3>${esc(location.name)}</h3><em class="is-${esc(location.severity)}">${location.severity === "danger" ? "조치 필요" : location.severity === "warn" ? "확인 필요" : location.severity === "ok" ? "정상" : "작업 없음"}</em></div>
       <dl class="control-map__detail-stats"><div><dt>작업지시</dt><dd>${orders.length}건</dd></div><div><dt>참여</dt><dd>${people}명</dd></div><div><dt>위험</dt><dd>${warnings}건</dd></div></dl>
       ${orderList}
       <button class="btn control-map__detail-action" data-view="manage" data-manage-center-card="operations" type="button">작업지시서에서 확인</button>`;
@@ -181,11 +183,11 @@
     const activeLocations = activeModel.locations.filter((location) => location.workOrders.length).length;
     return `<section class="control-map" data-control-map aria-labelledby="controlMapTitle">
       <header class="control-map__heading">
-        <div><span>LIVE WORK AREA</span><h2 id="controlMapTitle">작업구역 관제지도</h2><p>A–U 21개 구역 핀과 작업지시서 장소 ID를 연결해 오늘의 작업을 표시합니다.</p></div>
+        <div><span>LIVE WORK AREA</span><h2 id="controlMapTitle">작업구역 관제지도</h2><p>21개 도크·안벽 핀과 작업지시서 장소 ID를 연결해 오늘의 작업을 표시합니다.</p></div>
         <dl><div><dt>작업 구역</dt><dd>${activeLocations}</dd></div><div><dt>연결 작업</dt><dd>${activeModel.matchedCount}</dd></div>${activeModel.unmatchedCount ? `<div class="is-warn"><dt>장소 미지정</dt><dd>${activeModel.unmatchedCount}</dd></div>` : ""}</dl>
       </header>
       <div class="control-map__toolbar">
-        <p data-map-state aria-live="polite">${activeModel.canEdit ? "핀 또는 지도를 편집하면 이 기기에 자동 저장됩니다." : "핀을 선택하면 해당 구역의 작업을 확인할 수 있습니다."}</p>
+        <p data-map-state aria-live="polite">${activeModel.canEdit ? "핀 또는 지도 편집은 자동 저장되며 열린 화면에 실시간 반영됩니다." : "작업지시 변경사항을 실시간으로 반영하고 있습니다."}</p>
         <div class="control-map__toolbar-actions">
           ${activeModel.canEdit ? '<button class="btn-light" data-map-edit type="button" aria-pressed="false">핀 위치 편집</button><button class="btn-light" data-map-source-edit type="button" aria-expanded="false">원본 지도 편집</button>' : ""}
           <div class="control-map__zoom" role="group" aria-label="지도 확대 축소">
@@ -198,6 +200,7 @@
       ${activeModel.canEdit ? renderEditor() : ""}
       <div class="control-map__layout">
         <div class="control-map__viewport" data-map-viewport tabindex="0" aria-label="작업구역 지도. 터치하거나 마우스로 끌어 이동할 수 있습니다.">
+          <button class="btn-light control-map__fullscreen" data-map-fullscreen type="button" aria-pressed="false">지도 전체화면</button>
           <div class="control-map__canvas" data-map-canvas>
             <canvas class="control-map__source" data-map-source width="${MAP_WIDTH}" height="${MAP_HEIGHT}" aria-label="편집 가능한 작업구역 원본 지도"></canvas>
             <svg class="control-map__leaders" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${activeModel.locations.map((location) => {
@@ -207,8 +210,8 @@
             <div class="control-map__anchors" aria-hidden="true">${activeModel.locations.map((location) => `<span data-map-anchor="${esc(location.id)}" style="--anchor-x:${location.x}%;--anchor-y:${location.y}%"></span>`).join("")}</div>
             <div class="control-map__pins">${activeModel.locations.map((location) => {
               const point = defaultPinPoint(location);
-              return `<button class="control-map__pin is-${esc(location.severity)}${location.id === activeModel.selectedPlaceId ? " is-selected" : ""}" data-map-pin="${esc(location.id)}" style="--pin-x:${point.x}%;--pin-y:${point.y}%" type="button" aria-label="${esc(location.label)}구역 ${esc(location.name)} ${location.workOrders.length}건">
-                <span class="control-map__pin-label"><i>${esc(location.label)}</i><b>${esc(location.name)}</b>${location.workOrders.length ? `<em class="control-map__pin-count">${location.workOrders.length}</em>` : ""}</span>
+              return `<button class="control-map__pin is-${esc(location.severity)}${location.id === activeModel.selectedPlaceId ? " is-selected" : ""}" data-map-pin="${esc(location.id)}" style="--pin-x:${point.x}%;--pin-y:${point.y}%" type="button" aria-label="${esc(location.name)} ${location.workOrders.length}건">
+                <span class="control-map__pin-label"><b>${esc(location.name)}</b>${location.workOrders.length ? `<em class="control-map__pin-count">${location.workOrders.length}</em>` : ""}</span>
               </button>`;
             }).join("")}</div>
           </div>
@@ -409,6 +412,7 @@
     const persistMap = async (message) => {
       try {
         await writeStoredMap(await canvasBlob(sourceCanvas), mapName);
+        publishRealtimeChange("source");
         setStatus(message);
       } catch {
         setStatus("지도는 수정됐지만 브라우저 저장소에 보관하지 못했습니다. PNG로 저장해 주세요.");
@@ -443,6 +447,55 @@
         }
       });
     };
+    const syncSourceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    let syncChannel = null;
+    const replacePositions = (nextPositions) => {
+      Object.keys(positions).forEach((id) => delete positions[id]);
+      Object.entries(nextPositions || {}).forEach(([id, point]) => {
+        const x = Number(point?.x);
+        const y = Number(point?.y);
+        if (!LOCATIONS[id] || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 100 || y < 0 || y > 100) return;
+        positions[id] = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
+      });
+      applyPositions();
+    };
+    const applyRealtimeChange = async (message) => {
+      if (!message || message.sourceId === syncSourceId) return;
+      if (message.type === "positions") {
+        replacePositions(message.positions);
+        setStatus("핀 위치 변경사항을 실시간으로 반영했습니다.");
+        return;
+      }
+      if (message.type !== "source") return;
+      try {
+        const stored = await readStoredMap();
+        if (!stored?.blob) return;
+        mapName = stored.name || MAP_NAME;
+        await drawSource(stored.blob);
+        setStatus("원본 지도 변경사항을 실시간으로 반영했습니다.");
+      } catch {}
+    };
+    const publishRealtimeChange = (type, payload = {}) => {
+      const message = { sourceId: syncSourceId, type, ...payload, savedAt: Date.now() };
+      try { syncChannel?.postMessage(message); } catch {}
+      try { localStorage.setItem(MAP_REALTIME_KEY, JSON.stringify(message)); } catch {}
+    };
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        syncChannel = new BroadcastChannel(MAP_REALTIME_CHANNEL);
+        listen(syncChannel, "message", (event) => void applyRealtimeChange(event.data));
+        cleanups.push(() => syncChannel?.close());
+      } catch {}
+    }
+    listen(window, "storage", (event) => {
+      if (event.key === PIN_STORAGE_KEY) {
+        replacePositions(loadPositions());
+        setStatus("핀 위치 변경사항을 실시간으로 반영했습니다.");
+        return;
+      }
+      if (event.key !== MAP_REALTIME_KEY || !event.newValue) return;
+      try { void applyRealtimeChange(JSON.parse(event.newValue)); } catch {}
+    });
     const clampView = () => {
       const width = canvas.offsetWidth * view.zoom;
       const height = canvas.offsetHeight * view.zoom;
@@ -473,6 +526,51 @@
       view.y = centerY - mapY * nextZoom;
       applyView();
     };
+    const fullscreenButton = root.querySelector("[data-map-fullscreen]");
+    const updateFullscreenButton = () => {
+      if (!fullscreenButton) return;
+      const active = document.fullscreenElement === root || root.classList.contains("is-map-fullscreen");
+      fullscreenButton.textContent = active ? "전체화면 종료" : "지도 전체화면";
+      fullscreenButton.setAttribute("aria-pressed", String(active));
+    };
+    const refitAfterFullscreen = () => requestAnimationFrame(() => requestAnimationFrame(fitMap));
+    const enterFallbackFullscreen = () => {
+      root.classList.add("is-map-fullscreen");
+      updateFullscreenButton();
+      refitAfterFullscreen();
+    };
+    listen(fullscreenButton, "click", () => {
+      const active = document.fullscreenElement === root || root.classList.contains("is-map-fullscreen");
+      if (active) {
+        if (document.fullscreenElement === root && typeof document.exitFullscreen === "function") {
+          Promise.resolve(document.exitFullscreen()).catch(() => {});
+          return;
+        }
+        root.classList.remove("is-map-fullscreen");
+      } else if (typeof root.requestFullscreen === "function") {
+        try {
+          const request = root.requestFullscreen();
+          setTimeout(() => {
+            if (document.fullscreenElement !== root) enterFallbackFullscreen();
+          }, 150);
+          Promise.resolve(request).catch(enterFallbackFullscreen);
+        } catch {
+          enterFallbackFullscreen();
+        }
+        return;
+      } else {
+        enterFallbackFullscreen();
+        return;
+      }
+      updateFullscreenButton();
+      refitAfterFullscreen();
+    });
+    listen(document, "fullscreenchange", () => {
+      if (document.fullscreenElement !== root) root.classList.remove("is-map-fullscreen");
+      updateFullscreenButton();
+      refitAfterFullscreen();
+    });
+    cleanups.push(() => root.classList.remove("is-map-fullscreen"));
     const selectLocation = (placeId) => {
       const location = activeModel.locations.find((item) => item.id === placeId);
       if (!location) return;
@@ -696,6 +794,7 @@
         });
         if (!imported) throw new Error("No valid zones");
         savePositions(positions);
+        publishRealtimeChange("positions", { positions: { ...positions } });
         applyPositions();
         setStatus(`${file.name}에서 ${imported}개 구역 핀 위치를 불러왔습니다.`);
       } catch {
@@ -776,9 +875,10 @@
         const y = parseFloat(pin.style.getPropertyValue("--pin-y"));
         positions[pin.dataset.mapPin] = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
         savePositions(positions);
+        publishRealtimeChange("positions", { positions: { ...positions } });
         if (pin.hasPointerCapture(event.pointerId)) pin.releasePointerCapture(event.pointerId);
         pinDrag = null;
-        setStatus(`${LOCATIONS[pin.dataset.mapPin].label}구역 ${LOCATIONS[pin.dataset.mapPin].name} 핀 위치를 저장했습니다.`);
+        setStatus(`${LOCATIONS[pin.dataset.mapPin].name} 핀 위치를 저장하고 열린 화면에 반영했습니다.`);
       }
       if (mapDrag?.pointerId === event.pointerId) {
         if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
