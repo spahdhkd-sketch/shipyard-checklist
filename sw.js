@@ -1,5 +1,5 @@
-const APP_VERSION = "1.14.0-20260829-v1";
-const ASSET_TOKEN = "20260829-v5-1";
+const APP_VERSION = "1.14.1-20260829-v1";
+const ASSET_TOKEN = "20260829-v6-1";
 const CACHE = `gs-safety-${ASSET_TOKEN}`;
 const SHELL = [
   "/",
@@ -9,6 +9,7 @@ const SHELL = [
   "/assets/icons/icon-512.png",
   "/assets/icons/notification-icon.png",
   "/assets/images/control-map-4k.png",
+  "/assets/images/control-map-base-white.png",
   `/assets/dist/css/styles-v2.min.css?v=${ASSET_TOKEN}`,
   `/assets/dist/css/20-component-table.min.css?v=${ASSET_TOKEN}`,
   `/assets/dist/css/30-feature-not-found.min.css?v=${ASSET_TOKEN}`,

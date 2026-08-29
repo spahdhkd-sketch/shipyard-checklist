@@ -10,6 +10,7 @@ const {
   filterRecords,
   groupMaterialsByShip,
   groupUnsafeByStatus,
+  latestIntakeRecord,
   sortRecords,
   validateMaterialDraft,
   validateUnsafeDraft,
@@ -142,5 +143,23 @@ assert.deepStrictEqual(
   ],
   "current status/memo should not be synthesized twice when history already contains it",
 );
+
+assert.deepStrictEqual(
+  latestIntakeRecord(
+    [{ id: "unsafe-old", createdAt: "2026-08-29T08:00:00.000Z" }],
+    [{ id: "material-new", createdAt: "2026-08-29T09:00:00.000Z" }],
+  ),
+  { kind: "materials", record: { id: "material-new", createdAt: "2026-08-29T09:00:00.000Z" } },
+);
+
+assert.equal(
+  latestIntakeRecord(
+    [{ id: "unsafe-new", createdAt: "2026-08-29T10:00:00.000Z" }],
+    [{ id: "material-deleted", createdAt: "2026-08-29T11:00:00.000Z", deletedAt: "2026-08-29T11:30:00.000Z" }],
+  ).record.id,
+  "unsafe-new",
+);
+
+assert.equal(latestIntakeRecord([], []), null);
 
 console.log("issue-material-rules tests passed");

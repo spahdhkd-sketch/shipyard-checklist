@@ -143,6 +143,19 @@
     return rows.sort((a, b) => (statusIndex(a.status, statuses) - statusIndex(b.status, statuses)) || compareDateDesc(a, b));
   }
 
+  function latestIntakeRecord(unsafeRecords, materialRecords) {
+    const candidates = [
+      ...(Array.isArray(unsafeRecords) ? unsafeRecords : []).map((record) => ({ kind: "unsafe", record })),
+      ...(Array.isArray(materialRecords) ? materialRecords : []).map((record) => ({ kind: "materials", record })),
+    ].filter(({ record }) => record && !record.deletedAt);
+    candidates.sort((a, b) => (
+      compareDateDesc(a.record, b.record)
+      || compareText(a.kind, b.kind)
+      || compareText(a.record.id, b.record.id)
+    ));
+    return candidates[0] || null;
+  }
+
   function groupUnsafeByStatus(records) {
     const sorted = sortRecords(records, "status", UNSAFE_STATUSES);
     return UNSAFE_STATUSES.map((status) => ({
@@ -173,6 +186,7 @@
     filterRecords,
     groupMaterialsByShip,
     groupUnsafeByStatus,
+    latestIntakeRecord,
     sortRecords,
     validateMaterialDraft,
     validateUnsafeDraft,

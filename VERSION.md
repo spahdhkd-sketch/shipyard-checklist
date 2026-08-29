@@ -1,17 +1,19 @@
 # Version
 
-Current version: `1.14.0-20260829`
+Current version: `1.14.1-20260829`
 
-Recorded at: `2026-08-29 (v1 control-map, risk-assessment, and mobile-management release)`
+Recorded at: `2026-08-29 (v1.14.1 21-zone control-map and intake-routing release)`
 
 Baseline commit: `this release commit`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
-- Publishes the 4096 x 3072 control map on the main dashboard and fits the full original map inside both desktop and mobile viewports.
-- Keeps mobile navigation on one touch-pannable map surface instead of splitting the work area into horizontal zone pages.
-- Pre-registers nine dock pins, matches work orders by place ID, and lets administrators reposition pins with device-local persistence.
+- Replaces the embedded-label map with a white, label-free control-map base and renders 21 compact A-U zone banners with leader lines.
+- Fits the full 4096 x 3072 map canvas inside desktop and mobile viewports, with touch pan and zoom on one continuous mobile surface.
+- Matches work orders by place ID, lets administrators reposition zone banners with device-local persistence, and provides a browser-local map editor with PNG and JSON export.
+- Shows the control map as the first administrator dashboard row above the 2 x 2 KPI grid while keeping it hidden from preceding and following workers.
+- Routes the home intake action to the newest record across unsafe-factor and missing-material categories, opening that exact detail.
 - Adds the browser-only risk-assessment Excel tool to administrator work-type management without uploading workbook contents to a server.
 - Preserves the mobile Management Center master-menu and focused detail flow for reliable menu access at 360–430 px.
 - Removes the Management Work Orders new-registration action and deploys the dedicated authenticated status mutation for all five work-order states.
@@ -70,5 +72,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260829-v5-1` and service-worker version
-  `1.14.0-20260829-v1` so installed clients refresh safely.
+- Issues asset token `20260829-v6-1` and service-worker version
+  `1.14.1-20260829-v1` so installed clients refresh safely.

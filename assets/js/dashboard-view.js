@@ -84,6 +84,8 @@
         ${appVersionLabel ? `<span class="home-v4__version">${esc(appVersionLabel)}</span>` : ""}
       </header>
 
+      ${controlMapHtml}
+
       <section class="home-v4__grid" aria-label="오늘의 안전 업무">
         <article class="home-v4__card">
           <div class="home-v4__card-top">
@@ -104,7 +106,7 @@
             <span>불안전요소 <strong>${esc(unsafeCount)}</strong>건</span>
             <span>자재누락 <strong>${esc(openMaterials)}</strong>건</span>
           </div>
-          <button class="home-v4__action is-orange" data-view="manage" type="button">${navIcon("warning")}<span>접수 처리</span></button>
+          <button class="home-v4__action is-orange" data-action="open-latest-intake" type="button">${navIcon("warning")}<span>접수 처리</span></button>
         </article>
 
         <article class="home-v4__card">
@@ -131,9 +133,6 @@
           </div>
         </article>
       </section>
-
-      ${controlMapHtml}
-
     </main>`;
   }
 

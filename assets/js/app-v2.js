@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.14.0-20260829-v1";
+    const APP_VERSION = "1.14.1-20260829-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -3079,27 +3079,31 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function applyRouteFiltersFromQuery() {
       const shipNo = routeShipNo();
-      if (!shipNo) return;
-      if (state.view === "history") {
+      const tab = routeQueryParam("tab");
+      const detailId = routeQueryParam("detailId");
+      if (!shipNo && !tab && !detailId) return;
+      if (shipNo && state.view === "history") {
         state.historyScope = "all";
         state.historyFilter = "all";
         state.historyShipNo = shipNo;
         state.historyDetailId = null;
       }
       if (state.view === "manage") {
-        const tab = routeQueryParam("tab");
         if (tab === "unsafe") {
+          const selected = state.unsafeIssues.find((row) => row.id === detailId);
           state.manageTab = "unsafe";
           state.manageCenterMobileSectionOpen = true;
-          state.unsafeDetailId = "";
-          state.unsafeFilters = { ...state.unsafeFilters, shipNo, status: "" };
+          state.unsafeDetailId = selected?.id || "";
+          state.unsafeFilters = { ...state.unsafeFilters, shipNo: shipNo || selected?.shipNo || "", status: "" };
           saveJson("unsafeFilters", state.unsafeFilters);
           saveJson("manageTab", state.manageTab);
         }
         if (tab === "materials") {
+          const selected = state.missingMaterials.find((row) => row.id === detailId);
           state.manageTab = "materials";
           state.manageCenterMobileSectionOpen = true;
-          state.materialFilters = { ...state.materialFilters, shipNo, status: "", materialName: "" };
+          state.materialDetailId = selected?.id || "";
+          state.materialFilters = { ...state.materialFilters, shipNo: shipNo || selected?.shipNo || "", status: selected?.status || "", materialName: "" };
           saveJson("materialFilters", state.materialFilters);
           saveJson("manageTab", state.manageTab);
         }
@@ -4690,7 +4694,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const todayWorkRecords = workPrepRecordsForDate(today()).filter((record) => !record.deletedAt);
       const todayWorkProgress = todayWorkRecords
         .filter((record) => normalizeWorkPrepStatus(record.status) === "confirmed").length;
-      const controlMapHtml = typeof CONTROL_MAP_VIEW.render === "function"
+      const controlMapHtml = state.adminMode && typeof CONTROL_MAP_VIEW.render === "function"
         ? CONTROL_MAP_VIEW.render({
           canEdit: state.adminMode,
           records: todayWorkRecords.map((record) => {
@@ -11501,6 +11505,37 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return false;
     }
 
+    function openLatestIntakeDetail() {
+      const latest = typeof ISSUE_MATERIAL_RULES.latestIntakeRecord === "function"
+        ? ISSUE_MATERIAL_RULES.latestIntakeRecord(state.unsafeIssues, state.missingMaterials)
+        : null;
+      const managePage = pageForView("manage");
+      const onManagePage = currentPageName() === managePage.toLowerCase();
+      if (!latest) {
+        if (!onManagePage) {
+          location.href = `${managePage}?tab=unsafe`;
+          return;
+        }
+        state.manageTab = "unsafe";
+        state.manageCenterMobileSectionOpen = true;
+        state.unsafeDetailId = "";
+        state.materialDetailId = "";
+        saveJson("manageTab", state.manageTab);
+        changeView("manage");
+        toast("등록된 접수 건이 없습니다.");
+        return;
+      }
+      if (!onManagePage) {
+        location.href = `${managePage}?tab=${encodeURIComponent(latest.kind)}&detailId=${encodeURIComponent(latest.record.id)}`;
+        return;
+      }
+      if (latest.kind === "unsafe") {
+        openUnsafeDetail(latest.record.id);
+        return;
+      }
+      openMaterialDetail(latest.record.id);
+    }
+
     function handleViewNavigationClick(button) {
       if (button.dataset.view) {
         if (button.dataset.view === "manage") {
@@ -11515,6 +11550,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         }
       }
       if (button.dataset.action === "view-unsafe-received") openUnsafeReceivedList();
+      if (button.dataset.action === "open-latest-intake") openLatestIntakeDetail();
       if (button.dataset.screenMode) setScreenMode(button.dataset.screenMode);
       if (button.dataset.dashboardCategory) {
         state.selectedCategoryId = button.dataset.dashboardCategory;
