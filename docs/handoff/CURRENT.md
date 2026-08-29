@@ -5,14 +5,14 @@ Updated: 2026-08-29 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production release source commit: `2ce6cb7213a09551f05aa607c557ff9c426dbec5`
+- Production release source commit: `209397a685d1a5dd76445c70fbd3e80fe84a1223`
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.14.0-20260829-v1`
-- Asset token: `20260829-v5-1`
-- Production deployment: `dpl_PVs39R7HWpsD3ZQTnBZKhNH4uzfF` (`READY`, target `production`)
-- Deployment URL: `https://index-html-89ulr8jxt-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.1-20260829-v1`
+- Asset token: `20260829-v6-1`
+- Production deployment: `dpl_GQ15NojWqTeLZL2wfbre4uPjPUSq` (`READY`, target `production`)
+- Deployment URL: `https://index-html-72un1wnyw-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.0-20260829-v1` and asset token `20260829-v5-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, `assets/images/control-map-4k.png`, and `assets/dist/js/app-v2.min.js`.
+- Cache-bypassed live checks confirmed `1.14.1-20260829-v1` and asset token `20260829-v6-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, `assets/images/control-map-base-white.png`, the control-map CSS, and the app, control-map, dashboard, and issue-material minified runtimes.
 
 ## Supabase state
 
@@ -33,14 +33,15 @@ Updated: 2026-08-29 (Asia/Seoul)
 - `node tools/quality-harness.mjs --skip-verify --allow-non-main`
 - `git diff --check`
 
-## 2026-08-29 control map, risk-assessment, and management release (production)
+## 2026-08-29 1.14.1 21-zone control-map and latest-intake release (production)
 
-- Management and responsive operations were fixed in `ed164a1cd2f38ba65c5cb63bb24782b1d0004e83`; the browser-only risk-assessment workbook was integrated in `c3133eb699c8830f96ca9c5efb8b8e2ce567873b`; the control-map dashboard was committed in `2d948b146ef81a952328eafbb9bbd5ef8d4a8333`.
-- The Home screen now displays the white-water 4096 x 3072 map, fits the full original image by default, keeps one touch-pannable map on mobile, and renders nine dock pins.
+- The complete Home control-map and latest-intake change is committed and pushed as `209397a685d1a5dd76445c70fbd3e80fe84a1223` on `feat/claude-batch`.
+- The Home screen now draws a label-free white map base on a 4096 x 3072 canvas, fits the whole map by default, keeps one touch-pannable and zoomable mobile surface, and renders 21 compact A-U zone banners with leader lines.
 - Work-order location matching accepts `placeId`, `place_id`, `locationId`, `location_id`, and location object/text aliases. Production work orders without one of these fields remain under `장소 미지정` until the upstream work-order data path supplies a location ID.
-- Administrators can reposition pins and the browser remembers coordinates in `shipyardSafetyV1.controlMapPinPositions.v1`. This release intentionally keeps that configuration device-local; cross-device pin configuration requires a separately authorized Supabase schema and mutation path.
-- `RA 엑셀로 추가` is available to administrators in Quick Menu Work Type Management. The workbook is parsed locally in the browser and is not uploaded by this integration.
-- Desktop and 390 px production checks confirmed the new version, the full-size map asset, full-map fit, 46 px pins, nine-pin rendering, place-ID matching, touch panning, no horizontal overflow, and the canonical production alias.
+- Administrators can reposition zone banners, and the browser remembers coordinates in `shipyardSafetyV1.controlMapPinPositions.v1`. The browser-local source editor supports paint, white eraser, undo/redo, replacement images, and PNG/JSON export without uploading the edited map.
+- The control map appears only for administrators as the first Home row above the 2 x 2 KPI grid. Preceding and following worker sessions retain the KPI dashboard without any map surface.
+- The Home `접수 처리` action selects the newest non-deleted record across unsafe factors and missing materials, then opens the exact category and detail ID. Production synthetic QA resolved the newer material record to `/manage.html?tab=materials&detailId=material-newest`.
+- Desktop and true 390 px mobile production checks confirmed 21 zones, M-5 place-ID matching, editor controls, touch pan/zoom, no page-level horizontal overflow, map-before-KPI ordering, worker map hiding, and zero page errors.
 - No Supabase migration, cutover, Edge Function deployment, or production data mutation was performed for this release.
 
 ## 2026-08-29 mobile Management master-detail (production)
