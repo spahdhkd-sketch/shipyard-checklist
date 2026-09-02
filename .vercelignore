@@ -1,6 +1,8 @@
 index.original.html
 docs/
 tools/
+tests/
+supabase/
 design-previews/
 outputs/
 output/
