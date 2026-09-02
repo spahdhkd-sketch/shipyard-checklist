@@ -4,10 +4,6 @@ Current version: `1.14.5-20260902`
 
 Recorded at: `2026-09-02 (v1.14.5 safety operations and work-order production release)`
 
-Production runtime commit: `887c7019ae3abe6a1b3eca5fdff23cf962400c1b`
-
-Production deployment: `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ`
-
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
