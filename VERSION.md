@@ -1,12 +1,15 @@
 # Version
 
-Current version: `1.14.5-20260902`
+Current version: `1.14.6-20260902`
 
-Recorded at: `2026-09-02 (v1.14.5 safety operations and work-order production release)`
+Recorded at: `2026-09-02 (v1.14.6 actual work-order registration form correction)`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Places the required `작업 장소` selector and `현장 사전 답사 완료` confirmation on the actual administrator `점검 작성 → 작업지시서 등록` form instead of limiting them to the Management work-order context.
+- Keeps the ordinary worker flow unchanged, labels the administrator action `작업지시서 발행`, and unlocks it only after a registered place and site-survey confirmation are both present.
+- Issues asset token `20260902-v3-1` and service-worker version `1.14.6-20260902-v1` so installed clients refresh the corrected registration form.
 - Adds `place_id` to work orders (`work_prep_records`) only; worker master records do not receive a place field.
 - Adds the administrator-only `현장 사전 답사 완료` checkbox backed by `work_prep_records.site_survey_done`, defaulting existing and new unchecked work orders to `false`; an unchecked value shows the inline issuance warning and keeps the issue action disabled.
 - Requires administrators to select a registered dock or quay and confirm the site survey before issuing a work order, with the same boundary enforced by the admin Edge Function.
@@ -14,7 +17,7 @@ Notes:
 - Limits the new work-order place selector and map classification details to administrator surfaces while preserving the existing worker screens and non-admin work-order flow.
 - Adds work-type triple-inspection/non-routine flags and the worker foreign classification used by red and yellow control-map states.
 - Aligns red, yellow, and green operational badges with the control-map legend palette and preserves the same classification after data reloads.
-- Issues asset token `20260902-v2-1` and service-worker version `1.14.5-20260902-v1` so installed clients refresh the complete release safely.
+- Issues asset token `20260902-v3-1` and service-worker version `1.14.6-20260902-v1` so installed clients refresh the complete release safely.
 - Reflows dashboard KPI cards and primary-work shortcuts into 2 x 2 grids at viewport widths up to 1100px, including the legacy 920px PC preview canvas.
 - Keeps Korean operational labels together and prevents danger/caution values and units from colliding inside narrow cards.
 - Replaces the administrator home summary with a KPI-first `안전 운영 대시보드` backed by the existing work-order, pre-work check, and recent safety-signal records.

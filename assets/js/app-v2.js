@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.14.5-20260902-v1";
+    const APP_VERSION = "1.14.6-20260902-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -5896,12 +5896,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveWorkPrepDraft();
       if (!draft.workDate) return toast("작업일을 선택하세요.");
       if (!draft.shipNo) return toast("호선을 선택하세요.");
-      const adminPlaceRequired = state.adminMode && state.view === "manage" && state.manageTab === "workPrep";
-      if (adminPlaceRequired && (!draft.placeId || !CONTROL_MAP_VIEW.LOCATIONS?.[draft.placeId])) {
+      const adminIssueRequirementsRequired = state.adminMode;
+      if (adminIssueRequirementsRequired && (!draft.placeId || !CONTROL_MAP_VIEW.LOCATIONS?.[draft.placeId])) {
         requestAnimationFrame(() => $("workPrepPlace")?.focus());
         return;
       }
-      if (adminPlaceRequired && draft.siteSurveyDone !== true) {
+      if (adminIssueRequirementsRequired && draft.siteSurveyDone !== true) {
         requestAnimationFrame(() => $("workPrepSiteSurvey")?.focus());
         return;
       }
@@ -6208,10 +6208,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         teams,
         shipNo: draft.shipNo,
         ships: ships.map((ship) => ({ no: ship.no, type: ship.type })),
-        showPlaceField: state.adminMode && manageContext,
+        showPlaceField: state.adminMode,
         placeId: draft.placeId,
         places,
-        showSiteSurveyField: state.adminMode && manageContext,
+        showSiteSurveyField: state.adminMode,
         siteSurveyDone: draft.siteSurveyDone === true,
         categoryId: draft.categoryId,
         categories: categories.map((cat) => ({ id: cat.id, label: workLabel(cat) })),

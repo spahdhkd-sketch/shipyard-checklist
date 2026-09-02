@@ -2852,6 +2852,10 @@
       gap: 10px;
     }
 
+    .work-prep-register-place-field {
+      grid-column: 1 / -1;
+    }
+
     .work-prep-site-survey {
       --survey-border: #f0b36b;
       --survey-surface: #fff8ed;

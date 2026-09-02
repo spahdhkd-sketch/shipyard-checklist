@@ -1443,6 +1443,7 @@ async function main() {
     });
     try {
       await workPrepPage.evaluateOnNewDocument((storagePrefix) => {
+        localStorage.setItem(storagePrefix + "screenMode", "mobile");
         localStorage.setItem(storagePrefix + "workPrepFilters", JSON.stringify({ shipNo: "2402", status: "", sort: "latest" }));
         sessionStorage.setItem(storagePrefix + "workerSession", JSON.stringify({
           workerId: "w-kim",
@@ -1529,6 +1530,40 @@ async function main() {
       }
       const statusMutationActions = await workPrepPage.evaluate(() => window.__realtimeTest?.metrics?.mutations || []);
       const dedicatedStatusMutation = statusMutationActions.filter((action) => action === "updateWorkPrepStatus").length > statusRequestsBefore;
+      await workPrepPage.goto(`http://localhost:${PORT}/check.html`, { waitUntil: "domcontentloaded", timeout: 25000 });
+      await workPrepPage.waitForSelector('[data-action="open-work-prep-register"]', { visible: true });
+      await workPrepPage.click('[data-action="open-work-prep-register"]');
+      await workPrepPage.waitForSelector("#workPrepPlace", { visible: true });
+      const registrationRequirements = await workPrepPage.evaluate(() => {
+        const place = document.querySelector("#workPrepPlace");
+        const category = document.querySelector("#workPrepCategory");
+        const survey = document.querySelector("#workPrepSiteSurvey");
+        const warning = document.querySelector("#workPrepSiteSurveyWarning");
+        const action = document.querySelector('[data-action="save-work-prep-registration"]');
+        const placeRect = place?.closest(".material-flow-field")?.getBoundingClientRect();
+        const gridRect = place?.closest(".work-prep-register-grid")?.getBoundingClientRect();
+        return {
+          placeVisible: Boolean(place?.getClientRects().length),
+          surveyVisible: Boolean(survey?.getClientRects().length),
+          placeRequired: place?.required === true,
+          placeFullWidth: Boolean(placeRect && gridRect && placeRect.width >= gridRect.width - 1),
+          placeAfterCategory: Boolean(placeRect && category && placeRect.top > category.getBoundingClientRect().top),
+          warningCopy: warning?.textContent?.trim() || "",
+          actionLabel: action?.textContent?.trim() || "",
+          actionDisabled: action?.disabled === true,
+          overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        };
+      });
+      mkdirSync(join(ROOT, "output", "playwright"), { recursive: true });
+      await workPrepPage.screenshot({ path: join(ROOT, "output", "playwright", "work-order-register-390.png"), fullPage: true });
+      const firstPlaceId = await workPrepPage.$eval("#workPrepPlace", (select) => [...select.options].find((option) => option.value)?.value || "");
+      if (firstPlaceId) await workPrepPage.select("#workPrepPlace", firstPlaceId);
+      await workPrepPage.click("#workPrepSiteSurvey");
+      const registrationReady = await workPrepPage.waitForFunction(() => {
+        const action = document.querySelector('[data-action="save-work-prep-registration"]');
+        return action && !action.disabled && !document.querySelector("#workPrepSiteSurveyWarning");
+      }, { timeout: 5000 }).then(() => true).catch(() => false);
+      await workPrepPage.click('[data-action="close-work-prep-register"]');
       const archiveRecordId = seed[PRE + "workPrepRecords"]?.[0]?.id || "";
       let archived = { controlPresent: false, deleteLabel: false, localRemoved: false, tombstoneRemembered: false, cardRemoved: false };
       if (archiveRecordId) {
@@ -1571,8 +1606,18 @@ async function main() {
         && initialStatus === "preparing"
         && statusChanged
         && dedicatedStatusMutation
+        && registrationRequirements.placeVisible
+        && registrationRequirements.surveyVisible
+        && registrationRequirements.placeRequired
+        && registrationRequirements.placeFullWidth
+        && registrationRequirements.placeAfterCategory
+        && registrationRequirements.warningCopy === "현장 사전 답사 미진행시 작업지시서가 발행 되지 않습니다! 현장 사전 답사 후 지시서 발행 부탁드립니다"
+        && registrationRequirements.actionLabel === "작업지시서 발행"
+        && registrationRequirements.actionDisabled
+        && !registrationRequirements.overflow
+        && registrationReady
         && archiveCompleted;
-      if (!ok) console.log("  작업지시서 상태·삭제 진단:", JSON.stringify({ mobileMasterReady, mobileSectionReady, sectionBackClicked, mobileMenuReturned, menuFocusRestored, defaultsToAllShips, newRegistrationRemoved, initialStatus, statusChanged, dedicatedStatusMutation, statusMutationActions, archived }));
+      if (!ok) console.log("  작업지시서 상태·등록·삭제 진단:", JSON.stringify({ mobileMasterReady, mobileSectionReady, sectionBackClicked, mobileMenuReturned, menuFocusRestored, defaultsToAllShips, newRegistrationRemoved, initialStatus, statusChanged, dedicatedStatusMutation, statusMutationActions, registrationRequirements, registrationReady, archived }));
       return ok;
     } finally {
       try { await workPrepPage.close(); } catch {}
@@ -1677,7 +1722,7 @@ async function main() {
     return;
   }
   if (process.argv.includes("--work-prep-sync-only")) {
-    check("작업지시서: 전체 호선 기본값·상태 변경·즉시 서버 반영·삭제", await runWorkPrepSyncFlow());
+    check("작업지시서: 실제 등록 화면 필수 항목·상태 변경·즉시 서버 반영·삭제", await runWorkPrepSyncFlow());
     try { await withTimeout(browser.close(), 10000); } catch { try { browser.process()?.kill("SIGKILL"); } catch {} }
     srv.close();
     if (failures) throw new Error(`작업지시서 동기화 E2E 실패: ${failures}건`);
@@ -1685,7 +1730,7 @@ async function main() {
     return;
   }
 
-  check("작업지시서: 전체 호선 기본값·상태 변경·즉시 서버 반영·삭제", await runWorkPrepSyncFlow());
+  check("작업지시서: 실제 등록 화면 필수 항목·상태 변경·즉시 서버 반영·삭제", await runWorkPrepSyncFlow());
 
   await goto("index.html");
   const initialHome = await page.evaluate(() => ({

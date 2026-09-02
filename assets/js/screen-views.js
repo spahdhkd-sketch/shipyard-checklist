@@ -558,19 +558,19 @@
               ${ships.map((ship) => `<option value="${esc(ship.no)}" ${ship.no === model.shipNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` · ${esc(ship.type)}` : ""}</option>`).join("")}
             </select>
           </div>
-          ${model.showPlaceField ? `<div class="field material-flow-field">
-            <label for="workPrepPlace">작업 장소 <small class="work-prep-required-mark">필수</small></label>
-            <select class="select" id="workPrepPlace" data-work-prep-field="placeId" required>
-              <option value="">도크·안벽 선택</option>
-              ${places.map((place) => `<option value="${esc(place.id)}" ${place.id === model.placeId ? "selected" : ""}>${esc(place.name)} · ${esc(place.id)}</option>`).join("")}
-            </select>
-          </div>` : ""}
           <div class="field material-flow-field">
             <label for="workPrepCategory">작업 유형</label>
             <select class="select" id="workPrepCategory" data-work-prep-field="categoryId">
               ${categories.map((cat) => `<option value="${esc(cat.id)}" ${cat.id === model.categoryId ? "selected" : ""}>${esc(cat.label)}</option>`).join("")}
             </select>
           </div>
+          ${model.showPlaceField ? `<div class="field material-flow-field work-prep-register-place-field">
+            <label for="workPrepPlace">작업 장소 <small class="work-prep-required-mark">필수</small></label>
+            <select class="select" id="workPrepPlace" data-work-prep-field="placeId" required>
+              <option value="">도크·안벽 선택</option>
+              ${places.map((place) => `<option value="${esc(place.id)}" ${place.id === model.placeId ? "selected" : ""}>${esc(place.name)} · ${esc(place.id)}</option>`).join("")}
+            </select>
+          </div>` : ""}
         </div>
         ${model.showSiteSurveyField ? `<label class="work-prep-site-survey ${model.siteSurveyDone ? "is-complete" : "is-required"}" for="workPrepSiteSurvey">
           <input id="workPrepSiteSurvey" data-work-prep-field="siteSurveyDone" type="checkbox" aria-describedby="workPrepSiteSurveyWarning" required ${model.siteSurveyDone ? "checked" : ""} />
@@ -622,7 +622,7 @@
       </section>`;
 
     const footer = `<button class="btn-light material-flow-secondary" data-action="close-work-prep-register" type="button">${manageContext ? "관리 목록으로" : "작업 선택으로"}</button>
-        <button class="material-flow-primary" data-action="save-work-prep-registration" ${issueBlocked ? 'disabled aria-disabled="true" title="작업 장소 선택과 현장 사전 답사 확인이 필요합니다."' : ""} type="button">${manageContext ? "작업지시서 발행" : "준비 시작"}</button>`;
+        <button class="material-flow-primary" data-action="save-work-prep-registration" ${issueBlocked ? 'disabled aria-disabled="true" title="작업 장소 선택과 현장 사전 답사 확인이 필요합니다."' : ""} type="button">${issueRequirementsEnabled ? "작업지시서 발행" : "준비 시작"}</button>`;
     return `<section class="material-flow check-flow work-prep-register-flow">
         <div class="material-flow-head">
           <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업지시서 등록"}</div>
