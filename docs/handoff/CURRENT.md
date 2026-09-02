@@ -5,15 +5,15 @@ Updated: 2026-09-02 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production deployment baseline commit: `4f9fd5276eed3b4ece07b2c6e4ba3a4b5c94ef94`
-- Deployment source: the documented working-tree release changes on top of that baseline; no commit or push was made.
+- Production release source commit: `887c7019ae3abe6a1b3eca5fdff23cf962400c1b`
+- Release branch: `feat/claude-batch` (pushed to `origin`)
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.14.4-20260902-v2`
-- Asset token: `20260902-v1-2`
-- Production deployment: `dpl_H1bJK6sxWCQZZmFkciJNJNF7oHkp` (`READY`, target `production`)
-- Deployment URL: `https://index-html-c4f6wwpi9-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.5-20260902-v1`
+- Asset token: `20260902-v2-1`
+- Production deployment: `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ` (`READY`, target `production`)
+- Deployment URL: `https://index-html-qkzblsjf8-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.4-20260902-v2` and asset token `20260902-v1-2`. Candidate and production-alias SHA-256 hashes match for `index.html`, `sw.js`, app, dashboard, control-map, and the two dashboard/control-map CSS runtimes.
+- Cache-bypassed live checks confirmed `1.14.5-20260902-v1` and asset token `20260902-v2-1`. Local and production-alias SHA-256 hashes match for `index.html`, `sw.js`, app, screen views, dashboard, control-map, and the two primary CSS runtimes.
 - The generated deployment URL is protected by Vercel SSO for direct HTTP fetches; CLI inspection still resolves both the deployment URL and production alias to the same deployment ID, while the public production alias serves the verified release bytes.
 
 ## 2026-09-02 safety operations home dashboard production release
@@ -24,7 +24,7 @@ Updated: 2026-09-02 (Asia/Seoul)
 - Added the red danger, yellow caution, and green normal pin legend at the control map's top-left corner.
 - `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, `git diff --check`, full browser E2E, PWA E2E, and the PC/430/390/360 home visual gate passed.
 - Live browser checks passed at 1366 x 900 and 390 x 844 with four KPI cards, three legend items, no horizontal overflow, and no page errors.
-- No commit, push, branch change, Supabase migration, Edge Function deployment, or production-data mutation was performed.
+- This dashboard is included in the current committed and pushed production release recorded above.
 
 ## 2026-09-02 dashboard responsive layout production hotfix
 
@@ -39,10 +39,11 @@ Updated: 2026-09-02 (Asia/Seoul)
 ## Supabase state
 
 - Applied the record-retention foundation, safety-setting versions, and durable worker-push delivery idempotency migrations.
-- `admin-mutations` version 18 is ACTIVE with JWT verification enabled.
+- Applied production migration `20260902074214_work_prep_map_classification_20260902`; the source migration is `supabase/migrations/20260902120000_work_prep_map_classification.sql`.
+- `admin-mutations` version 20 is ACTIVE with JWT verification enabled.
 - `record-retention` version 1 is ACTIVE with JWT verification enabled.
 - `worker-push` version 12 is ACTIVE with JWT verification enabled.
-- Post-migration security and performance advisor checks reported no notices.
+- Post-migration advisors reported no new security or performance notice for the changed schema; existing INFO notices remain outside this release scope.
 
 ## Verification
 
@@ -209,13 +210,13 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - No live production work-order deletion was executed during release verification; the deployed UI and exact asset hash were checked without mutating production data.
 - Supabase Realtime WebSocket connections were observed failing repeatedly against production v1.13.0, both before and after worker login. The cursor-based polling fallback is healthy and all 11 tables report successful pulls. Whether the failure reproduces outside the observing browser environment is unconfirmed.
 
-## 2026-09-02 local work-prep map classification implementation
+## 2026-09-02 work-prep map classification production release
 
-- Local branch `feat/claude-batch` now carries work-order `place_id` / `site_survey_done`, work-type `requires_triple_inspection` / `is_non_routine`, and worker `is_foreign` support across the legacy UI, remote adapters, and admin mutation boundary.
+- Production branch `feat/claude-batch` carries work-order `place_id` / `site_survey_done`, work-type `requires_triple_inspection` / `is_non_routine`, and worker `is_foreign` support across the legacy UI, remote adapters, and admin mutation boundary.
 - The Home control map classifies red as eligible triple-inspection work, yellow as a one-person assignment (including one foreign worker), green as all assigned workers having completed their pre-work inspections, and gray as ordinary incomplete work.
 - Clicking map background outside a dock or quay clears the selected location and renders the explicit `선택 안 함` detail state. Work-type cards and their editor expose `3중점검` and `비일상작업` classifications.
-- Migration `supabase/migrations/20260902120000_work_prep_map_classification.sql` is created locally but has **not** been applied to any Supabase project. It adds the work-order place and administrator-confirmed site-survey fields together with the map classifications. Existing work orders still require a controlled `place_id` backfill before they can appear on the map.
-- No commit, push, Vercel deployment, production alias change, Edge Function deployment, or production data mutation was performed for this local implementation.
+- Migration `supabase/migrations/20260902120000_work_prep_map_classification.sql` was applied to production as migration `20260902074214_work_prep_map_classification_20260902`. It adds the work-order place and administrator-confirmed site-survey fields together with the map classifications. Existing work orders still require a controlled `place_id` backfill before they can appear on the map.
+- Release commits were pushed, `admin-mutations` version 20 was deployed with JWT verification enabled, and Vercel deployment `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ` was assigned to the production alias.
 - Current-source verification passed: `npm.cmd run verify`, `npm.cmd run build:assets`, `npm.cmd run e2e`, `node tools/quality-harness.mjs --skip-verify --allow-non-main`, and `git diff --check`. The quality harness retained only the expected dirty-worktree and HEAD-difference warnings.
 - Manual desktop and 390 px mobile QA artifacts are under `output/playwright/`, including the four pin states, the upper-left legend, background deselection, the 22-option place selector, and work-type classification badges.
 - The operational badges now reuse the control-map legend palette: triple-inspection and non-routine are red, solo and foreign-worker classification are yellow, and completed work is green. The administrator worker list foreign badge resolves to the same yellow border `#f3a53a` and surface `#fff2df` used by the legend.
@@ -225,4 +226,4 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - Administrator work-order cards/details and the inspection-history linked work-order card display both the saved location and the site-survey state. The status timeline remains limited to registration, start, and completion milestones.
 - Worker normalization now preserves `isForeign` / `is_foreign` after local or remote reload so the administrator classification badge and yellow map rule remain stable across rerenders.
 - Final fresh-browser evidence includes `output/playwright/admin-map-badges-aligned.png`, `worker-screen-existing-layout.png`, `worker-registration-existing-layout.png`, `admin-work-order-place-field.png`, and `admin-worker-foreign-classification-final.png`.
-- This administrator-only refinement remains local. Its migration, frontend assets, and Edge Function changes have not been deployed or applied to production.
+- Production schema verification confirmed all five columns, the site-survey trigger, both work-type constraints, both work-prep RLS policies, and the `security_invoker` worker view. All 283 existing work orders were preserved and remain unclassified until an administrator assigns a place and confirms the survey.

@@ -2,9 +2,11 @@
 
 Current version: `1.14.5-20260902`
 
-Recorded at: `2026-09-02 (v1.14.5 work-order map classification release candidate)`
+Recorded at: `2026-09-02 (v1.14.5 safety operations and work-order production release)`
 
-Baseline commit: `working tree based on 4f9fd5276eed3b4ece07b2c6e4ba3a4b5c94ef94`
+Production runtime commit: `887c7019ae3abe6a1b3eca5fdff23cf962400c1b`
+
+Production deployment: `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
@@ -22,6 +24,8 @@ Notes:
 - Replaces the administrator home summary with a KPI-first `안전 운영 대시보드` backed by the existing work-order, pre-work check, and recent safety-signal records.
 - Keeps records without a matched control-map location visible as `장소 미지정`, and marks the risk-assessment execution rate unavailable until a reliable event and denominator exist.
 - Adds a top-left control-map legend for red danger, yellow caution, and green normal pins while preserving existing quick actions and map interactions.
+- Applies production Supabase migration `20260902074214_work_prep_map_classification_20260902` and deploys `admin-mutations` version 20 with JWT verification enabled.
+- Confirms cache-bypassed SHA-256 parity for the production HTML, service worker, app, work-order view, dashboard, control-map, and primary CSS runtimes.
 - Renders all 21 control-map banners with dock or quay names only; internal A-U aliases remain available for place-ID matching but are no longer shown on the map or detail panel.
 - Opens a dedicated desktop control-map presentation window, prefers another monitor when the browser exposes screen details, and keeps a visible close action.
 - Reflects pin and source-map edits immediately across open same-browser tabs through BroadcastChannel, localStorage, and the shared IndexedDB map asset.
