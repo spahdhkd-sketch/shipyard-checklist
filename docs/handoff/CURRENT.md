@@ -5,17 +5,27 @@ Updated: 2026-09-02 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production release source commit: `0c1ae9810ff3f73176399f3ceba1f74c659fade6`
+- Production release source commit: `6d029bce87b2265548c2ca143e3f785df4c7cbbf`
 - Release branch: `feat/claude-batch` (pushed to `origin`)
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.14.5-20260902-v1`
-- Asset token: `20260902-v2-1`
-- Production deployment: `dpl_4HvtZxj6Xnuua1og2htDzZXpnvgW` (`READY`, target `production`)
-- Deployment URL: `https://index-html-f0h2yhkvv-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.6-20260902-v1`
+- Asset token: `20260902-v3-1`
+- Production deployment: `dpl_C3aU84JpgaFP8qdqM38htCdeaZBs` (`READY`, target `production`)
+- Deployment URL: `https://index-html-qdanuerxq-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.5-20260902-v1` and asset token `20260902-v2-1`. Local and production-alias SHA-256 hashes match for `index.html`, `VERSION.md`, `sw.js`, app, screen views, dashboard, control-map, and the two primary CSS runtimes.
-- Fresh production browser checks passed at 1280 x 720 and 390 x 844 with the login entry visible, no horizontal overflow, no version failure, and zero browser log errors. Authenticated administrator behavior was covered by the full hermetic E2E and exact deployed-runtime hash proof; no live work order was created or changed during release QA.
+- Cache-bypassed live checks confirmed `1.14.6-20260902-v1` and asset token `20260902-v3-1`. Local and production-alias SHA-256 hashes match for `check.html`, `sw.js`, app, screen views, and the primary CSS runtime.
+- A fresh production browser check at 390 x 844 loaded the public login entry with no horizontal overflow and zero browser log errors. Authenticated administrator behavior was covered by the full hermetic E2E and exact deployed-runtime hash proof; no live work order was created or changed during release QA.
 - The generated deployment URL is protected by Vercel SSO for direct HTTP fetches; CLI inspection still resolves both the deployment URL and production alias to the same deployment ID, while the public production alias serves the verified release bytes.
+
+## 2026-09-02 actual work-order registration form production correction
+
+- Moved the administrator-only `작업 장소` selector and `현장 사전 답사 완료` checkbox onto the actual mobile `점검 작성 → 작업지시서 등록` form in `check.html`; the ordinary worker selection and inspection flow remains unchanged.
+- The basic-information card keeps 작업일/팀 and 호선/작업유형 as two-column rows, then renders 작업 장소 full width with the site-survey confirmation and approved inline warning directly below it.
+- The action is labelled `작업지시서 발행` for administrator issuance and remains disabled until a registered place is selected and the site survey is checked. The same conditions are rechecked before persistence.
+- Added a 390 px browser regression that confirms field visibility, required state, full-width placement, warning copy, disabled-to-enabled transition, and no horizontal overflow. Evidence is `output/playwright/work-order-register-390.png`.
+- `npm.cmd run build:assets`, `npm.cmd run verify`, the 338-check non-main quality harness, full browser E2E, PWA E2E, and `git diff --check` passed for application version `1.14.6-20260902-v1` and asset token `20260902-v3-1`.
+- Commit `6d029bce87b2265548c2ca143e3f785df4c7cbbf` was pushed to `origin/feat/claude-batch`. Vercel deployment `dpl_C3aU84JpgaFP8qdqM38htCdeaZBs` is `READY`, targets production, and the `gs-safety-checklist.vercel.app` alias resolves to it.
+- This correction required no Supabase migration, Edge Function deployment, or production-data mutation. Live verification did not issue or edit a work order.
 
 ## 2026-09-02 safety operations home dashboard production release
 
@@ -221,8 +231,8 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - Current-source verification passed: `npm.cmd run verify`, `npm.cmd run build:assets`, `npm.cmd run e2e`, `node tools/quality-harness.mjs --skip-verify --allow-non-main`, and `git diff --check`. The quality harness retained only the expected dirty-worktree and HEAD-difference warnings.
 - Manual desktop and 390 px mobile QA artifacts are under `output/playwright/`, including the four pin states, the upper-left legend, background deselection, the 22-option place selector, and work-type classification badges.
 - The operational badges now reuse the control-map legend palette: triple-inspection and non-routine are red, solo and foreign-worker classification are yellow, and completed work is green. The administrator worker list foreign badge resolves to the same yellow border `#f3a53a` and surface `#fff2df` used by the legend.
-- `place_id` belongs only to `work_prep_records` (work orders), never to the worker master. Worker creation adds only `is_foreign`. The administrator Work Orders surface owns the new place selector, while worker login, pledge, work-order selection, work-order cards, and the existing non-admin work-order flow retain the current production layout and store an unspecified place as `null`.
-- `site_survey_done` also belongs only to `work_prep_records`. The administrator Work Orders form owns the checkbox; public direct writes cannot change it, and non-admin work-order mutations preserve the existing value.
+- `place_id` belongs only to `work_prep_records` (work orders), never to the worker master. Worker creation adds only `is_foreign`. The actual administrator `check.html` work-order registration form owns the new place selector, while worker login, pledge, work-order selection, work-order cards, and the existing non-admin work-order flow retain the current production layout and store an unspecified place as `null`.
+- `site_survey_done` also belongs only to `work_prep_records`. The actual administrator `check.html` registration form owns the checkbox; public direct writes cannot change it, and non-admin work-order mutations preserve the existing value.
 - Administrator work-order issuance is blocked until both a registered dock/quay and `현장 사전 답사 완료` are selected. Only the unchecked site-survey field shows an inline warning; the location field uses a required marker and disabled issue action without an extra warning popup.
 - Administrator work-order cards/details and the inspection-history linked work-order card display both the saved location and the site-survey state. The status timeline remains limited to registration, start, and completion milestones.
 - Worker normalization now preserves `isForeign` / `is_foreign` after local or remote reload so the administrator classification badge and yellow map rule remain stable across rerenders.
