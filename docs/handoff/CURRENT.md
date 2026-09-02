@@ -5,15 +5,16 @@ Updated: 2026-09-02 (Asia/Seoul)
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production release source commit: `887c7019ae3abe6a1b3eca5fdff23cf962400c1b`
+- Production release source commit: `0c1ae9810ff3f73176399f3ceba1f74c659fade6`
 - Release branch: `feat/claude-batch` (pushed to `origin`)
 - Production URL: `https://gs-safety-checklist.vercel.app`
 - Application version: `1.14.5-20260902-v1`
 - Asset token: `20260902-v2-1`
-- Production deployment: `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ` (`READY`, target `production`)
-- Deployment URL: `https://index-html-qkzblsjf8-spahdhkd-3161s-projects.vercel.app`
+- Production deployment: `dpl_4HvtZxj6Xnuua1og2htDzZXpnvgW` (`READY`, target `production`)
+- Deployment URL: `https://index-html-f0h2yhkvv-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.5-20260902-v1` and asset token `20260902-v2-1`. Local and production-alias SHA-256 hashes match for `index.html`, `sw.js`, app, screen views, dashboard, control-map, and the two primary CSS runtimes.
+- Cache-bypassed live checks confirmed `1.14.5-20260902-v1` and asset token `20260902-v2-1`. Local and production-alias SHA-256 hashes match for `index.html`, `VERSION.md`, `sw.js`, app, screen views, dashboard, control-map, and the two primary CSS runtimes.
+- Fresh production browser checks passed at 1280 x 720 and 390 x 844 with the login entry visible, no horizontal overflow, no version failure, and zero browser log errors. Authenticated administrator behavior was covered by the full hermetic E2E and exact deployed-runtime hash proof; no live work order was created or changed during release QA.
 - The generated deployment URL is protected by Vercel SSO for direct HTTP fetches; CLI inspection still resolves both the deployment URL and production alias to the same deployment ID, while the public production alias serves the verified release bytes.
 
 ## 2026-09-02 safety operations home dashboard production release
@@ -216,7 +217,7 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - The Home control map classifies red as eligible triple-inspection work, yellow as a one-person assignment (including one foreign worker), green as all assigned workers having completed their pre-work inspections, and gray as ordinary incomplete work.
 - Clicking map background outside a dock or quay clears the selected location and renders the explicit `선택 안 함` detail state. Work-type cards and their editor expose `3중점검` and `비일상작업` classifications.
 - Migration `supabase/migrations/20260902120000_work_prep_map_classification.sql` was applied to production as migration `20260902074214_work_prep_map_classification_20260902`. It adds the work-order place and administrator-confirmed site-survey fields together with the map classifications. Existing work orders still require a controlled `place_id` backfill before they can appear on the map.
-- Release commits were pushed, `admin-mutations` version 20 was deployed with JWT verification enabled, and Vercel deployment `dpl_AG6mo9bVAkQmHQPzKskC2TRW75CZ` was assigned to the production alias.
+- Release commits were pushed, `admin-mutations` version 20 was deployed with JWT verification enabled, and Vercel deployment `dpl_4HvtZxj6Xnuua1og2htDzZXpnvgW` was assigned to the production alias.
 - Current-source verification passed: `npm.cmd run verify`, `npm.cmd run build:assets`, `npm.cmd run e2e`, `node tools/quality-harness.mjs --skip-verify --allow-non-main`, and `git diff --check`. The quality harness retained only the expected dirty-worktree and HEAD-difference warnings.
 - Manual desktop and 390 px mobile QA artifacts are under `output/playwright/`, including the four pin states, the upper-left legend, background deselection, the 22-option place selector, and work-type classification badges.
 - The operational badges now reuse the control-map legend palette: triple-inspection and non-routine are red, solo and foreign-worker classification are yellow, and completed work is green. The administrator worker list foreign badge resolves to the same yellow border `#f3a53a` and surface `#fff2df` used by the legend.
