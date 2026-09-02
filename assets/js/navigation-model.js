@@ -18,7 +18,7 @@
     Object.freeze({ id: "ships", label: "호선", group: "status", permission: "worker", mobileParent: "status", url: "ships.html", title: "호선 현황" }),
     Object.freeze({ id: "unsafe", label: "불안전요소 신고", group: "report", permission: "worker", mobileParent: "report", url: "unsafe.html", title: "불안전요소 신고" }),
     Object.freeze({ id: "materials", label: "자재 누락 신고", group: "report", permission: "worker", mobileParent: "report", url: "materials.html", title: "자재 누락 신고" }),
-    Object.freeze({ id: "items", label: "빠른 메뉴", group: "more", permission: "worker", mobileParent: "more", url: "items.html", title: "빠른 메뉴" }),
+    Object.freeze({ id: "items", label: "표준작업지도서/위험성평가 관리", group: "more", permission: "worker", mobileParent: "more", url: "items.html", title: "표준작업지도서/위험성평가 관리" }),
     Object.freeze({ id: "pledge", label: "안전 서약", group: "more", permission: "worker", mobileParent: "more", url: "pledge.html", title: "안전 서약" }),
     Object.freeze({ id: "analytics", label: "통계", group: "more", permission: "admin", mobileParent: "more", url: "analytics.html", title: "안전 통계" }),
     Object.freeze({ id: "manage", label: "관리", group: "more", permission: "admin", mobileParent: "more", url: "manage.html", title: "관리" }),

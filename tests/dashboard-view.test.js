@@ -5,12 +5,14 @@ const path = require("path");
 const dashboardView = require("../assets/js/dashboard-view.js");
 
 const ROOT = path.join(__dirname, "..");
-const ASSET_TOKEN = "20260829-v7-1";
+const ASSET_TOKEN = "20260902-v2-1";
 const APP_SCRIPT = `assets/dist/js/app-v2.min.js?v=${ASSET_TOKEN}`;
 const WORKER_HELPER_SCRIPT = `assets/dist/js/worker-helpers.min.js?v=${ASSET_TOKEN}`;
 const DASHBOARD_VIEW_SCRIPT = `assets/dist/js/dashboard-view.min.js?v=${ASSET_TOKEN}`;
 
 const html = dashboardView.renderDashboardView({
+  isAdmin: true,
+  dateLabel: "2026-09-02",
   todayCount: 4,
   todayDone: 3,
   todayPending: 1,
@@ -19,6 +21,25 @@ const html = dashboardView.renderDashboardView({
   openMaterials: 5,
   todayWorkCount: 6,
   todayWorkProgress: 4,
+  todayWorkStatusCounts: { confirmed: 3, waiting: 2, completed: 1, unregistered: 1 },
+  todayWorkCheckSubmitted: 9,
+  todayWorkCheckTotal: 12,
+  todayWorkCheckRate: 75,
+  riskNg: 2,
+  riskWarn: 5,
+  riskOk: 13,
+  riskTotal: 20,
+  todayWorkRows: [{
+    id: "work-one",
+    placeName: "H-2안벽",
+    shipNo: "1201",
+    task: "탑재",
+    status: "점검 대기",
+    submitted: 2,
+    total: 4,
+    severity: "warn",
+  }],
+  controlMapHtml: '<section data-control-map="true"></section>',
   appVersionLabel: "v1.12.4",
   syncStatus: "online",
   syncLabel: "온라인 · 동기화 완료",
@@ -32,33 +53,53 @@ const html = dashboardView.renderDashboardView({
   navIcon: (name) => `<i data-icon="${name}"></i>`,
 });
 
-assert(html.includes('<main class="home-v4" aria-labelledby="homeV4Title">'));
-assert(html.includes('<h1 id="homeV4Title">오늘의 안전 운영</h1>'));
+assert(html.includes('<main class="home-v4 home-dashboard" aria-labelledby="homeV4Title">'));
+assert(html.includes('<h1 id="homeV4Title">안전 운영 대시보드</h1>'));
 assert(html.includes('<span class="home-v4__version">v1.12.4</span>'));
-assert(!html.includes("data-home-sync"));
-assert(!html.includes("온라인 · 동기화 완료"));
-assert.strictEqual((html.match(/<article class="home-v4__card">/g) || []).length, 4);
-assert(html.includes("미점검 <strong>3</strong>건"));
+assert(html.includes("온라인 · 동기화 완료"));
+assert.strictEqual((html.match(/<article class="home-dashboard__kpi">/g) || []).length, 4);
+assert(html.includes("기준 날짜 <strong>2026.09.02 · 오늘</strong>"));
+assert(html.includes("작업지시서"));
+assert(html.includes("확정 3 · 점검 전 2 · 완료 1"));
+assert(html.includes("작업 전 점검 실행 확인"));
+assert(html.includes("9/12<small>명 · 75%</small>"));
+assert(html.includes("위험성평가 실행 확인"));
+assert(html.includes("확인 이벤트와 분모 정의 필요"));
+assert(html.includes("안전 신호 · 최근 7일"));
+assert(html.includes("위험 2건 · 주의 5건"));
+assert(html.includes("H-2안벽 · 탑재"));
+assert(html.includes('data-control-map="true"'));
+assert(html.includes("미점검 3건"));
 assert(html.includes("다음 점검 · H1201 · 탑재"));
 assert(html.includes('data-view="check"'));
 assert(html.includes('data-view="unsafe"'));
 assert(html.includes('data-view="materials"'));
 assert(html.includes('data-view="manage" data-manage-center-card="operations"'));
-assert(html.includes("불안전요소 <strong>2</strong>건"));
-assert(html.includes("자재누락 <strong>5</strong>건"));
-assert(html.includes("작업지시 <strong>6</strong>건"));
-assert(html.includes("진행 <strong>4</strong>건"));
+assert(html.includes("불안전요소 등록 · 접수 2건"));
+assert(html.includes("자재누락 등록 · 미완료 5건"));
 assert(!html.includes("관리 설정은 현장 실행과 분리"));
 assert(!html.includes('class="home-v4__management"'));
 assert(!html.includes("현장 안전 홈"));
 assert(!html.includes('class="home-v4__kicker'));
 
+const completedWorkHtml = dashboardView.renderDashboardView({
+  isAdmin: true,
+  todayWorkRows: [{ id: "work-complete", submitted: 2, total: 2, severity: "ok" }],
+});
+assert(completedWorkHtml.includes('home-dashboard__chip is-ok">점검 완료'));
+
+const workerHomeHtml = dashboardView.renderDashboardView({
+  isAdmin: false,
+  controlMapHtml: '<section data-control-map="worker-should-not-see"></section>',
+});
+assert(!workerHomeHtml.includes('data-control-map="worker-should-not-see"'));
+
 const unsafeZero = dashboardView.renderDashboardView({
   unsafeCount: 0,
   openMaterials: 0,
 });
-assert(unsafeZero.includes("불안전요소 <strong>0</strong>건"));
-assert(unsafeZero.includes("자재누락 <strong>0</strong>건"));
+assert(unsafeZero.includes("불안전요소 등록 · 접수 0건"));
+assert(unsafeZero.includes("자재누락 등록 · 미완료 0건"));
 
 const completedCheck = dashboardView.renderDashboardView({
   myCheck: { status: "done", pending: 0, total: 2 },
@@ -558,6 +599,8 @@ const inspectionRangeLoadEntry = extractFunction(app, "inspectionRangeLoadEntry"
 const inspectionRangeLoader = extractFunction(app, "ensureInspectionRangeLoaded");
 assert(app.includes("window.ShipyardDashboardView"), "app-v2 reads dashboard view global");
 assert(app.includes("DASHBOARD_VIEW.renderDashboardView(dashboardModel(), { sectionHeading, navIcon })"), "renderDashboard delegates to dashboard view");
+assert(app.includes("const unmatchedWorkRows = todayWorkMapRecords"), "home dashboard keeps work orders without a map location in execution status");
+assert(app.includes('placeName: "장소 미지정"'), "home dashboard labels work orders without a map location explicitly");
 assert(analyticsModel.includes("dateLabel: formatKoreanDate(now)"), "analytics model owns date label derivation");
 assert(analyticsModel.includes("processRows: processRows.map"), "analytics model owns process row derivation");
 assert(analyticsModel.includes("risk: {"), "analytics model owns risk distribution derivation");

@@ -1,18 +1,40 @@
 # Current handoff
 
-Updated: 2026-08-29 (Asia/Seoul)
+Updated: 2026-09-02 (Asia/Seoul)
 
 ## Release state
 
 - Active branch: `feat/claude-batch`
-- Production release source commit: `209397a685d1a5dd76445c70fbd3e80fe84a1223`
+- Production deployment baseline commit: `4f9fd5276eed3b4ece07b2c6e4ba3a4b5c94ef94`
+- Deployment source: the documented working-tree release changes on top of that baseline; no commit or push was made.
 - Production URL: `https://gs-safety-checklist.vercel.app`
-- Application version: `1.14.1-20260829-v1`
-- Asset token: `20260829-v6-1`
-- Production deployment: `dpl_GQ15NojWqTeLZL2wfbre4uPjPUSq` (`READY`, target `production`)
-- Deployment URL: `https://index-html-72un1wnyw-spahdhkd-3161s-projects.vercel.app`
+- Application version: `1.14.4-20260902-v2`
+- Asset token: `20260902-v1-2`
+- Production deployment: `dpl_H1bJK6sxWCQZZmFkciJNJNF7oHkp` (`READY`, target `production`)
+- Deployment URL: `https://index-html-c4f6wwpi9-spahdhkd-3161s-projects.vercel.app`
 - The production alias was explicitly assigned to this deployment and resolves to the same deployment ID.
-- Cache-bypassed live checks confirmed `1.14.1-20260829-v1` and asset token `20260829-v6-1`. Local and live SHA-256 hashes match for `index.html`, `sw.js`, `assets/images/control-map-base-white.png`, the control-map CSS, and the app, control-map, dashboard, and issue-material minified runtimes.
+- Cache-bypassed live checks confirmed `1.14.4-20260902-v2` and asset token `20260902-v1-2`. Candidate and production-alias SHA-256 hashes match for `index.html`, `sw.js`, app, dashboard, control-map, and the two dashboard/control-map CSS runtimes.
+- The generated deployment URL is protected by Vercel SSO for direct HTTP fetches; CLI inspection still resolves both the deployment URL and production alias to the same deployment ID, while the public production alias serves the verified release bytes.
+
+## 2026-09-02 safety operations home dashboard production release
+
+- Replaced the actual legacy administrator home route (`index.html` -> `dashboard` -> `renderDashboard`) with the KPI-first `안전 운영 대시보드`; the standalone proposal artifact was not used as the deployment source.
+- Uses existing live work-order, pre-work check, and recent safety-signal records. Work orders without a matched map location remain visible as `장소 미지정`.
+- Shows the risk-assessment execution confirmation as unavailable until the product defines a reliable confirmation event and denominator.
+- Added the red danger, yellow caution, and green normal pin legend at the control map's top-left corner.
+- `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, `git diff --check`, full browser E2E, PWA E2E, and the PC/430/390/360 home visual gate passed.
+- Live browser checks passed at 1366 x 900 and 390 x 844 with four KPI cards, three legend items, no horizontal overflow, and no page errors.
+- No commit, push, branch change, Supabase migration, Edge Function deployment, or production-data mutation was performed.
+
+## 2026-09-02 dashboard responsive layout production hotfix
+
+- Production deployment `dpl_H1bJK6sxWCQZZmFkciJNJNF7oHkp` now serves the responsive layout hotfix from `https://gs-safety-checklist.vercel.app`.
+- At viewport widths up to 1100px, the dashboard KPI cards and primary-work shortcuts now use a 2 x 2 grid instead of retaining the compressed four-column desktop layout.
+- Korean KPI and shortcut labels keep words together, and the danger/caution signal units no longer collide inside narrow cards.
+- Added an 840px desktop-preview regression in addition to the existing PC, 430, 390, and 360 checks. The 920px horizontal canvas in PC preview mode remains intentional.
+- `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, `git diff --check`, full browser E2E, PWA E2E, and the home-only design-token visual gate passed.
+- Deployment used an audited runtime-only candidate with 346 files. It excluded `docs`, `tests`, `tools`, `supabase`, artifacts, environment files, and patch files; the candidate's seven key runtime hashes matched the source checkout before upload.
+- Live QA passed at 840 x 900 and 390 x 844 with two KPI columns, two shortcut columns, the control map and legend visible, and no page errors.
 
 ## Supabase state
 
@@ -32,6 +54,43 @@ Updated: 2026-08-29 (Asia/Seoul)
 - `npm.cmd run e2e:pwa`
 - `node tools/quality-harness.mjs --skip-verify --allow-non-main`
 - `git diff --check`
+
+## 2026-08-31 control-map map-app redesign (local only)
+
+- The real administrator Home control map now uses a map-first, non-overlapping hierarchy: a compact heading and filter row, a large map beside an inline desktop detail panel, and the same map followed by inline details on mobile. Controls and selected-place information no longer sit on top of the map.
+- Existing location name banners carry the state signal. Warning and danger locations use a gentle edge pulse instead of adding another pin, with a static reduced-motion fallback.
+- A linked order with exactly one deduplicated participant shows the orange `1인 작업` badge. A compatible `inspectionType` or `inspection_type` value of `3중점검` shows the blue `3중점검` badge. No database field or production persistence was added.
+- Local browser QA covered the actual Home at PC/430/390/360 widths, including map visibility, the empty-place message, filters, badges, pulse, 44 px controls, and zero horizontal overflow. Current evidence is under `.omo/evidence/design-token/index-{1366,430,390,360}.png`.
+- `npm.cmd run build:assets`, `npm.cmd run verify`, the 338-check non-main quality harness, focused control-map tests, the PC/430/390/360 Home visual gate, and `git diff --check` pass. The full E2E functional flow passed before its visual phase; one unrelated existing `390 관리 안전수칙` surface assertion remains outside this change.
+- No commit, push, Preview/production deployment, Supabase migration, Edge Function deployment, or production-data mutation was performed.
+
+## 2026-08-29 1.14.3 standard-work merge and control-map presentation release (production)
+
+- The Quick Menu route is now `표준작업지도서/위험성평가 관리`; the risk-assessment surface preserves workbook state and requires a preview plus an explicit merge into the selected target work type. Existing work types can also be previewed and merged while normalized duplicate checklist text is skipped.
+- The Home control map now opens in a dedicated presentation window suitable for a second screen. Presentation mode covers the full viewport, hides editing/detail chrome, keeps the map controls required for viewing, and can be closed from the presentation window.
+- Administrators can move each location's name banner and leader-line anchor independently. Both coordinates are retained in the map model and included in JSON/PNG export behavior.
+- Fresh browser QA confirmed the RA existing-work-type preview (`12` new sections and `16` new items), true 390 px mobile list-to-detail navigation with zero horizontal overflow, 21 editable anchor controls, and a 1366 x 768 full-viewport presentation window.
+- `npm.cmd run verify`, the non-main quality harness, full browser E2E, PWA E2E, visual design-token E2E, and `git diff --check` passed before deployment. The deployment excludes local Playwright evidence, patch inputs, project documentation, and other preserved artifacts through `.vercelignore`.
+- No Supabase migration, Edge Function deployment, production-data mutation, commit, or push was performed for this release.
+
+## 2026-08-29 1.14.2 label-free fullscreen realtime-map release (production)
+
+- Removed the visible A-U alphabet badges from all 21 dock and quay pins, selection details, and accessible pin labels. The alphabet aliases remain internal so existing work-order place IDs still resolve to the correct pin.
+- Added a desktop-only map fullscreen control. Fullscreen mode keeps only the map and exit control visible; the existing touch pan and zoom behavior remains available on mobile without exposing the desktop control.
+- Administrator pin moves and source-map edits now propagate immediately to other open tabs on the same browser and origin through `BroadcastChannel`, `localStorage`, and the shared IndexedDB map source. Existing Supabase Realtime work-order updates continue to refresh operational pin status across connected devices.
+- Production manual QA confirmed 21 pins, zero visible alphabet badges, map-only fullscreen entry and exit, cross-tab pin movement, editor paint and undo, mobile touch movement without page overflow, latest-intake routing, and no control map for worker roles. No page errors were reported.
+- No Supabase migration, Edge Function deployment, or production-data mutation was made for this release.
+
+## 2026-08-29 standard-work/risk-assessment management and merge flow (production in 1.14.3)
+
+- The visible duplicate `빠른 메뉴 / 필요한 업무로 바로 이동합니다` header is removed from the Quick Menu surface while a screen-reader-only page title preserves the accessibility contract.
+- The `items` route is now named `표준작업지도서/위험성평가 관리` in the shared navigation model, legacy fallback, and accessible page-title fallback.
+- The risk-assessment widget shell now lives outside the repeatedly replaced `#page` region. Upload results, checklist edits, and check states survive work-type selection and background app renders until the administrator explicitly closes the tool or leaves the surface.
+- Opening the import surface captures the currently selected work type as the merge target. RA workbook results and a separately selected existing work type each show a merge preview and require an explicit `현재 작업 유형에 병합` action.
+- Merge planning preserves existing sections and items, reuses sections with the same normalized title, and skips duplicate checklist text across the target work type. Existing-work-type imports preserve risk, required, tool, and visibility metadata without reusing source IDs.
+- Desktop 1366 px and true mobile 390 px browser checks merged one new section and one new item from an existing work type while skipping one duplicate. `_sample_ra.xlsx` produced seven new sections and 41 new items; both widths saved 42 unique target items with no horizontal overflow and returned to the target's section tab.
+- The full hermetic browser E2E suite passes. `npm.cmd run build:assets`, `npm.cmd run verify`, the non-main quality harness, focused regression tests, and `git diff --check` pass.
+- This change is included in production deployment `dpl_8Pz7QuaV41kn1HvUwwzwZL3E97h4` with application version `1.14.3-20260829-v1` and asset token `20260829-v8-1`. No commit, push, Supabase change, Edge Function deployment, or production-data mutation was performed.
 
 ## 2026-08-29 1.14.1 21-zone control-map and latest-intake release (production)
 
@@ -149,3 +208,21 @@ Current comparison result: all three fail both forward and reverse `git apply --
 - Work Preparation Inspection Step 2 and Step 3 were re-verified in the hermetic full browser E2E after the synchronization change.
 - No live production work-order deletion was executed during release verification; the deployed UI and exact asset hash were checked without mutating production data.
 - Supabase Realtime WebSocket connections were observed failing repeatedly against production v1.13.0, both before and after worker login. The cursor-based polling fallback is healthy and all 11 tables report successful pulls. Whether the failure reproduces outside the observing browser environment is unconfirmed.
+
+## 2026-09-02 local work-prep map classification implementation
+
+- Local branch `feat/claude-batch` now carries work-order `place_id` / `site_survey_done`, work-type `requires_triple_inspection` / `is_non_routine`, and worker `is_foreign` support across the legacy UI, remote adapters, and admin mutation boundary.
+- The Home control map classifies red as eligible triple-inspection work, yellow as a one-person assignment (including one foreign worker), green as all assigned workers having completed their pre-work inspections, and gray as ordinary incomplete work.
+- Clicking map background outside a dock or quay clears the selected location and renders the explicit `선택 안 함` detail state. Work-type cards and their editor expose `3중점검` and `비일상작업` classifications.
+- Migration `supabase/migrations/20260902120000_work_prep_map_classification.sql` is created locally but has **not** been applied to any Supabase project. It adds the work-order place and administrator-confirmed site-survey fields together with the map classifications. Existing work orders still require a controlled `place_id` backfill before they can appear on the map.
+- No commit, push, Vercel deployment, production alias change, Edge Function deployment, or production data mutation was performed for this local implementation.
+- Current-source verification passed: `npm.cmd run verify`, `npm.cmd run build:assets`, `npm.cmd run e2e`, `node tools/quality-harness.mjs --skip-verify --allow-non-main`, and `git diff --check`. The quality harness retained only the expected dirty-worktree and HEAD-difference warnings.
+- Manual desktop and 390 px mobile QA artifacts are under `output/playwright/`, including the four pin states, the upper-left legend, background deselection, the 22-option place selector, and work-type classification badges.
+- The operational badges now reuse the control-map legend palette: triple-inspection and non-routine are red, solo and foreign-worker classification are yellow, and completed work is green. The administrator worker list foreign badge resolves to the same yellow border `#f3a53a` and surface `#fff2df` used by the legend.
+- `place_id` belongs only to `work_prep_records` (work orders), never to the worker master. Worker creation adds only `is_foreign`. The administrator Work Orders surface owns the new place selector, while worker login, pledge, work-order selection, work-order cards, and the existing non-admin work-order flow retain the current production layout and store an unspecified place as `null`.
+- `site_survey_done` also belongs only to `work_prep_records`. The administrator Work Orders form owns the checkbox; public direct writes cannot change it, and non-admin work-order mutations preserve the existing value.
+- Administrator work-order issuance is blocked until both a registered dock/quay and `현장 사전 답사 완료` are selected. Only the unchecked site-survey field shows an inline warning; the location field uses a required marker and disabled issue action without an extra warning popup.
+- Administrator work-order cards/details and the inspection-history linked work-order card display both the saved location and the site-survey state. The status timeline remains limited to registration, start, and completion milestones.
+- Worker normalization now preserves `isForeign` / `is_foreign` after local or remote reload so the administrator classification badge and yellow map rule remain stable across rerenders.
+- Final fresh-browser evidence includes `output/playwright/admin-map-badges-aligned.png`, `worker-screen-existing-layout.png`, `worker-registration-existing-layout.png`, `admin-work-order-place-field.png`, and `admin-worker-foreign-classification-final.png`.
+- This administrator-only refinement remains local. Its migration, frontend assets, and Edge Function changes have not been deployed or applied to production.

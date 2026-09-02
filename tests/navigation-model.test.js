@@ -15,6 +15,7 @@ assert.strictEqual(new Set(ROUTES.map((route) => route.id)).size, ROUTES.length,
 assert(ROUTES.every((route) => route.label && route.group && route.permission && route.mobileParent && route.url && route.title), "every route must describe IA metadata");
 
 assert.strictEqual(getRoute("pledge").url, "pledge.html");
+assert.strictEqual(getRoute("items").label, "표준작업지도서/위험성평가 관리");
 assert.strictEqual(getActiveMobileParentId("pledge"), "more");
 assert.strictEqual(getActiveMobileParentId("analytics"), "more");
 assert.strictEqual(canAccessRoute("pledge", "worker"), true);

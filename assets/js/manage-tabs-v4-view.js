@@ -68,7 +68,7 @@
     const detailOpen = Boolean(model.mobileDetailOpen && selected);
     const list = categories.length
       ? categories.map((category) => `<button class="manage-tabs-v4__list-row${category.active ? " is-active" : ""}" data-select-work-type="${esc(category.id)}" data-work-type-search-item data-work-type-search-text="${esc(category.searchText || [category.label, category.meta].filter(Boolean).join(" "))}" type="button" role="option" aria-selected="${category.active ? "true" : "false"}">
-          <span>${html(category.iconHtml)}<strong>${esc(category.label)}</strong><small>${esc(category.meta)}</small></span>
+          <span>${html(category.iconHtml)}<strong>${esc(category.label)}</strong>${html(category.badgesHtml)}<small>${esc(category.meta)}</small></span>
           <em>${esc(category.countLabel)}</em>
         </button>`).join("")
       : '<div class="manage-tabs-v4__empty">등록된 작업 유형이 없습니다.</div>';
@@ -76,7 +76,7 @@
       ? `<article class="manage-tabs-v4__detail${detailOpen ? " is-mobile-fullscreen" : ""}" data-manage-tabs-selected="${esc(selected.id)}" aria-labelledby="manageWorkTypeTitle"${detailOpen ? ' tabindex="-1"' : ""}>
           ${detailOpen ? '<button class="manage-tabs-v4__back" data-action="back-work-type-list" type="button">작업 유형 목록</button>' : ""}
           <header class="manage-tabs-v4__detail-head">
-            <div><h2 id="manageWorkTypeTitle">${esc(selected.label)}</h2><p>${esc(selected.meta)}</p></div>
+            <div><h2 id="manageWorkTypeTitle">${esc(selected.label)}</h2>${html(selected.badgesHtml)}<p>${esc(selected.meta)}</p></div>
             ${model.canEdit && !editing ? `<button class="manage-tabs-v4__button" data-edit-category="${esc(selected.id)}" type="button">기본 정보 수정</button>` : ""}
           </header>
           <div class="manage-tabs-v4__detail-body" data-manage-tabs-read-only="${editing ? "false" : "true"}">${editing ? html(selected.editHtml) : html(selected.summaryHtml || selected.detailHtml)}</div>

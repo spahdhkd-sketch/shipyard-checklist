@@ -1,23 +1,37 @@
 # Version
 
-Current version: `1.14.2-20260829`
+Current version: `1.14.5-20260902`
 
-Recorded at: `2026-08-29 (v1.14.2 label-free fullscreen realtime-map release)`
+Recorded at: `2026-09-02 (v1.14.5 work-order map classification release candidate)`
 
-Baseline commit: `this release commit`
+Baseline commit: `working tree based on 4f9fd5276eed3b4ece07b2c6e4ba3a4b5c94ef94`
 
 Production alias: `https://gs-safety-checklist.vercel.app/`
 
 Notes:
+- Adds `place_id` to work orders (`work_prep_records`) only; worker master records do not receive a place field.
+- Adds the administrator-only `현장 사전 답사 완료` checkbox backed by `work_prep_records.site_survey_done`, defaulting existing and new unchecked work orders to `false`; an unchecked value shows the inline issuance warning and keeps the issue action disabled.
+- Requires administrators to select a registered dock or quay and confirm the site survey before issuing a work order, with the same boundary enforced by the admin Edge Function.
+- Shows the saved place and site-survey state in administrator work-order cards/details and in the linked work-order card inside inspection history.
+- Limits the new work-order place selector and map classification details to administrator surfaces while preserving the existing worker screens and non-admin work-order flow.
+- Adds work-type triple-inspection/non-routine flags and the worker foreign classification used by red and yellow control-map states.
+- Aligns red, yellow, and green operational badges with the control-map legend palette and preserves the same classification after data reloads.
+- Issues asset token `20260902-v2-1` and service-worker version `1.14.5-20260902-v1` so installed clients refresh the complete release safely.
+- Reflows dashboard KPI cards and primary-work shortcuts into 2 x 2 grids at viewport widths up to 1100px, including the legacy 920px PC preview canvas.
+- Keeps Korean operational labels together and prevents danger/caution values and units from colliding inside narrow cards.
+- Replaces the administrator home summary with a KPI-first `안전 운영 대시보드` backed by the existing work-order, pre-work check, and recent safety-signal records.
+- Keeps records without a matched control-map location visible as `장소 미지정`, and marks the risk-assessment execution rate unavailable until a reliable event and denominator exist.
+- Adds a top-left control-map legend for red danger, yellow caution, and green normal pins while preserving existing quick actions and map interactions.
 - Renders all 21 control-map banners with dock or quay names only; internal A-U aliases remain available for place-ID matching but are no longer shown on the map or detail panel.
-- Adds a desktop-only map fullscreen control that presents the map surface alone while preserving pan, zoom, and a visible exit action.
+- Opens a dedicated desktop control-map presentation window, prefers another monitor when the browser exposes screen details, and keeps a visible close action.
 - Reflects pin and source-map edits immediately across open same-browser tabs through BroadcastChannel, localStorage, and the shared IndexedDB map asset.
 - Continues to reflect work-order and status changes across connected devices through the existing Supabase Realtime record flow without adding a new database schema.
 - Fits the full 4096 x 3072 map canvas inside desktop and mobile viewports, with touch pan and zoom on one continuous mobile surface.
-- Matches work orders by place ID, lets administrators reposition zone banners with browser-local persistence, and provides a browser-local map editor with PNG and JSON export.
+- Matches work orders by place ID, lets administrators reposition zone banners and their leader-line anchor points with browser-local persistence, and exports both coordinates in PNG and JSON outputs.
 - Shows the control map as the first administrator dashboard row above the 2 x 2 KPI grid while keeping it hidden from preceding and following workers.
 - Routes the home intake action to the newest record across unsafe-factor and missing-material categories, opening that exact detail.
-- Adds the browser-only risk-assessment Excel tool to administrator work-type management without uploading workbook contents to a server.
+- Renames Quick Menu to `표준작업지도서/위험성평가 관리` and removes its duplicate visible heading while preserving an accessible page title.
+- Adds explicit preview-and-merge flows for browser-only risk-assessment Excel results and existing work types, preserving current sections and skipping duplicate checklist text.
 - Preserves the mobile Management Center master-menu and focused detail flow for reliable menu access at 360–430 px.
 - Removes the Management Work Orders new-registration action and deploys the dedicated authenticated status mutation for all five work-order states.
 - Defaults the Management Work Orders filter to all ships and persists status changes without showing a false synchronization failure.
@@ -75,5 +89,5 @@ Notes:
 - Stores issue photos privately with short-lived signed URLs and guarded two-slot upload reservations.
 - Retries missing-material notifications only after durable record persistence.
 - Fixes common-tool registration for the database empty-category contract and prevents duplicate clicks or failed-save form resets.
-- Issues asset token `20260829-v7-1` and service-worker version
-  `1.14.2-20260829-v1` so installed clients refresh safely.
+- Issues asset token `20260829-v8-1` and service-worker version
+  `1.14.3-20260829-v1` so installed clients refresh safely.

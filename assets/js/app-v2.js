@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = "shipyardSafetyV1.";
-    const APP_VERSION = "1.14.2-20260829-v1";
+    const APP_VERSION = "1.14.5-20260902-v1";
     const APP_VERSION_SHORT = String(APP_VERSION).split("-")[0];
     const APP_VERSION_LABEL = `v${APP_VERSION_SHORT}`;
     const STORAGE_VERSION_KEY = "storageVersion";
@@ -160,7 +160,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       { id: "check", label: "작업 전 점검", icon: "noteCheck" },
       { id: "ships", label: "호선", icon: "ship" },
       { id: "history", label: "점검 이력", icon: "book" },
-      { id: "items", label: "빠른 메뉴", icon: "menu" },
+      { id: "items", label: "표준작업지도서/위험성평가 관리", icon: "menu" },
       { id: "pledge", label: "서약", icon: "noteCheck" },
       { id: "analytics", label: "통계", icon: "board" },
     ];
@@ -359,7 +359,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "safety_categories",
         key: "categories",
-        selectColumns: "id,label,icon,color,require_tool_check,tool_nature,tool_ids,sort_order",
+        selectColumns: "id,label,icon,color,require_tool_check,tool_nature,tool_ids,requires_triple_inspection,is_non_routine,sort_order",
+        fallbackSelectColumns: "id,label,icon,color,require_tool_check,tool_nature,tool_ids,sort_order",
         toDb: (row) => ({
           id: row.id,
           label: row.label,
@@ -368,8 +369,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           require_tool_check: row.requireToolCheck !== false,
           tool_nature: normalizeToolNature(row.toolNature || defaultToolNatureForCategory(row)),
           tool_ids: sanitizeToolIds(row.toolIds),
+          requires_triple_inspection: Boolean(row.requiresTripleInspection),
+          is_non_routine: Boolean(row.isNonRoutine),
           sort_order: row.order || 0,
         }),
+        fallbackPayload: (payload) => payload.map(({ requires_triple_inspection, is_non_routine, ...row }) => row),
         fromDb: (row) => ({
           id: row.id,
           label: row.label,
@@ -378,6 +382,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           requireToolCheck: row.require_tool_check !== false,
           toolNature: normalizeToolNature(row.tool_nature || defaultToolNatureForCategory(row)),
           toolIds: sanitizeToolIds(row.tool_ids),
+          requiresTripleInspection: Boolean(row.requires_triple_inspection),
+          isNonRoutine: Boolean(row.is_non_routine),
           order: row.sort_order || 0,
         }),
       },
@@ -573,7 +579,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         table: "workers",
         readTable: "workers_public",
         key: "workers",
-        selectColumns: "id,name,team,position,active,unsafe_push_target,created_at,updated_at",
+        selectColumns: "id,name,team,position,active,is_foreign,unsafe_push_target,created_at,updated_at",
+        fallbackSelectColumns: "id,name,team,position,active,unsafe_push_target,created_at,updated_at",
         rows: (rows) => rows.filter((row) => row.active !== false),
         toDb: (row) => ({
           id: row.id,
@@ -581,16 +588,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
           active: row.active !== false,
+          is_foreign: Boolean(row.isForeign),
           unsafe_push_target: Boolean(row.unsafePushTarget),
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
+        fallbackPayload: (payload) => payload.map(({ is_foreign, ...row }) => row),
         fromDb: (row) => ({
           id: row.id,
           name: row.name,
           team: row.team || "",
           position: normalizeWorkerPosition(row.position),
           active: row.active !== false,
+          isForeign: Boolean(row.is_foreign),
           unsafePushTarget: Boolean(row.unsafe_push_target),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -711,8 +721,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       {
         table: "work_prep_records",
         key: "workPrepRecords",
-        selectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,status_history,created_at,updated_at,deleted_at",
-        fallbackSelectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,created_at,updated_at,deleted_at",
+        selectColumns: "id,work_date,appearance_time,team,ship_no,place_id,site_survey_done,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,status_history,created_at,updated_at,deleted_at",
+        fallbackSelectColumns: "id,work_date,appearance_time,team,ship_no,category_id,leader_worker_id,worker_ids,other_team_worker_ids,tool_ids,status,status_history,created_at,updated_at,deleted_at",
         orderBy: "updated_at",
         ascending: false,
         limit: 0,
@@ -722,6 +732,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           appearance_time: row.appearanceTime || "",
           team: row.team || "",
           ship_no: row.shipNo || "",
+          place_id: row.placeId || null,
+          site_survey_done: row.siteSurveyDone === true,
           category_id: row.categoryId || "",
           leader_worker_id: row.leaderWorkerId || "",
           worker_ids: Array.isArray(row.workerIds) ? row.workerIds : [],
@@ -732,13 +744,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           created_at: row.createdAt || serverNow().toISOString(),
           updated_at: row.updatedAt || row.createdAt || serverNow().toISOString(),
         }),
-        fallbackPayload: (payload) => payload.map(({ status_history, ...row }) => row),
+        fallbackPayload: (payload) => payload.map(({ place_id, site_survey_done, ...row }) => row),
         fromDb: (row) => ({
           id: row.id,
           workDate: row.work_date || "",
           appearanceTime: row.appearance_time || "",
           team: row.team || "",
           shipNo: row.ship_no || "",
+          placeId: row.place_id || "",
+          siteSurveyDone: row.site_survey_done === true,
           categoryId: row.category_id || "",
           leaderWorkerId: row.leader_worker_id || "",
           workerIds: Array.isArray(row.worker_ids) ? row.worker_ids : [],
@@ -1248,6 +1262,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         appearanceTime: "15:00",
         team: "",
         shipNo: "",
+        placeId: "",
+        siteSurveyDone: false,
         categoryId: "",
         leaderWorkerId: "",
         workerIds: [],
@@ -1264,6 +1280,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         appearanceTime: previous.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME,
         team: previous.team || "",
         shipNo: "",
+        placeId: "",
+        siteSurveyDone: false,
         categoryId: "",
         leaderWorkerId: "",
         workerIds: [],
@@ -1617,6 +1635,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         appearanceTime: cleanDraft.appearanceTime || DEFAULT_WORK_PREP_APPEARANCE_TIME,
         team: cleanDraft.team,
         shipNo: cleanDraft.shipNo,
+        placeId: cleanDraft.placeId,
+        siteSurveyDone: cleanDraft.siteSurveyDone === true,
         categoryId: cleanDraft.categoryId,
         leaderWorkerId: cleanDraft.leaderWorkerId,
         workerIds: normalizeWorkPrepWorkerIds(cleanDraft),
@@ -3259,6 +3279,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         team: String(worker.team || "").trim(),
         position: normalizeWorkerPosition(worker.position),
         active: worker.active !== false,
+        isForeign: Boolean(worker.isForeign || worker.is_foreign),
         unsafePushTarget: Boolean(worker.unsafePushTarget || worker.unsafe_push_target),
         createdAt: worker.createdAt || serverNow().toISOString(),
         updatedAt: worker.updatedAt || worker.createdAt || serverNow().toISOString(),
@@ -3482,6 +3503,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     let adminModulePromise = null;
     let riskAssessmentWidgetInstance = null;
     let riskAssessmentWidgetLoadPromise = null;
+    let riskAssessmentWidgetResult = null;
+    let riskAssessmentTargetCategoryId = "";
+    let existingWorkTypeMergeSourceId = "";
+    let existingWorkTypeMergePlan = null;
+    let workTypeMergeSubmitting = false;
 
     function loadAdminModule() {
       if (!adminModulePromise) adminModulePromise = import("./admin-v2.js");
@@ -3519,6 +3545,134 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return riskAssessmentWidgetLoadPromise;
     }
 
+    function workTypeMergeTarget() {
+      return categoryById(riskAssessmentTargetCategoryId);
+    }
+
+    function riskAssessmentLevel(score) {
+      const value = Number(score || 0);
+      if (value >= 4) return "high";
+      if (value >= 2) return "medium";
+      return "low";
+    }
+
+    function createWorkTypeMergePlan(incomingSections, incomingItems) {
+      return StateShapeRules.planWorkTypeChecklistMerge({
+        targetCategoryId: riskAssessmentTargetCategoryId,
+        targetSections: state.sections,
+        targetItems: state.items,
+        incomingSections,
+        incomingItems,
+      }, { uid });
+    }
+
+    function createRiskAssessmentMergePlan() {
+      const items = Array.isArray(riskAssessmentWidgetResult?.items) ? riskAssessmentWidgetResult.items : [];
+      const sectionMap = new Map();
+      const incomingItems = items.map((row) => {
+        const sectionTitle = String(row?.section || row?.kind || "위험성평가").trim() || "위험성평가";
+        if (!sectionMap.has(sectionTitle)) sectionMap.set(sectionTitle, { key: sectionTitle, title: sectionTitle });
+        return {
+          sectionKey: sectionTitle,
+          sectionTitle,
+          text: row?.text,
+          risk: riskAssessmentLevel(row?.score),
+          required: Number(row?.score || 0) >= 4,
+        };
+      });
+      return createWorkTypeMergePlan(Array.from(sectionMap.values()), incomingItems);
+    }
+
+    function createExistingWorkTypeMergePlan(sourceId) {
+      const sourceSections = sectionsFor(sourceId);
+      return createWorkTypeMergePlan(
+        sourceSections.map((row) => ({ key: row.id, title: row.title })),
+        activeItems(sourceId).map((row) => ({
+          sectionKey: row.sectionId,
+          sectionTitle: sourceSections.find((section) => section.id === row.sectionId)?.title || "기본 점검",
+          text: row.text,
+          risk: row.risk,
+          required: row.required,
+          toolIds: row.toolIds,
+          visibilityCondition: row.visibilityCondition,
+        })),
+      );
+    }
+
+    function mergePlanSummary(plan) {
+      if (!plan) return "병합할 내용을 먼저 불러오세요.";
+      const added = Number(plan.sections?.length || 0) + Number(plan.items?.length || 0);
+      if (!added) return plan.skippedItemCount ? `새 항목이 없습니다. 중복 ${plan.skippedItemCount}개를 건너뜁니다.` : "추가할 내용이 없습니다.";
+      return `새 섹션 ${plan.sections.length}개 · 새 점검 항목 ${plan.items.length}개${plan.skippedItemCount ? ` · 중복 ${plan.skippedItemCount}개 제외` : ""}`;
+    }
+
+    function updateRiskAssessmentMergeControls() {
+      const target = workTypeMergeTarget();
+      const targetNode = $("raMergeTarget");
+      if (targetNode) targetNode.textContent = target ? target.label : "선택된 작업 유형 없음";
+
+      const raPlan = riskAssessmentWidgetResult ? createRiskAssessmentMergePlan() : null;
+      const raSummary = $("raMergeSummary");
+      const raButton = $("applyRaMergeButton");
+      if (raSummary) raSummary.textContent = riskAssessmentWidgetResult
+        ? mergePlanSummary(raPlan)
+        : "엑셀을 업로드하면 추가할 섹션과 점검 항목을 미리 계산합니다.";
+      if (raButton) raButton.disabled = workTypeMergeSubmitting || !target || !raPlan || !(raPlan.sections.length || raPlan.items.length);
+
+      const existingSummary = $("existingWorkTypeMergeSummary");
+      const existingButton = $("applyExistingWorkTypeMergeButton");
+      if (existingSummary) existingSummary.textContent = mergePlanSummary(existingWorkTypeMergePlan);
+      if (existingButton) existingButton.disabled = workTypeMergeSubmitting || !target || !existingWorkTypeMergePlan || !(existingWorkTypeMergePlan.sections.length || existingWorkTypeMergePlan.items.length);
+    }
+
+    function previewExistingWorkTypeMerge() {
+      const sourceId = $("existingWorkTypeMergeSource")?.value || "";
+      const source = categoryById(sourceId);
+      if (!source) return toast("불러올 작업 유형을 선택하세요.");
+      existingWorkTypeMergeSourceId = sourceId;
+      existingWorkTypeMergePlan = createExistingWorkTypeMergePlan(sourceId);
+      updateRiskAssessmentMergeControls();
+      toast(`${source.label}의 병합 내용을 확인했습니다.`);
+    }
+
+    async function applyWorkTypeChecklistMerge(kind) {
+      if (!requireAdminWrite() || workTypeMergeSubmitting) return;
+      const target = workTypeMergeTarget();
+      if (!target) return toast("병합할 작업 유형을 다시 선택하세요.");
+      const source = kind === "ra" ? null : categoryById(existingWorkTypeMergeSourceId);
+      const plan = kind === "ra"
+        ? createRiskAssessmentMergePlan()
+        : createExistingWorkTypeMergePlan(source?.id || "");
+      if (!plan.sections.length && !plan.items.length) return toast(mergePlanSummary(plan));
+
+      const previousSections = state.sections;
+      const previousItems = state.items;
+      workTypeMergeSubmitting = true;
+      updateRiskAssessmentMergeControls();
+      state.sections = [...state.sections, ...plan.sections];
+      state.items = [...state.items, ...plan.items];
+      if (!(await persistAndSync(["sections", "items"]))) {
+        state.sections = previousSections;
+        state.items = previousItems;
+        workTypeMergeSubmitting = false;
+        persist();
+        updateRiskAssessmentMergeControls();
+        return;
+      }
+
+      workTypeMergeSubmitting = false;
+      state.workTypeManagerSelectedId = target.id;
+      state.workTypeManagerTab = "sections";
+      state.workTypeManagerMobileDetailOpen = true;
+      state.riskAssessmentWidgetOpen = false;
+      destroyRiskAssessmentWidget();
+      riskAssessmentWidgetResult = null;
+      existingWorkTypeMergePlan = null;
+      existingWorkTypeMergeSourceId = "";
+      render();
+      toast(`${target.label}에 섹션 ${plan.sections.length}개와 점검 항목 ${plan.items.length}개를 병합했습니다.`);
+    }
+
     function setupRiskAssessmentWidget() {
       if (!state.riskAssessmentWidgetOpen || state.view !== "items" || !state.adminMode) return;
       const host = $("hisafeRaWidgetHost");
@@ -3532,7 +3686,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           riskAssessmentWidgetInstance = HisafeRA.mount(host, {
             title: "위험성평가 점검표",
             subtitle: "작업표준 엑셀을 이 기기에서만 분석해 점검항목을 만듭니다.",
-            onLoad: (result) => toast(`위험성평가 점검항목 ${Number(result?.items?.length || 0)}개를 만들었습니다.`),
+            onChange: (result) => {
+              riskAssessmentWidgetResult = result;
+              updateRiskAssessmentMergeControls();
+            },
+            onLoad: (result) => {
+              riskAssessmentWidgetResult = result;
+              updateRiskAssessmentMergeControls();
+              toast(`위험성평가 점검항목 ${Number(result?.items?.length || 0)}개를 만들었습니다.`);
+            },
           });
           delete host.dataset.mounting;
           host.removeAttribute("aria-busy");
@@ -3565,6 +3727,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function openRiskAssessmentWidget() {
       if (!requireAdminWrite()) return;
+      const target = categoryById(state.workTypeManagerSelectedId) || state.categories[0];
+      if (!target) return toast("먼저 작업 유형을 추가하세요.");
+      riskAssessmentTargetCategoryId = target.id;
+      riskAssessmentWidgetResult = null;
+      existingWorkTypeMergeSourceId = "";
+      existingWorkTypeMergePlan = null;
+      workTypeMergeSubmitting = false;
       state.riskAssessmentWidgetOpen = true;
       render();
       requestAnimationFrame(() => document.querySelector('[data-action="close-ra-widget"]')?.focus());
@@ -3573,6 +3742,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     function closeRiskAssessmentWidget() {
       state.riskAssessmentWidgetOpen = false;
       destroyRiskAssessmentWidget();
+      riskAssessmentWidgetResult = null;
+      riskAssessmentTargetCategoryId = "";
+      existingWorkTypeMergeSourceId = "";
+      existingWorkTypeMergePlan = null;
+      workTypeMergeSubmitting = false;
       if (typeof CONTROL_MAP_VIEW.destroy === "function") CONTROL_MAP_VIEW.destroy();
       renderPreservingScroll();
       requestAnimationFrame(() => document.querySelector('[data-action="open-ra-widget"]')?.focus());
@@ -4708,7 +4882,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const riskWarn = weekInspections.filter((row) => row.status !== "완료" && !Number(row.warnings || 0)).length
         + weekMaterials.filter((row) => row.status !== ISSUE_MATERIAL_RULES.MATERIAL_STATUSES[2]).length;
       const riskOk = weekInspections.filter((row) => row.status === "완료" && !Number(row.warnings || 0)).length;
-      const riskTotal = Math.max(riskNg + riskWarn + riskOk, 1);
+      const riskTotal = riskNg + riskWarn + riskOk;
       const processStages = SHIP_WORKFLOW_STAGES.map((stage) => ({
         stage,
         info: shipStageInfo(stage),
@@ -4717,20 +4891,86 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const todayWorkRecords = workPrepRecordsForDate(today()).filter((record) => !record.deletedAt);
       const todayWorkProgress = todayWorkRecords
         .filter((record) => normalizeWorkPrepStatus(record.status) === "confirmed").length;
+      const todayWorkStatusCounts = todayWorkRecords.reduce((counts, record) => {
+        const status = normalizeWorkPrepStatus(record.status);
+        if (status === "confirmed") counts.confirmed += 1;
+        else if (status === "used") counts.completed += 1;
+        else counts.waiting += 1;
+        if (status === "unregistered") counts.unregistered += 1;
+        return counts;
+      }, { confirmed: 0, waiting: 0, completed: 0, unregistered: 0 });
+      const todayWorkMapRecords = todayWorkRecords.map((record) => {
+        const progress = workPrepSubmissionProgress(record);
+        const category = categoryById(record.categoryId);
+        const participantIds = workPrepParticipantWorkerIds(record);
+        const singleWorker = participantIds.length === 1
+          ? state.workers.find((worker) => worker.id === participantIds[0])
+          : null;
+        return {
+          ...record,
+          categoryLabel: category ? workLabel(category) : "작업지시",
+          statusLabel: WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(record.status)] || record.status || "확인 필요",
+          submitted: progress.submittedIds.length,
+          total: progress.total,
+          inspectionComplete: progress.complete,
+          requiresTripleInspection: Boolean(category?.requiresTripleInspection),
+          isNonRoutine: Boolean(category?.isNonRoutine),
+          isForeignSolo: Boolean(singleWorker?.isForeign),
+        };
+      });
+      const todayWorkCheckSummary = todayWorkMapRecords.reduce((summary, record) => {
+        const total = Math.max(0, Number(record.total || 0));
+        summary.total += total;
+        summary.submitted += Math.min(total, Math.max(0, Number(record.submitted || 0)));
+        return summary;
+      }, { submitted: 0, total: 0 });
+      const todayWorkCheckRate = todayWorkCheckSummary.total
+        ? Math.round(todayWorkCheckSummary.submitted / todayWorkCheckSummary.total * 100)
+        : 0;
+      const controlMapModel = typeof CONTROL_MAP_VIEW.buildModel === "function"
+        ? CONTROL_MAP_VIEW.buildModel({ canEdit: state.adminMode, records: todayWorkMapRecords })
+        : null;
+      const matchedWorkRows = controlMapModel
+        ? controlMapModel.locations.flatMap((location) => location.workOrders.map((record) => ({
+          ...record,
+          placeName: location.name,
+          severity: record.mapState || record.severity,
+        })))
+        : [];
+      const matchedWorkIds = new Set(matchedWorkRows.map((record) => record.id));
+      const unmatchedWorkRows = todayWorkMapRecords
+        .filter((record) => !matchedWorkIds.has(String(record.id || "")))
+        .map((record) => {
+          const total = Math.max(0, Number(record.total || 0));
+          const isSolo = total === 1;
+          const severity = record.requiresTripleInspection
+            ? "danger"
+            : isSolo
+              ? "warn"
+              : record.inspectionComplete
+                ? "ok"
+                : "idle";
+          return {
+            id: String(record.id || ""),
+            placeName: "장소 미지정",
+            shipNo: String(record.shipNo || "-").trim() || "-",
+            task: String(record.categoryLabel || "작업지시").trim() || "작업지시",
+            status: String(record.statusLabel || "확인 필요").trim() || "확인 필요",
+            warnings: Math.max(0, Number(record.warnings || 0)),
+            submitted: Math.max(0, Number(record.submitted || 0)),
+            total,
+            severity,
+            isSolo,
+            isForeignSolo: Boolean(record.isForeignSolo),
+            isTripleInspection: Boolean(record.requiresTripleInspection),
+            isNonRoutine: Boolean(record.isNonRoutine),
+          };
+        });
+      const todayWorkRows = [...matchedWorkRows, ...unmatchedWorkRows];
       const controlMapHtml = state.adminMode && typeof CONTROL_MAP_VIEW.render === "function"
         ? CONTROL_MAP_VIEW.render({
           canEdit: state.adminMode,
-          records: todayWorkRecords.map((record) => {
-            const progress = workPrepSubmissionProgress(record);
-            const category = categoryById(record.categoryId);
-            return {
-              ...record,
-              categoryLabel: category ? workLabel(category) : "작업지시",
-              statusLabel: WORK_PREP_STATUS_LABELS[normalizeWorkPrepStatus(record.status)] || record.status || "확인 필요",
-              submitted: progress.submittedIds.length,
-              total: progress.total,
-            };
-          }),
+          records: todayWorkMapRecords,
         })
         : "";
       const homeSyncStatus = state.syncMode === "online"
@@ -4771,6 +5011,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         };
       })();
       return {
+        isAdmin: state.adminMode,
+        dateLabel: today(),
         myCheck,
         todayCount,
         todayDone,
@@ -4788,6 +5030,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         processStages,
         todayWorkCount: todayWorkRecords.length,
         todayWorkProgress,
+        todayWorkStatusCounts,
+        todayWorkCheckSubmitted: todayWorkCheckSummary.submitted,
+        todayWorkCheckTotal: todayWorkCheckSummary.total,
+        todayWorkCheckRate,
+        todayWorkRows,
         controlMapHtml,
         appVersionLabel: APP_VERSION_LABEL,
         syncStatus: homeSyncStatus,
@@ -5055,6 +5302,19 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       })[cat.id] || cat.label;
     }
 
+    function categoryTripleInspectionEligible(label, isNonRoutine = false) {
+      if (isNonRoutine) return true;
+      return /(압력|co\s*[-_]?\s*2|co₂|leak|리크|누설)/i.test(String(label || ""));
+    }
+
+    function categoryInspectionBadgesHtml(category) {
+      if (!category?.requiresTripleInspection && !category?.isNonRoutine) return "";
+      return `<span class="work-type-classification-badges">
+        ${category.requiresTripleInspection ? '<em class="is-triple">3중점검</em>' : ""}
+        ${category.isNonRoutine ? '<em class="is-non-routine">비일상작업</em>' : ""}
+      </span>`;
+    }
+
     function workerInitial(name) {
       return String(name || "?").trim().slice(0, 1) || "?";
     }
@@ -5121,8 +5381,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return `<span class="worker-position-badge ${className}">${esc(label)}</span>`;
     }
 
-    function workerBadgeRow(worker) {
-      return `<span class="worker-badge-row">${workerTeamBadge(worker?.team)}${workerRoleBadge(worker)}</span>`;
+    function workerForeignBadge(worker) {
+      return worker?.isForeign ? '<span class="worker-position-badge is-foreign">외국인</span>' : "";
+    }
+
+    function workerBadgeRow(worker, options = {}) {
+      return `<span class="worker-badge-row">${workerTeamBadge(worker?.team)}${workerRoleBadge(worker)}${options.showForeign ? workerForeignBadge(worker) : ""}</span>`;
     }
 
     function renderPledgeFlowSummary({ label, title, meta = "", metaHtml = "", mobileMeta = "", action = "", stage = null, locked = false }) {
@@ -5632,6 +5896,15 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       saveWorkPrepDraft();
       if (!draft.workDate) return toast("작업일을 선택하세요.");
       if (!draft.shipNo) return toast("호선을 선택하세요.");
+      const adminPlaceRequired = state.adminMode && state.view === "manage" && state.manageTab === "workPrep";
+      if (adminPlaceRequired && (!draft.placeId || !CONTROL_MAP_VIEW.LOCATIONS?.[draft.placeId])) {
+        requestAnimationFrame(() => $("workPrepPlace")?.focus());
+        return;
+      }
+      if (adminPlaceRequired && draft.siteSurveyDone !== true) {
+        requestAnimationFrame(() => $("workPrepSiteSurvey")?.focus());
+        return;
+      }
       if (!draft.categoryId) return toast("작업 유형을 선택하세요.");
       if (!draft.leaderWorkerId) return toast("조장을 선택하세요.");
       if (tools.length && !draft.toolIds.length) return toast("공기구/준비물을 1개 이상 선택하세요.");
@@ -5783,6 +6056,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       </div>`;
     }
 
+    function workPrepPlaceLabel(record) {
+      const placeId = String(record?.placeId || "");
+      const place = CONTROL_MAP_VIEW.LOCATIONS?.[placeId];
+      return place ? `${place.name} · ${placeId}` : placeId || "장소 미지정";
+    }
+
     function renderWorkPrepTypeIcon(category, className = "work-prep-record-type-icon") {
       return `<span class="${esc(className)}" aria-hidden="true">${category ? categoryVisual(category) : lineIcon("shieldCheck")}</span>`;
     }
@@ -5823,6 +6102,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ariaLabel: `${record.shipNo || "-"} 작업지시서 수정`,
         typeIconHtml: renderWorkPrepTypeIcon(category),
         shipNo: record.shipNo || "-",
+        showPlace: false,
         categoryLabel: category ? workLabel(category) : "작업 유형 없음",
         statusLabel: WORK_PREP_STATUS_LABELS[status],
         leaderName: leader?.name || "미정",
@@ -5897,6 +6177,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const teams = workPrepTeamOptions();
       const ships = visibleWorkerShips();
       const categories = state.categories.sort(byOrder);
+      const places = Object.entries(CONTROL_MAP_VIEW.LOCATIONS || {})
+        .map(([id, place]) => ({ id, name: place.name || place.label || id }));
       const leaders = state.workers.filter(isLeaderWorker).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
       const selectedCategory = categoryById(draft.categoryId) || categories[0] || null;
       const tools = selectedCategory ? visibleToolsForCategory(selectedCategory.id) : [];
@@ -5926,6 +6208,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         teams,
         shipNo: draft.shipNo,
         ships: ships.map((ship) => ({ no: ship.no, type: ship.type })),
+        showPlaceField: state.adminMode && manageContext,
+        placeId: draft.placeId,
+        places,
+        showSiteSurveyField: state.adminMode && manageContext,
+        siteSurveyDone: draft.siteSurveyDone === true,
         categoryId: draft.categoryId,
         categories: categories.map((cat) => ({ id: cat.id, label: workLabel(cat) })),
         leaderWorkerId: draft.leaderWorkerId,
@@ -6914,11 +7201,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           searchText: normalizeSearchQuery(`${category.label} ${category.toolNature}`),
           active: category.id === selected?.id,
           iconHtml: categoryVisual(category),
+          badgesHtml: categoryInspectionBadgesHtml(category),
         })),
         selected: selected ? {
           id: selected.id,
           label: selected.label,
           meta: `${sectionsFor(selected.id).length}개 섹션 · ${activeItems(selected.id).length}개 점검 항목`,
+          badgesHtml: categoryInspectionBadgesHtml(selected),
           summaryHtml: renderWorkTypeDetail(selected, selectedToolIds, categories),
         } : null,
         searchQuery: state.workTypeSearchQuery,
@@ -6929,17 +7218,50 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
 
     function renderRiskAssessmentWidgetPanel() {
       if (!state.riskAssessmentWidgetOpen) return "";
+      const target = workTypeMergeTarget();
+      const sources = state.categories.filter((row) => row.id !== target?.id);
       return `<section class="ra-widget-shell" role="dialog" aria-modal="true" aria-labelledby="raWidgetTitle">
         <header class="ra-widget-shell__head">
           <div>
             <span>관리자 도구</span>
-            <h2 id="raWidgetTitle">위험성평가 엑셀 가져오기</h2>
-            <p>파일은 서버로 전송하지 않고 현재 기기에서만 분석합니다.</p>
+            <h2 id="raWidgetTitle">표준작업지도서/위험성평가 관리</h2>
+            <p>파일은 현재 기기에서 분석하고, 확인한 항목만 선택한 작업 유형에 병합합니다.</p>
           </div>
           <button class="btn-light ra-widget-shell__close" data-action="close-ra-widget" type="button" aria-label="위험성평가 도구 닫기">닫기</button>
         </header>
-        <div class="ra-widget-shell__host" id="hisafeRaWidgetHost" aria-label="위험성평가 점검표 생성 도구">
-          <div class="ra-widget-shell__loading" role="status">위험성평가 도구를 불러오는 중입니다.</div>
+        <div class="ra-widget-shell__body">
+          <aside class="ra-merge-panel" aria-label="작업 유형 병합 설정">
+            <div class="ra-merge-target">
+              <span>현재 병합 대상</span>
+              <strong id="raMergeTarget">${esc(target?.label || "선택된 작업 유형 없음")}</strong>
+              <p>기존 섹션과 점검 항목은 유지하며, 같은 문구의 항목은 추가하지 않습니다.</p>
+            </div>
+            <section class="ra-merge-card">
+              <div>
+                <span class="ra-merge-card__step">01</span>
+                <h3>RA 엑셀 결과 병합</h3>
+              </div>
+              <p id="raMergeSummary" aria-live="polite">엑셀을 업로드하면 추가할 섹션과 점검 항목을 미리 계산합니다.</p>
+              <button class="btn" id="applyRaMergeButton" data-action="apply-ra-merge" disabled type="button">현재 작업 유형에 병합</button>
+            </section>
+            <section class="ra-merge-card">
+              <div>
+                <span class="ra-merge-card__step">02</span>
+                <h3>기존 작업 유형 불러오기</h3>
+              </div>
+              <label for="existingWorkTypeMergeSource">불러올 작업 유형</label>
+              <select class="select" id="existingWorkTypeMergeSource" data-existing-work-type-source ${sources.length ? "" : "disabled"}>
+                <option value="">작업 유형 선택</option>
+                ${sources.map((source) => `<option value="${esc(source.id)}">${esc(source.label)} · 섹션 ${sectionsFor(source.id).length}개 · 항목 ${activeItems(source.id).length}개</option>`).join("")}
+              </select>
+              <button class="btn-light" data-action="preview-existing-work-type-merge" ${sources.length ? "" : "disabled"} type="button">병합 내용 미리보기</button>
+              <p id="existingWorkTypeMergeSummary" aria-live="polite">병합할 내용을 먼저 불러오세요.</p>
+              <button class="btn" id="applyExistingWorkTypeMergeButton" data-action="apply-existing-work-type-merge" disabled type="button">현재 작업 유형에 병합</button>
+            </section>
+          </aside>
+          <div class="ra-widget-shell__host" id="hisafeRaWidgetHost" aria-label="위험성평가 점검표 생성 도구">
+            <div class="ra-widget-shell__loading" role="status">위험성평가 도구를 불러오는 중입니다.</div>
+          </div>
         </div>
       </section>`;
     }
@@ -6971,7 +7293,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         showHeader: false,
       })}`;
       if (!state.adminMode) return menu;
-      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><div><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></div><button class="btn ra-widget-launch" data-action="open-ra-widget" type="button">RA 엑셀로 추가</button></header>${renderWorkTypesV4()}</section>`;
+      return `${menu}<section class="quick-menu-v4__admin-work-types" aria-labelledby="quickMenuWorkTypesHeading"><header><div><h2 id="quickMenuWorkTypesHeading">작업 유형 관리</h2><p>조회 상태에서 유형을 선택한 뒤 필요한 항목만 명시적으로 수정합니다.</p></div><button class="btn ra-widget-launch" data-action="open-ra-widget" type="button">표준작업지도서/RA로 추가</button></header>${renderWorkTypesV4()}</section>`;
     }
 
     function renderItems() {
@@ -7160,6 +7482,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         progressDone: submissionProgress.done,
         progressTotal: submissionProgress.total || workerCount + 1,
         toolCount,
+        placeLabel: workPrepPlaceLabel(record),
+        siteSurveyDone: record.siteSurveyDone === true,
         team: record.team || "-",
       });
     }
@@ -8036,9 +8360,11 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         ariaLabel: `${record.shipNo || "-"} 작업지시서 상세 보기`,
         typeIconHtml: renderWorkPrepTypeIcon(category, "work-prep-admin-type-icon"),
         shipNo: record.shipNo || "-",
+        placeLabel: workPrepPlaceLabel(record),
+        siteSurveyDone: record.siteSurveyDone === true,
         categoryLabel: category ? workLabel(category) : "작업 유형 없음",
         leaderName: leader?.name || "미정",
-        leaderBadgeHtml: workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION }),
+        leaderBadgeHtml: workerBadgeRow(leader || { team: record.team, position: LEADER_WORKER_POSITION }, { showForeign: true }),
         participantNames: workPrepParticipantNameSummary(record),
         progressDone: progressInfo.done,
         progressTotal: progressInfo.total || participantCount,
@@ -8119,7 +8445,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const detailModel = {
         shipNo: record.shipNo || "-",
         categoryLabel: category ? workLabel(category) : "작업 유형 없음",
-        metaLine: [record.team || "-", shortDate(record.workDate || record.createdAt), workPrepAppearanceMeta(record)].filter(Boolean).join(" · "),
+        metaLine: [
+          workPrepPlaceLabel(record),
+          record.siteSurveyDone === true ? "현장 사전 답사 완료" : "현장 사전 답사 미진행",
+          record.team || "-",
+          shortDate(record.workDate || record.createdAt),
+          workPrepAppearanceMeta(record),
+        ].filter(Boolean).join(" · "),
         statusChipHtml: statusChip(statusLabel),
         progressDone: progressInfo.done,
         progressTotal: total || 0,
@@ -8185,13 +8517,13 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
             name: worker.name,
             teamLine: [worker.team, workerDisplayPosition(worker)].filter(Boolean).join(" · "),
             active: worker.id === selected?.id,
-            badgesHtml: `${workerTeamBadge(worker.team)}${workerRoleBadge(worker)}${workerPushSubscriptionBadgeHtml(worker.id)}`,
+            badgesHtml: `${workerTeamBadge(worker.team)}${workerRoleBadge(worker)}${workerForeignBadge(worker)}${workerPushSubscriptionBadgeHtml(worker.id)}`,
           })),
           selected: selected ? {
             id: selected.id,
             name: selected.name,
             teamLine: [selected.team, workerDisplayPosition(selected)].filter(Boolean).join(" · "),
-            summaryHtml: `<dl class="manage-tabs-v4__facts"><div><dt>팀</dt><dd>${esc(selected.team || "미지정")}</dd></div><div><dt>역할</dt><dd>${esc(workerDisplayPosition(selected) || "미지정")}</dd></div><div><dt>알림 대상</dt><dd>${selected.unsafePushTarget ? "설정" : "미설정"}</dd></div><div><dt>푸시 구독</dt><dd>${esc(String(workerPushSubscriptionStatusFor(selected.id).subscriptionCount || 0))}대</dd></div></dl>`,
+            summaryHtml: `<dl class="manage-tabs-v4__facts"><div><dt>팀</dt><dd>${esc(selected.team || "미지정")}</dd></div><div><dt>역할</dt><dd>${esc(workerDisplayPosition(selected) || "미지정")}</dd></div><div><dt>작업자 구분</dt><dd>${selected.isForeign ? "외국인" : "내국인"}</dd></div><div><dt>알림 대상</dt><dd>${selected.unsafePushTarget ? "설정" : "미설정"}</dd></div><div><dt>푸시 구독</dt><dd>${esc(String(workerPushSubscriptionStatusFor(selected.id).subscriptionCount || 0))}대</dd></div></dl>`,
             editPanelHtml: editing ? renderWorkerEditPanel(selected) : "",
             devices,
           } : null,
@@ -8217,7 +8549,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         teamLine: worker.team || "팀 성격 미지정",
         expanded,
         canEditPush: Boolean(state.adminMode),
-        badgesHtml: `${workerTeamBadge(worker.team)}\n          ${workerRoleBadge(worker)}\n          ${workerPushSubscriptionBadgeHtml(worker.id)}`,
+        badgesHtml: `${workerTeamBadge(worker.team)}\n          ${workerRoleBadge(worker)}\n          ${workerForeignBadge(worker)}\n          ${workerPushSubscriptionBadgeHtml(worker.id)}`,
         editPanelHtml: expanded ? renderWorkerEditPanel(worker) : "",
       };
     }
@@ -8444,6 +8776,10 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <label class="check-row worker-push-target-field" for="${esc(workerFieldId(worker, "unsafePushTarget"))}">
             <input type="checkbox" id="${esc(workerFieldId(worker, "unsafePushTarget"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="unsafePushTarget" ${worker.unsafePushTarget ? "checked" : ""} />
             <span>불안전·누락자재 알림 대상</span>
+          </label>
+          <label class="check-row" for="${esc(workerFieldId(worker, "isForeign"))}">
+            <input type="checkbox" id="${esc(workerFieldId(worker, "isForeign"))}" data-worker-edit="${esc(worker.id)}" data-worker-edit-field="isForeign" ${worker.isForeign ? "checked" : ""} />
+            <span>외국인 작업자</span>
           </label>
         </div>
         <p class="small muted worker-security-note">사번/비밀번호 변경은 보안 전환 중 서버 관리 경로로 이동합니다.</p>
@@ -10074,6 +10410,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
           <div>
             <span class="work-type-detail-kicker">작업 유형</span>
             <h2>${esc(cat.label)}</h2>
+            ${categoryInspectionBadgesHtml(cat)}
             <p>${sections.length}개 섹션 · ${items.length}개 점검 항목 · ${esc(normalizeToolNature(cat.toolNature))}</p>
           </div>
         </header>
@@ -10197,6 +10534,16 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         <button class="toggle ${cat.requireToolCheck !== false ? "active" : ""}" data-toggle-tool-check="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button" aria-pressed="${cat.requireToolCheck !== false ? "true" : "false"}">
           <span class="toggle-track"></span><span>공기구 체크 필수 ${cat.requireToolCheck !== false ? "ON" : "OFF"}</span>
         </button>
+        <div class="work-type-classification-editor" aria-label="점검 분류">
+          <label class="check-row" for="editCategoryTriple_${esc(cat.id)}">
+            <input type="checkbox" id="editCategoryTriple_${esc(cat.id)}" ${cat.requiresTripleInspection ? "checked" : ""} ${state.adminMode ? "" : "disabled"} />
+            <span>3중점검 대상 <small>압력·CO2 system·Leak test 또는 비일상 작업만 지정</small></span>
+          </label>
+          <label class="check-row" for="editCategoryNonRoutine_${esc(cat.id)}">
+            <input type="checkbox" id="editCategoryNonRoutine_${esc(cat.id)}" ${cat.isNonRoutine ? "checked" : ""} ${state.adminMode ? "" : "disabled"} />
+            <span>비일상작업 <small>선택하면 3중점검 대상으로 함께 저장</small></span>
+          </label>
+        </div>
         ${renderPictogramPicker(cat.icon || "", `editCategoryIcon_${cat.id}`)}
         <div class="item-actions manage-actions">
           <button class="btn" data-apply-category-icon="${esc(cat.id)}" ${state.adminMode ? "" : "disabled"} type="button">선택한 아이콘 적용</button>
@@ -11052,6 +11399,9 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       return runActionMap({
         "open-ra-widget": openRiskAssessmentWidget,
         "close-ra-widget": closeRiskAssessmentWidget,
+        "preview-existing-work-type-merge": previewExistingWorkTypeMerge,
+        "apply-ra-merge": () => applyWorkTypeChecklistMerge("ra"),
+        "apply-existing-work-type-merge": () => applyWorkTypeChecklistMerge("existing"),
         "retry-ships": () => pullRemote({ force: true, keys: ["ships"], reason: "ships-v4-retry" }),
         "retry-history": () => pullRemote({ force: true, keys: ["inspections", "inspectionItems"], reason: "history-v4-retry" }),
         "select-ship-v4": () => openShipsV4Detail(event.target.closest("[data-ship-id]")?.dataset.shipId || ""),
@@ -12396,6 +12746,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
     });
 
     document.addEventListener("change", (event) => {
+      if (event.target.matches("[data-existing-work-type-source]")) {
+        existingWorkTypeMergeSourceId = event.target.value || "";
+        existingWorkTypeMergePlan = null;
+        updateRiskAssessmentMergeControls();
+        return;
+      }
       if (event.target.id === "pledgeSignatureText") {
         state.mobileSafetyPledgeExpanded = false;
         renderPreservingScroll();
@@ -12514,7 +12870,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         return;
       }
       if (event.target.matches("[data-work-prep-field]")) {
-        updateWorkPrepDraftField(event.target.dataset.workPrepField, event.target.value);
+        const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+        updateWorkPrepDraftField(event.target.dataset.workPrepField, value);
         return;
       }
       if (event.target.matches("[data-work-prep-worker]")) {
@@ -13081,11 +13438,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const team = normalizeWorkerTeam($("workerTeam")?.value || "");
       const position = normalizeWorkerPosition($("workerPosition")?.value || "");
       const employeeNo = normalizeEmployeeNo($("workerEmployeeNo")?.value || "");
+      const isForeign = Boolean($("workerIsForeign")?.checked);
       if (!name) return toast("작업자 이름을 입력하세요.");
       if (!team) return toast("팀 성격을 선택하세요.");
       if (!/^[A-Za-z0-9_-]{4,40}$/.test(employeeNo)) return toast("사번은 영문·숫자·밑줄·하이픈으로 4자 이상 입력하세요.");
 
-      const requestFingerprint = JSON.stringify([name, team, position, employeeNo]);
+      const requestFingerprint = JSON.stringify([name, team, position, employeeNo, isForeign]);
       const requestId = state.workerCreateRequest?.fingerprint === requestFingerprint
         ? state.workerCreateRequest.id
         : uid("worker");
@@ -13098,7 +13456,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       }
       try {
         const result = await invokeAdminMutation("createWorker", {
-          worker: { id: requestId, name, team, position, employeeNo },
+          worker: { id: requestId, name, team, position, employeeNo, isForeign },
         });
         if (!result.worker?.id) throw new Error("worker_create_response_invalid");
         const existingIndex = state.workers.findIndex((row) => row.id === result.worker.id);
@@ -13217,6 +13575,7 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       worker.name = cleanName;
       worker.team = cleanTeam;
       worker.position = cleanPosition;
+      worker.isForeign = workerEditFieldChecked(id, "isForeign");
       worker.unsafePushTarget = workerEditFieldChecked(id, "unsafePushTarget");
       worker.updatedAt = serverNow().toISOString();
       if (state.workerSession?.workerId === worker.id) {
@@ -14244,7 +14603,12 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
       const icon = normalizeIconKey($(`editCategoryIcon_${id}`)?.value.trim() || cat.icon || "blockAssembly");
       const color = selectedEditCategoryColor(id, cat.color);
       const toolNature = normalizeToolNature($(`editCategoryNature_${id}`)?.value || cat.toolNature);
+      const isNonRoutine = Boolean($(`editCategoryNonRoutine_${id}`)?.checked);
+      const requiresTripleInspection = Boolean($(`editCategoryTriple_${id}`)?.checked) || isNonRoutine;
       if (!label) return toast("작업 유형명을 입력하세요.");
+      if (requiresTripleInspection && !categoryTripleInspectionEligible(label, isNonRoutine)) {
+        return toast("3중점검은 압력·CO2 system·Leak test 또는 비일상 작업에만 지정할 수 있습니다.");
+      }
       const duplicate = state.categories.some((row) => row.id !== id && row.label === label);
       if (duplicate) return toast("같은 이름의 작업 유형이 이미 있습니다.");
       const iconChanged = normalizeIconKey(cat.icon) !== icon;
@@ -14256,6 +14620,8 @@ const STORAGE_PREFIX = "shipyardSafetyV1.";
         icon,
         color,
         toolNature,
+        requiresTripleInspection,
+        isNonRoutine,
       } : row);
       state.editCategoryId = null;
       if (!(await persistAndSync("categories"))) {

@@ -51,12 +51,25 @@
   function renderDashboardView(model = {}, deps = {}) {
     const navIcon = typeof deps.navIcon === "function" ? deps.navIcon : defaultNavIcon;
     const {
+      isAdmin = false,
+      dateLabel = "",
       todayCount = 0,
       todayPending = 0,
       unsafeCount = 0,
       openMaterials = 0,
       todayWorkCount = 0,
       todayWorkProgress = 0,
+      todayWorkStatusCounts = {},
+      todayWorkCheckSubmitted = 0,
+      todayWorkCheckTotal = 0,
+      todayWorkCheckRate = 0,
+      todayWorkRows = [],
+      riskNg = 0,
+      riskWarn = 0,
+      riskOk = 0,
+      riskTotal = 0,
+      syncStatus = "online",
+      syncLabel = "",
       appVersionLabel = "",
       controlMapHtml = "",
     } = model;
@@ -75,64 +88,139 @@
           : todayCount
             ? "오늘 현장 전체 기준"
             : "등록된 오늘 점검이 없습니다";
-    return `<main class="home-v4" aria-labelledby="homeV4Title">
+    const workCounts = {
+      confirmed: Number(todayWorkStatusCounts.confirmed ?? todayWorkProgress ?? 0),
+      waiting: Number(todayWorkStatusCounts.waiting ?? Math.max(Number(todayWorkCount || 0) - Number(todayWorkProgress || 0), 0)),
+      completed: Number(todayWorkStatusCounts.completed || 0),
+      unregistered: Number(todayWorkStatusCounts.unregistered || 0),
+    };
+    const workRows = Array.isArray(todayWorkRows) ? todayWorkRows : [];
+    const priorityRows = workRows
+      .filter((row) => ["danger", "warn"].includes(row.severity))
+      .sort((a, b) => {
+        const severityRank = { danger: 0, warn: 1 };
+        const rankDelta = (severityRank[a.severity] ?? 2) - (severityRank[b.severity] ?? 2);
+        if (rankDelta) return rankDelta;
+        return Math.max(0, Number(b.total || 0) - Number(b.submitted || 0))
+          - Math.max(0, Number(a.total || 0) - Number(a.submitted || 0));
+      })
+      .slice(0, 3);
+    const signalTotal = Math.max(0, Number(riskTotal || (Number(riskNg || 0) + Number(riskWarn || 0) + Number(riskOk || 0))));
+    const signalPercent = (value) => signalTotal ? Math.round(Number(value || 0) / signalTotal * 100) : 0;
+    const riskNgPercent = signalPercent(riskNg);
+    const riskWarnPercent = signalPercent(riskWarn);
+    const riskOkPercent = signalPercent(riskOk);
+    const displayDate = dateLabel ? String(dateLabel).replace(/-/g, ".") : "";
+    const riskAssessmentDefined = Boolean(model.riskAssessmentDefined);
+    const riskAssessmentConfirmed = Math.max(0, Number(model.riskAssessmentConfirmed || 0));
+    const riskAssessmentTotal = Math.max(0, Number(model.riskAssessmentTotal || 0));
+    const riskAssessmentRate = riskAssessmentDefined && riskAssessmentTotal
+      ? Math.round(riskAssessmentConfirmed / riskAssessmentTotal * 100)
+      : 0;
+    const shipLabel = (value) => {
+      const normalized = String(value || "-").trim();
+      return normalized === "-" || /^H/i.test(normalized) ? normalized : `H${normalized}`;
+    };
+    const priorityHtml = priorityRows.length
+      ? priorityRows.map((row, index) => {
+        const total = Math.max(0, Number(row.total || 0));
+        const submitted = Math.min(total, Math.max(0, Number(row.submitted || 0)));
+        const missing = Math.max(total - submitted, 0);
+        const isDanger = row.severity === "danger";
+        const reason = isDanger
+          ? row.isNonRoutine ? "3중점검 · 비일상작업" : "3중점검 대상"
+          : row.isForeignSolo ? "외국인 1인 작업" : "1인 작업";
+        return `<div class="analytics-priority-row ${isDanger ? "is-high" : "is-medium"}" role="row">
+          <span class="analytics-priority-rank">${index + 1}</span>
+          <span class="analytics-priority-copy"><strong>${esc(row.placeName || "장소 미지정")} · ${esc(row.task || "작업지시")}</strong><small>${esc(shipLabel(row.shipNo))} · ${esc(reason)}</small></span>
+          <strong class="analytics-priority-count">${total ? `${submitted}/${total}명` : esc(row.status || "확인 필요")}</strong>
+          <span class="analytics-priority-status ${isDanger ? "is-danger" : "is-warn"}">${isDanger ? "3중점검" : "1인 작업"}</span>
+        </div>`;
+      }).join("")
+      : `<div class="home-dashboard__empty">오늘 조치가 필요한 작업이 없습니다.</div>`;
+    const workTableHtml = workRows.length
+      ? workRows.slice(0, 5).map((row) => {
+        const total = Math.max(0, Number(row.total || 0));
+        const submitted = Math.min(total, Math.max(0, Number(row.submitted || 0)));
+        const rate = total ? Math.round(submitted / total * 100) : 0;
+        const complete = total > 0 && submitted >= total;
+        const danger = row.severity === "danger";
+        const solo = row.severity === "warn";
+        return `<tr>
+          <td><strong>${esc(shipLabel(row.shipNo))} · ${esc(row.task || "작업지시")}</strong></td>
+          <td>${esc(row.placeName || "장소 미지정")}</td>
+          <td>${submitted}/${total}명</td>
+          <td><span class="home-dashboard__progress ${complete ? "" : "is-low"}"><i style="--rate:${rate}%"></i>${rate}%</span></td>
+          <td><span class="home-dashboard__chip ${danger ? "is-danger" : solo ? "is-warn" : complete ? "is-ok" : "is-idle"}">${danger ? "3중점검" : solo ? "1인 작업" : complete ? "점검 완료" : "점검 전"}</span></td>
+        </tr>`;
+      }).join("")
+      : `<tr><td colspan="5" class="home-dashboard__table-empty">오늘 등록된 작업지시서가 없습니다.</td></tr>`;
+    const adminSections = isAdmin ? `
+      ${controlMapHtml}
+
+      <section class="analytics-priority home-dashboard__priority" aria-labelledby="homeDashboardPriorityTitle">
+        <div class="analytics-v4-heading"><div><h2 id="homeDashboardPriorityTitle">조치가 필요한 작업부터</h2></div><strong>위험 ${esc(riskNg)}건 · 주의 ${esc(riskWarn)}건</strong></div>
+        <div class="analytics-priority-layout">
+          <div class="analytics-priority-table" role="table" aria-label="오늘 조치 우선순위">
+            <div class="analytics-priority-row is-head" role="row"><span>순위</span><span>대상</span><span>현재</span><span>판단</span></div>
+            ${priorityHtml}
+          </div>
+          <section class="analytics-risk-distribution" aria-labelledby="homeDashboardSignalTitle">
+            <div class="analytics-risk-heading"><h3 id="homeDashboardSignalTitle">최근 7일 안전 신호</h3><span>${signalTotal}건</span></div>
+            <div class="analytics-risk-body">
+              <div class="analytics-risk-donut${signalTotal ? "" : " is-empty"}" style="--risk-ng:${riskNgPercent};--risk-warn:${riskWarnPercent}" role="img" aria-label="${signalTotal ? `위험 ${riskNgPercent}%, 주의 ${riskWarnPercent}%, 정상 ${riskOkPercent}%` : "최근 7일 안전 신호 없음"}"><span><strong>${signalTotal}</strong>총 신호</span></div>
+              <dl class="analytics-risk-legend"><div class="is-danger"><dt>위험 · NG</dt><dd>${esc(riskNg)}건 · ${riskNgPercent}%</dd></div><div class="is-warn"><dt>주의 · Warn</dt><dd>${esc(riskWarn)}건 · ${riskWarnPercent}%</dd></div><div class="is-ok"><dt>정상 · OK</dt><dd>${esc(riskOk)}건 · ${riskOkPercent}%</dd></div></dl>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <div class="home-dashboard__status-board">
+        <section class="home-dashboard__status-panel" aria-labelledby="homeDashboardWorkTitle">
+          <header class="home-dashboard__status-head"><div><h2 id="homeDashboardWorkTitle">작업지시서 실행 확인 현황</h2><p>작업지시서별 점검 대상과 완료 인원</p></div><span>${Math.max(Number(todayWorkCount || 0) - workCounts.completed, 0)}건 진행 중</span></header>
+          <div class="home-dashboard__table-wrap"><table class="home-dashboard__table"><thead><tr><th>호선·작업</th><th>위치</th><th>점검 인원</th><th>이행률</th><th>상태</th></tr></thead><tbody>${workTableHtml}</tbody></table></div>
+        </section>
+
+        <section class="home-dashboard__status-panel" aria-labelledby="homeDashboardRaTitle">
+          <header class="home-dashboard__status-head"><div><h2 id="homeDashboardRaTitle">위험성평가 실행 확인 현황</h2><p>적용 작업과 확인 여부를 분리해 표시</p></div><span>${riskAssessmentDefined ? `미확인 ${Math.max(riskAssessmentTotal - riskAssessmentConfirmed, 0)}건` : "기준 정의 필요"}</span></header>
+          <div class="home-dashboard__ra-state">
+            <strong>${riskAssessmentDefined ? `${riskAssessmentConfirmed}/${riskAssessmentTotal}건 · ${riskAssessmentRate}%` : "—"}</strong>
+            <p>${riskAssessmentDefined ? "작업지시별 위험성평가 실행 확인 이벤트 기준" : "현재 앱에는 작업지시별 위험성평가 확인 이벤트가 없습니다. 적용 전 확인 시점과 분모를 먼저 정의해야 합니다."}</p>
+          </div>
+        </section>
+      </div>` : "";
+    return `<main class="home-v4 home-dashboard" aria-labelledby="homeV4Title">
       <header class="home-v4__heading">
         <div>
-          <h1 id="homeV4Title">오늘의 안전 운영</h1>
-          <p>한 화면에는 오늘 해야 할 일만</p>
+          <h1 id="homeV4Title">안전 운영 대시보드</h1>
+          <p>오늘 작업의 이행 상태와 위험 신호를 같은 기준 시점으로 확인합니다.</p>
         </div>
         ${appVersionLabel ? `<span class="home-v4__version">${esc(appVersionLabel)}</span>` : ""}
       </header>
 
-      ${controlMapHtml}
-
-      <section class="home-v4__grid" aria-label="오늘의 안전 업무">
-        <article class="home-v4__card">
-          <div class="home-v4__card-top">
-            <span class="home-v4__icon is-teal">${navIcon("noteCheck")}</span>
-          </div>
-          <h2>지금 해야 할 일</h2>
-          <p class="home-v4__metric">미점검 <strong>${esc(checkPending)}</strong>건</p>
-          <small>${esc(checkDetail)}</small>
-          <button class="home-v4__action is-teal" data-view="${checkAction.view}" type="button" ${checkAction.disabled ? `disabled title="${esc(myCheck?.lockMessage || "점검을 시작할 수 없습니다")}"` : ""}>${navIcon("noteCheck")}<span>${checkAction.label}</span></button>
-        </article>
-
-        <article class="home-v4__card">
-          <div class="home-v4__card-top">
-            <span class="home-v4__icon is-orange">${navIcon("warning")}</span>
-          </div>
-          <h2>즉시 확인</h2>
-          <div class="home-v4__dual-metric">
-            <span>불안전요소 <strong>${esc(unsafeCount)}</strong>건</span>
-            <span>자재누락 <strong>${esc(openMaterials)}</strong>건</span>
-          </div>
-          <button class="home-v4__action is-orange" data-action="open-latest-intake" type="button">${navIcon("warning")}<span>접수 처리</span></button>
-        </article>
-
-        <article class="home-v4__card">
-          <div class="home-v4__card-top">
-            <span class="home-v4__icon is-navy">${navIcon("ship")}</span>
-          </div>
-          <h2>오늘 작업</h2>
-          <div class="home-v4__work-metric">
-            <span>작업지시 <strong>${esc(todayWorkCount)}</strong>건</span>
-            <i aria-hidden="true"></i>
-            <span>진행 <strong>${esc(todayWorkProgress)}</strong>건</span>
-          </div>
-          <button class="home-v4__action is-navy" data-view="manage" data-manage-center-card="operations" type="button">${navIcon("ship")}<span>작업지시 보기</span></button>
-        </article>
-
-        <article class="home-v4__card">
-          <div class="home-v4__card-top">
-            <span class="home-v4__icon is-teal-soft">${navIcon("board")}</span>
-          </div>
-          <h2>현장 신고</h2>
-          <div class="home-v4__report-actions">
-            <button data-view="unsafe" type="button">${navIcon("warning")}<span>불안전요소 등록</span></button>
-            <button data-view="materials" type="button">${navIcon("board")}<span>자재누락 등록</span></button>
-          </div>
-        </article>
+      <section class="home-dashboard__context" aria-label="대시보드 기준 정보">
+        <div><span>기준 날짜 <strong>${displayDate ? `${esc(displayDate)} · 오늘` : "오늘"}</strong></span><span>범위 <strong>현장 전체</strong></span></div>
+        <span class="home-dashboard__sync is-${esc(syncStatus)}">${esc(syncLabel || "동기화 상태 확인 중")}</span>
       </section>
+
+      <section class="home-dashboard__kpis" aria-labelledby="homeDashboardKpiTitle">
+        <div class="home-dashboard__section-heading"><div><h2 id="homeDashboardKpiTitle">오늘 핵심 지표</h2><p>운영 용어와 분모를 함께 표시합니다.</p></div></div>
+        <div class="home-dashboard__kpi-grid">
+          <article class="home-dashboard__kpi"><span>작업지시서</span><strong>${esc(todayWorkCount)}<small>건</small></strong><small>확정 ${workCounts.confirmed} · 점검 전 ${workCounts.waiting} · 완료 ${workCounts.completed}</small>${workCounts.unregistered ? `<em>미등록 ${workCounts.unregistered}건 우선 확인</em>` : ""}</article>
+          <article class="home-dashboard__kpi"><span>작업 전 점검 실행 확인</span><strong>${esc(todayWorkCheckSubmitted)}/${esc(todayWorkCheckTotal)}<small>명 · ${esc(todayWorkCheckRate)}%</small></strong><small>점검 대상 인원 기준 · ${esc(checkDetail)}</small></article>
+          <article class="home-dashboard__kpi"><span>위험성평가 실행 확인</span><strong>${riskAssessmentDefined ? `${riskAssessmentConfirmed}/${riskAssessmentTotal}` : "—"}${riskAssessmentDefined ? `<small>건 · ${riskAssessmentRate}%</small>` : ""}</strong><small>${riskAssessmentDefined ? "작업지시별 확인 이벤트 기준" : "확인 이벤트와 분모 정의 필요"}</small></article>
+          <article class="home-dashboard__kpi"><span>안전 신호 · 최근 7일</span><div class="home-dashboard__signals"><b>${esc(riskNg)}<small>위험</small></b><b>${esc(riskWarn)}<small>주의</small></b></div><small>위험 위치부터 우선 확인</small><button class="home-dashboard__kpi-action" data-action="open-latest-intake" type="button">접수 처리</button></article>
+        </div>
+      </section>
+
+      <nav class="home-dashboard__shortcuts" aria-label="오늘 빠른 업무">
+        <button data-view="${checkAction.view}" type="button" ${checkAction.disabled ? `disabled title="${esc(myCheck?.lockMessage || "점검을 시작할 수 없습니다")}"` : ""}>${navIcon("noteCheck")}<span>${esc(checkAction.label)} · 미점검 ${esc(checkPending)}건</span></button>
+        <button data-view="manage" data-manage-center-card="operations" type="button">${navIcon("ship")}<span>작업지시서 보기</span></button>
+        <button data-view="unsafe" type="button">${navIcon("warning")}<span>불안전요소 등록 · 접수 ${esc(unsafeCount)}건</span></button>
+        <button data-view="materials" type="button">${navIcon("board")}<span>자재누락 등록 · 미완료 ${esc(openMaterials)}건</span></button>
+      </nav>
+
+      ${adminSections}
     </main>`;
   }
 

@@ -212,6 +212,10 @@
             <label for="workerEmployeeNo">최초 사번</label>
             <input id="workerEmployeeNo" class="input" type="password" autocomplete="new-password" inputmode="text" maxlength="40" placeholder="영문·숫자 4자 이상" />
           </div>
+          <label class="check-row" for="workerIsForeign">
+            <input id="workerIsForeign" type="checkbox" />
+            <span>외국인 작업자</span>
+          </label>
           <button class="btn" data-action="add-worker" type="button">신입사원 등록</button>
         </div>
         <div class="section-title">작업자 목록</div>
@@ -462,7 +466,7 @@
 
   // 점검: 작업지시서 카드 (읽기 전용 마크업)
   // model: { status, recordId, ariaLabel, typeIconHtml, shipNo, categoryLabel, statusLabel, leaderName,
-  //          leaderBadgeHtml, workerCount, progressDone, progressTotal, toolCount, team, summaryKind,
+  //          leaderBadgeHtml, workerCount, progressDone, progressTotal, toolCount, team, showPlace, summaryKind,
   //          pendingNames: [string], canDelete, deleteDisabled, deleteAriaLabel, buttonLight,
   //          buttonDisabled, buttonHelp, buttonAction, buttonLabel }
   function renderWorkPrepCardView(model = {}) {
@@ -496,6 +500,7 @@
           <span>같이 ${model.workerCount}명</span>
           <span class="work-prep-record-progress">점검 ${model.progressDone}/${model.progressTotal}명</span>
           <span>공기구 ${model.toolCount}개</span>
+          ${model.showPlace ? `<span>장소 ${esc(model.placeLabel || "장소 미지정")}</span>` : ""}
           <span>${esc(model.team)}</span>
         </div>
         <div class="work-prep-record-actions">
@@ -510,16 +515,19 @@
 
   // 점검/관리: 작업지시서 등록 화면 (읽기 전용 마크업)
   // model: { manageContext, activeStatus, statusSteps: [{ status, label }], appearanceBadgeHtml,
-  //          workDate, team, teams: [string], shipNo, ships: [{ no, type }], categoryId,
+  //          workDate, team, teams: [string], shipNo, ships: [{ no, type }], showPlaceField, placeId, places,
   //          categories: [{ id, label }], leaderWorkerId, leaders: [{ id, name, team }], teamLabel,
   //          workerChoices: [{ id, name, checked, badgeHtml }], otherWorkersOpen, otherSelectedCount,
   //          otherWorkerChoices: [{ id, name, checked, badgeHtml }], toolCategoryLabel,
   //          tools: [{ id, name, natureLabel, checked }] }
   function renderWorkPrepRegisterView(model = {}) {
     const manageContext = Boolean(model.manageContext);
+    const issueRequirementsEnabled = Boolean(model.showPlaceField || model.showSiteSurveyField);
+    const issueBlocked = issueRequirementsEnabled && (!model.placeId || model.siteSurveyDone !== true);
     const statusSteps = Array.isArray(model.statusSteps) ? model.statusSteps : [];
     const teams = Array.isArray(model.teams) ? model.teams : [];
     const ships = Array.isArray(model.ships) ? model.ships : [];
+    const places = Array.isArray(model.places) ? model.places : [];
     const categories = Array.isArray(model.categories) ? model.categories : [];
     const leaders = Array.isArray(model.leaders) ? model.leaders : [];
     const workerChoices = Array.isArray(model.workerChoices) ? model.workerChoices : [];
@@ -550,6 +558,13 @@
               ${ships.map((ship) => `<option value="${esc(ship.no)}" ${ship.no === model.shipNo ? "selected" : ""}>${esc(ship.no)}${ship.type ? ` · ${esc(ship.type)}` : ""}</option>`).join("")}
             </select>
           </div>
+          ${model.showPlaceField ? `<div class="field material-flow-field">
+            <label for="workPrepPlace">작업 장소 <small class="work-prep-required-mark">필수</small></label>
+            <select class="select" id="workPrepPlace" data-work-prep-field="placeId" required>
+              <option value="">도크·안벽 선택</option>
+              ${places.map((place) => `<option value="${esc(place.id)}" ${place.id === model.placeId ? "selected" : ""}>${esc(place.name)} · ${esc(place.id)}</option>`).join("")}
+            </select>
+          </div>` : ""}
           <div class="field material-flow-field">
             <label for="workPrepCategory">작업 유형</label>
             <select class="select" id="workPrepCategory" data-work-prep-field="categoryId">
@@ -557,6 +572,10 @@
             </select>
           </div>
         </div>
+        ${model.showSiteSurveyField ? `<label class="work-prep-site-survey ${model.siteSurveyDone ? "is-complete" : "is-required"}" for="workPrepSiteSurvey">
+          <input id="workPrepSiteSurvey" data-work-prep-field="siteSurveyDone" type="checkbox" aria-describedby="workPrepSiteSurveyWarning" required ${model.siteSurveyDone ? "checked" : ""} />
+          <span><strong>현장 사전 답사 완료</strong><small>작업 시작 전 현장 위험요인과 작업 위치를 직접 확인했습니다.</small></span>
+        </label>${model.siteSurveyDone ? "" : `<p class="work-prep-site-survey-warning" id="workPrepSiteSurveyWarning" aria-live="polite">현장 사전 답사 미진행시 작업지시서가 발행 되지 않습니다! 현장 사전 답사 후 지시서 발행 부탁드립니다</p>`}` : ""}
       </section>
       <section class="work-prep-register-card">
         <div class="section-title">조장 / 같이 작업자</div>
@@ -603,7 +622,7 @@
       </section>`;
 
     const footer = `<button class="btn-light material-flow-secondary" data-action="close-work-prep-register" type="button">${manageContext ? "관리 목록으로" : "작업 선택으로"}</button>
-        <button class="material-flow-primary" data-action="save-work-prep-registration" type="button">${manageContext ? "작업지시서 저장" : "준비 시작"}</button>`;
+        <button class="material-flow-primary" data-action="save-work-prep-registration" ${issueBlocked ? 'disabled aria-disabled="true" title="작업 장소 선택과 현장 사전 답사 확인이 필요합니다."' : ""} type="button">${manageContext ? "작업지시서 발행" : "준비 시작"}</button>`;
     return `<section class="material-flow check-flow work-prep-register-flow">
         <div class="material-flow-head">
           <div class="material-flow-kicker">${manageContext ? "관리 · 작업지시서" : "작업 전 점검 · 작업지시서 등록"}</div>
@@ -680,6 +699,8 @@
               <span>같이 ${esc(model.participantNames)}</span>
               <span class="work-prep-record-progress">점검 ${model.progressDone}/${model.progressTotal}명</span>
               <span>공기구 ${model.toolCount}개</span>
+              <span>장소 ${esc(model.placeLabel || "장소 미지정")}</span>
+              <span class="work-prep-survey-state ${model.siteSurveyDone ? "is-complete" : "is-pending"}">현장답사 ${model.siteSurveyDone ? "완료" : "미진행"}</span>
               <span>${esc(model.team)} · ${esc(model.dateLabel)}${model.appearanceMeta ? ` · ${esc(model.appearanceMeta)}` : ""}</span>
               <span class="work-prep-sync-state state-${esc(model.syncState)}" data-work-prep-sync-state="${esc(model.syncState)}" title="${esc(model.syncDetail)}">${esc(model.syncLabel)}</span>
             </div>
@@ -823,6 +844,8 @@
           <span>조장 ${esc(model.leaderName)}</span>
           <span>점검 ${model.progressDone}/${model.progressTotal}명</span>
           <span>공기구 ${model.toolCount}개</span>
+          <span>장소 ${esc(model.placeLabel || "장소 미지정")}</span>
+          <span class="work-prep-survey-state ${model.siteSurveyDone ? "is-complete" : "is-pending"}">현장답사 ${model.siteSurveyDone ? "완료" : "미진행"}</span>
           <span>${esc(model.team)}</span>
         </div>
       </section>`;

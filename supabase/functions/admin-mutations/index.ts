@@ -92,6 +92,11 @@ const WORK_PREP_STATUS_LABELS = new Map([
   ["used", "점검 완료"],
 ]);
 const WORK_PREP_LEADER_POSITIONS = new Set(["조장", "반장"]);
+const WORK_PREP_PLACE_IDS = new Set([
+  "DOCK-1", "DOCK-2", "DOCK-3", "DOCK-4", "DOCK-5", "DOCK-8", "DOCK-9", "DOCK-H",
+  "QUAY-M1", "QUAY-M2", "QUAY-M4", "QUAY-M5", "QUAY-M7",
+  "QUAY-J1", "QUAY-J2", "QUAY-J5", "QUAY-H1", "QUAY-H2", "QUAY-H3", "QUAY-H4", "QUAY-H5",
+]);
 const ISSUE_PHOTO_MIME_EXTENSIONS = new Map<string, string>([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -133,6 +138,7 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "team",
       "position",
       "active",
+      "is_foreign",
       "unsafe_push_target",
       "created_at",
       "updated_at",
@@ -148,6 +154,8 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "require_tool_check",
       "tool_nature",
       "tool_ids",
+      "requires_triple_inspection",
+      "is_non_routine",
       "sort_order",
     ]),
   }],
@@ -294,6 +302,8 @@ const ADMIN_TABLES = new Map<string, TableConfig>([
       "appearance_time",
       "team",
       "ship_no",
+      "place_id",
+      "site_survey_done",
       "category_id",
       "leader_worker_id",
       "worker_ids",
@@ -731,7 +741,7 @@ async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization
   const ids = rows.map((row) => cleanText(row.id, 120));
   const { data: existingData, error: existingError } = await supabase
     .from("work_prep_records")
-    .select("id,leader_worker_id,status,status_history,created_at,deleted_at")
+    .select("id,leader_worker_id,status,status_history,created_at,deleted_at,site_survey_done")
     .in("id", ids);
   if (existingError) {
     console.error("work prep existing lookup failed", existingError);
@@ -791,6 +801,10 @@ async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization
     const appearanceTime = cleanText(row.appearance_time, 5) || "15:00";
     const team = cleanText(row.team, 80);
     const shipNo = cleanText(row.ship_no, 120);
+    const placeId = cleanText(row.place_id, 40).toUpperCase();
+    const siteSurveyDone = privileged && Object.prototype.hasOwnProperty.call(row, "site_survey_done")
+      ? row.site_survey_done === true
+      : existing?.site_survey_done === true;
     const categoryId = cleanText(row.category_id, 120);
     const leaderId = cleanText(row.leader_worker_id, 120);
     const status = normalizeWorkPrepStatus(row.status);
@@ -802,8 +816,11 @@ async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)
       || !/^([01]\d|2[0-3]):[0-5]\d$/.test(appearanceTime)
-      || !team || !shipNo || !category || !leader || !status) {
+      || !team || !shipNo || (placeId && !WORK_PREP_PLACE_IDS.has(placeId)) || !category || !leader || !status) {
       return { error: jsonResponse({ error: "work_prep_invalid" }, 400) };
+    }
+    if (privileged && (!placeId || siteSurveyDone !== true)) {
+      return { error: jsonResponse({ error: "work_prep_issue_requirements_missing" }, 400) };
     }
     if (!WORK_PREP_LEADER_POSITIONS.has(cleanText(leader.position, 80)) || cleanText(leader.team, 80) !== team) {
       return { error: jsonResponse({ error: "work_prep_leader_invalid" }, 400) };
@@ -836,6 +853,8 @@ async function secureWorkPrepRows(rows: Record<string, unknown>[], authorization
       appearance_time: appearanceTime,
       team,
       ship_no: shipNo,
+      place_id: placeId || null,
+      site_survey_done: siteSurveyDone,
       category_id: categoryId,
       leader_worker_id: leaderId,
       worker_ids: workerIds,
@@ -971,6 +990,7 @@ async function upsertRows(payload: Record<string, unknown>) {
           name: row.name,
           team: row.team,
           position: row.position,
+          is_foreign: Boolean(row.is_foreign),
           unsafe_push_target: row.unsafe_push_target,
           updated_at: row.updated_at,
         })
@@ -1033,6 +1053,7 @@ async function createWorker(payload: Record<string, unknown>) {
   const team = cleanText(worker.team, 40);
   const position = cleanText(worker.position, 40);
   const employeeNo = cleanText(worker.employeeNo, 40);
+  const isForeign = Boolean(worker.isForeign);
   if (!/^worker_[A-Za-z0-9_-]{8,110}$/.test(id) || !name || !WORKER_TEAMS.has(team) || !WORKER_POSITIONS.has(position)) {
     return jsonResponse({ error: "worker_profile_invalid" }, 400);
   }
@@ -1048,6 +1069,7 @@ async function createWorker(payload: Record<string, unknown>) {
     position,
     employee_no: employeeNo,
     active: true,
+    is_foreign: isForeign,
     unsafe_push_target: false,
     created_at: now,
     updated_at: now,
@@ -1055,14 +1077,14 @@ async function createWorker(payload: Record<string, unknown>) {
   const { data, error } = await supabase
     .from("workers")
     .insert(row)
-    .select("id,name,team,position,active,unsafe_push_target,created_at,updated_at")
+    .select("id,name,team,position,active,is_foreign,unsafe_push_target,created_at,updated_at")
     .single();
   if (error) {
     console.error("worker create failed", { code: error.code });
     if (error.code === "23505") {
       const { data: existing } = await supabase
         .from("workers")
-        .select("id,name,team,position,active,unsafe_push_target,created_at,updated_at")
+        .select("id,name,team,position,active,is_foreign,unsafe_push_target,created_at,updated_at")
         .eq("id", id)
         .eq("employee_no", employeeNo)
         .eq("name", name)
@@ -1078,6 +1100,7 @@ async function createWorker(payload: Record<string, unknown>) {
             team: existing.team || "",
             position: existing.position || "작업자",
             active: existing.active !== false,
+            isForeign: Boolean(existing.is_foreign),
             unsafePushTarget: Boolean(existing.unsafe_push_target),
             createdAt: existing.created_at,
             updatedAt: existing.updated_at,
@@ -1097,6 +1120,7 @@ async function createWorker(payload: Record<string, unknown>) {
       team: data.team || "",
       position: data.position || "작업자",
       active: data.active !== false,
+      isForeign: Boolean(data.is_foreign),
       unsafePushTarget: Boolean(data.unsafe_push_target),
       createdAt: data.created_at,
       updatedAt: data.updated_at,

@@ -4,6 +4,7 @@ tools/
 design-previews/
 outputs/
 .omo/
+.playwright-cli/
 artifacts/
 *.patch
 widget-integration-plan.html

@@ -21,11 +21,11 @@ const html = quickMenu.renderQuickMenuV4({
   entries: adminEntries,
   role: "admin",
   currentView: "items",
-  heading: "빠른 메뉴",
+  heading: "표준작업지도서/위험성평가 관리",
   lead: "필요한 업무로 바로 이동합니다.",
 });
 assert(html.includes('<main class="quick-menu-v4" aria-labelledby="quickMenuV4Title" data-quick-menu-state="ready">'));
-assert(html.includes('<h1 id="quickMenuV4Title">빠른 메뉴</h1>'));
+assert(html.includes('<h1 id="quickMenuV4Title">표준작업지도서/위험성평가 관리</h1>'));
 assert(html.includes("오늘의 업무"));
 assert(html.includes("점검"));
 assert(html.includes("신고"));
@@ -35,8 +35,18 @@ assert(html.includes('data-view="manage" type="button"'));
 assert(!html.includes("0건"), "the menu must not invent operational counts");
 assert(!html.includes("홍길동"), "the menu must not hardcode worker data");
 
+const headerlessHtml = quickMenu.renderQuickMenuV4({
+  entries: adminEntries,
+  role: "admin",
+  currentView: "items",
+  showHeader: false,
+});
+assert(!headerlessHtml.includes('class="quick-menu-v4__header"'), "the page can omit a heading already provided by the app shell");
+assert(headerlessHtml.includes('<header class="sr-only">'), "the headerless surface keeps an accessible page name");
+assert(headerlessHtml.includes('data-view="manage" type="button"'), "hiding the duplicate heading keeps the permitted menu actions");
+
 const noSelfLink = quickMenu.renderQuickMenuV4({
-  entries: [{ id: "items", label: "빠른 메뉴", permission: "worker" }, { id: "pledge", label: "안전 서약", permission: "worker" }],
+  entries: [{ id: "items", label: "표준작업지도서/위험성평가 관리", permission: "worker" }, { id: "pledge", label: "안전 서약", permission: "worker" }],
   role: "worker",
   currentView: "items",
 });

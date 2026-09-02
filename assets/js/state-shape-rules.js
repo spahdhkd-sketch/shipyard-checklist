@@ -20,6 +20,93 @@
     });
   }
 
+  function planWorkTypeChecklistMerge(input, deps) {
+    const source = input || {};
+    const targetCategoryId = String(source.targetCategoryId || "");
+    const emptyPlan = { sections: [], items: [], skippedItemCount: 0 };
+    if (!targetCategoryId) return emptyPlan;
+
+    const d = deps || {};
+    let generatedId = 0;
+    const makeId = typeof d.uid === "function"
+      ? d.uid
+      : (prefix) => `${prefix}-merge-${Date.now()}-${++generatedId}`;
+    const normalize = (value) => String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("ko-KR");
+    const clean = (value) => String(value || "").trim().replace(/\s+/g, " ");
+    const targetSections = (Array.isArray(source.targetSections) ? source.targetSections : [])
+      .filter((row) => String(row.categoryId || "") === targetCategoryId);
+    const targetItems = (Array.isArray(source.targetItems) ? source.targetItems : [])
+      .filter((row) => String(row.categoryId || "") === targetCategoryId && row.active !== false);
+    const additions = [];
+    const itemAdditions = [];
+    const sectionByTitle = new Map();
+    const sectionIdBySourceKey = new Map();
+    let nextSectionOrder = targetSections.reduce((max, row) => Math.max(max, Number(row.order || 0)), 0);
+
+    targetSections.forEach((row) => {
+      const titleKey = normalize(row.title);
+      if (titleKey && !sectionByTitle.has(titleKey)) sectionByTitle.set(titleKey, row);
+    });
+
+    const ensureSection = (row) => {
+      const title = clean(row?.title) || "기본 점검";
+      const titleKey = normalize(title);
+      let section = sectionByTitle.get(titleKey);
+      if (!section) {
+        section = {
+          id: makeId("section"),
+          categoryId: targetCategoryId,
+          title,
+          order: ++nextSectionOrder,
+        };
+        additions.push(section);
+        sectionByTitle.set(titleKey, section);
+      }
+      const sourceKey = String(row?.key || row?.id || titleKey);
+      sectionIdBySourceKey.set(sourceKey, section.id);
+      return section;
+    };
+
+    (Array.isArray(source.incomingSections) ? source.incomingSections : []).forEach(ensureSection);
+    const seenItemTexts = new Set(targetItems.map((row) => normalize(row.text)).filter(Boolean));
+    const nextItemOrderBySection = new Map();
+    targetItems.forEach((row) => {
+      const sectionId = String(row.sectionId || "");
+      nextItemOrderBySection.set(sectionId, Math.max(nextItemOrderBySection.get(sectionId) || 0, Number(row.order || 0)));
+    });
+
+    let skippedItemCount = 0;
+    (Array.isArray(source.incomingItems) ? source.incomingItems : []).forEach((row) => {
+      const text = clean(row?.text);
+      const textKey = normalize(text);
+      if (!textKey || seenItemTexts.has(textKey)) {
+        skippedItemCount += 1;
+        return;
+      }
+      const sourceKey = String(row?.sectionKey || "");
+      const section = sectionIdBySourceKey.has(sourceKey)
+        ? { id: sectionIdBySourceKey.get(sourceKey) }
+        : ensureSection({ key: sourceKey || "__default__", title: row?.sectionTitle || "기본 점검" });
+      const nextOrder = (nextItemOrderBySection.get(section.id) || 0) + 1;
+      nextItemOrderBySection.set(section.id, nextOrder);
+      seenItemTexts.add(textKey);
+      itemAdditions.push({
+        id: makeId("item"),
+        categoryId: targetCategoryId,
+        sectionId: section.id,
+        text,
+        risk: ["low", "medium", "high"].includes(row?.risk) ? row.risk : "low",
+        required: row?.required === true,
+        active: true,
+        toolIds: Array.isArray(row?.toolIds) ? Array.from(new Set(row.toolIds.filter(Boolean))) : [],
+        visibilityCondition: row?.visibilityCondition || null,
+        order: nextOrder,
+      });
+    });
+
+    return { sections: additions, items: itemAdditions, skippedItemCount };
+  }
+
   function dedupeTools(tools, deps) {
     const d = deps || {};
     const normalizeToolName = d.normalizeToolName || ((name) => String(name || "").trim());
@@ -224,6 +311,7 @@
 
   return {
     dedupeChecklistItems,
+    planWorkTypeChecklistMerge,
     dedupeTools,
     dedupeShips,
     copyCategoryToolIds,

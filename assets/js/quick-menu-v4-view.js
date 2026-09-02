@@ -122,19 +122,22 @@
     const entries = visibleEntries(model.entries, model);
     const contentBlocked = BLOCKING_STATES.has(state);
     const groups = groupEntries(entries);
-    const heading = model.heading || "빠른 메뉴";
+    const heading = model.heading || "표준작업지도서/위험성평가 관리";
     const lead = model.lead || "필요한 업무로 바로 이동합니다.";
     const stateHtml = renderState(state, model);
+    const headerHtml = model.showHeader === false ? `<header class="sr-only">
+        <h1 id="quickMenuV4Title">${esc(heading)}</h1>
+      </header>` : `<header class="quick-menu-v4__header">
+        <h1 id="quickMenuV4Title">${esc(heading)}</h1>
+        <p>${esc(lead)}</p>
+      </header>`;
     const groupsHtml = groups.map((group) => `<section class="quick-menu-v4__group" aria-labelledby="quickMenuGroup_${esc(group.label)}">
       <h2 id="quickMenuGroup_${esc(group.label)}">${esc(group.label)}</h2>
       <ul class="quick-menu-v4__entries">${group.entries.map(renderEntry).join("")}</ul>
     </section>`).join("");
 
     return `<main class="quick-menu-v4" aria-labelledby="quickMenuV4Title" data-quick-menu-state="${esc(state)}">
-      <header class="quick-menu-v4__header">
-        <h1 id="quickMenuV4Title">${esc(heading)}</h1>
-        <p>${esc(lead)}</p>
-      </header>
+      ${headerHtml}
       ${stateHtml}
       ${contentBlocked ? "" : `<div class="quick-menu-v4__groups">${groupsHtml || `<section class="quick-menu-v4__state" role="status" aria-live="polite"><p>${esc(model.emptyLabel || "현재 권한으로 표시할 메뉴가 없습니다.")}</p></section>`}</div>`}
     </main>`;

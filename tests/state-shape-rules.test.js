@@ -5,6 +5,7 @@ const {
   dedupeTools,
   dedupeShips,
   copyCategoryToolIds,
+  planWorkTypeChecklistMerge,
   migrateOldChecklists,
   removeRemoteDeletedRows,
   missingRemoteRowIds,
@@ -27,6 +28,41 @@ assert.strictEqual(items[2].active, false);
 assert.strictEqual(items[3].active, false);
 assert.strictEqual(items[4].active, undefined);
 assert.deepStrictEqual(dedupeChecklistItems(null), []);
+
+let mergeId = 0;
+const mergePlan = planWorkTypeChecklistMerge({
+  targetCategoryId: "target",
+  targetSections: [
+    { id: "target-basic", categoryId: "target", title: "기본 점검", order: 1 },
+  ],
+  targetItems: [
+    { id: "target-item", categoryId: "target", sectionId: "target-basic", text: "안전모 착용", active: true, order: 1 },
+  ],
+  incomingSections: [
+    { key: "basic", title: " 기본   점검 " },
+    { key: "risk", title: "위험감소대책" },
+  ],
+  incomingItems: [
+    { sectionKey: "basic", text: " 안전모   착용 ", risk: "medium" },
+    { sectionKey: "risk", text: "추락 방지 난간 설치", risk: "high", required: true },
+    { sectionKey: "risk", text: "추락 방지 난간 설치", risk: "low" },
+  ],
+}, {
+  uid: (prefix) => `${prefix}-${++mergeId}`,
+});
+assert.deepStrictEqual(mergePlan.sections.map((row) => row.title), ["위험감소대책"]);
+assert.strictEqual(mergePlan.items.length, 1);
+assert.strictEqual(mergePlan.items[0].categoryId, "target");
+assert.strictEqual(mergePlan.items[0].sectionId, mergePlan.sections[0].id);
+assert.strictEqual(mergePlan.items[0].risk, "high");
+assert.strictEqual(mergePlan.items[0].required, true);
+assert.strictEqual(mergePlan.skippedItemCount, 2);
+
+assert.deepStrictEqual(planWorkTypeChecklistMerge({ targetCategoryId: "" }), {
+  sections: [],
+  items: [],
+  skippedItemCount: 0,
+});
 
 // --- dedupeTools ---
 const norm = (n) => String(n || "").trim().toLowerCase();

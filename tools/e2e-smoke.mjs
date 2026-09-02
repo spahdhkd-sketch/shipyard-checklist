@@ -501,13 +501,14 @@ async function main() {
   const runDesignTokenViewportFlow = async () => {
     const allViewports = [
       { label: "PC", width: 1366, height: 768, mobile: false },
+      ...(HOME_VISUAL_ONLY ? [{ label: "840", width: 840, height: 900, mobile: false, allowDesktopPreviewOverflow: true }] : []),
       { label: "430", width: 430, height: 932, mobile: true },
       { label: "390", width: 390, height: 844, mobile: true },
       { label: "360", width: 360, height: 800, mobile: true },
     ];
     const viewports = MANAGE_MOBILE_VISUAL_ONLY ? allViewports.filter((viewport) => viewport.mobile) : allViewports;
     const visualRoutes = [
-      { label: "홈", path: "index.html", selector: ".home-v4", kpiSelector: ".home-v4__grid", home: true },
+      { label: "홈", path: "index.html", selector: ".home-v4", kpiSelector: ".home-dashboard__kpi-grid", home: true },
       { label: "작업 전 점검", path: "check.html", selector: ".check-flow-v4", kpiSelector: ".check-flow-steps", flow: true, kpiCount: 3, mobileColumns: 3 },
       { label: "서약", path: "pledge.html", selector: ".pledge-action-view", kpiSelector: ".pledge-action-kpis" },
       { label: "통계", path: "analytics.html", selector: ".analytics-board", kpiSelector: ".analytics-action-grid" },
@@ -609,6 +610,7 @@ async function main() {
             const surface = document.querySelector(selector);
             const context = surface?.querySelector(".data-context");
             const kpiGrid = surface?.querySelector(kpiSelector);
+            const homeShortcutGrid = surface?.querySelector(".home-dashboard__shortcuts");
             const bottomNav = document.querySelector(".bottom-nav");
             const main = document.querySelector(".main");
             const navVisible = visible(bottomNav);
@@ -648,6 +650,7 @@ async function main() {
           hasAsOf: [...(context?.querySelectorAll("dt") || [])].some((node) => /최종 반영|데이터 기준/.test(node.textContent)),
               kpiItemCount: kpiGrid ? [...kpiGrid.children].filter(visible).length : 0,
               kpiColumnCount: kpiGrid ? getComputedStyle(kpiGrid).gridTemplateColumns.split(/\s+/).filter(Boolean).length : 0,
+              homeShortcutColumnCount: homeShortcutGrid ? getComputedStyle(homeShortcutGrid).gridTemplateColumns.split(/\s+/).filter(Boolean).length : 0,
               fontFamily: bodyStyle.fontFamily,
               navy: rootStyle.getPropertyValue("--ds-color-navy-950").trim().toUpperCase(),
               teal: rootStyle.getPropertyValue("--ds-color-teal-700").trim().toUpperCase(),
@@ -975,14 +978,16 @@ async function main() {
               && observation.hasBusinessDate
               && observation.hasAsOf;
           const mobileManageSection = viewport.mobile && route.path === "manage.html" && Boolean(route.manageTab);
+          const compactHome = route.home && viewport.width <= 1100;
           const ok = pledgeReady
             && observation.surfaceVisible
-            && !observation.overflow
+            && (!observation.overflow || (viewport.allowDesktopPreviewOverflow && observation.scrollWidth === 920))
             && observation.navVisible === (viewport.mobile && !mobileManageSection)
             && observation.navClear
             && headingContractOk
             && (route.surfaceOnly || observation.kpiItemCount === (route.kpiCount || 4))
-            && (route.surfaceOnly || !viewport.mobile || observation.kpiColumnCount === (route.mobileColumns || 2))
+            && (route.surfaceOnly || (!viewport.mobile && !compactHome) || observation.kpiColumnCount === (route.mobileColumns || 2))
+            && (!compactHome || observation.homeShortcutColumnCount === 2)
             && observation.fontFamily.startsWith('"Noto Sans KR"')
             && observation.navy === "#07162F"
             && observation.teal === "#0F766E"
@@ -1685,11 +1690,11 @@ async function main() {
   await goto("index.html");
   const initialHome = await page.evaluate(() => ({
     title: document.querySelector("#homeV4Title")?.textContent?.trim() || "",
-    cardCount: document.querySelectorAll(".home-v4__card").length,
-    checkMetric: document.querySelector(".home-v4__metric")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    cardCount: document.querySelectorAll(".home-dashboard__kpi").length,
+    checkMetric: document.querySelector(".home-dashboard__shortcuts button span")?.textContent?.replace(/\s+/g, " ").trim() || "",
   }));
-  check("홈: 승인 v4 안전 운영 보드 표시", initialHome.title === "오늘의 안전 운영" && initialHome.cardCount === 4);
-  check("홈: 로그인 작업자 미점검 수치 표시", initialHome.checkMetric === "미점검 1건");
+  check("홈: 안전 운영 대시보드 표시", initialHome.title === "안전 운영 대시보드" && initialHome.cardCount === 4);
+  check("홈: 로그인 작업자 미점검 수치 표시", initialHome.checkMetric === "점검 시작 · 미점검 1건");
 
   // 1-2. 추출된 뷰 모듈 화면 렌더 확인 (호선/서약/이력)
   await goto("ships.html");
@@ -1791,10 +1796,10 @@ async function main() {
 
   await goto("index.html");
   const completedHome = await page.evaluate(() => ({
-    checkMetric: document.querySelector(".home-v4__metric")?.textContent?.replace(/\s+/g, " ").trim() || "",
-    actionView: document.querySelector(".home-v4__card .home-v4__action")?.getAttribute("data-view") || "",
+    checkMetric: document.querySelector(".home-dashboard__shortcuts button span")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    actionView: document.querySelector(".home-dashboard__shortcuts button")?.getAttribute("data-view") || "",
   }));
-  check("홈: 점검 후 완료 상태 표시", completedHome.checkMetric === "미점검 0건" && completedHome.actionView === "history");
+  check("홈: 점검 후 완료 상태 표시", completedHome.checkMetric === "이력 보기 · 미점검 0건" && completedHome.actionView === "history");
 
   // 4. 불안전요소 등록 플로우
   await goto("unsafe.html");
