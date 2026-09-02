@@ -3,6 +3,7 @@ docs/
 tools/
 design-previews/
 outputs/
+output/
 .omo/
 .playwright-cli/
 artifacts/
